@@ -126,6 +126,15 @@ func TestSubmitIntegration_SingleCommit(t *testing.T) {
 	if len(remoteCommits) != 2 { // initial + new commit
 		t.Errorf("Expected 2 commits on remote main, got %d", len(remoteCommits))
 	}
+
+	// 9. Verify no forge-parent trailer in commit description
+	changeIDs := getChangeIDs(t, repoDir)
+	if len(changeIDs) > 0 {
+		desc := getDescription(t, repoDir, changeIDs[0])
+		if hasTrailer(desc, "forge-parent") {
+			t.Errorf("forge-parent trailer found in description: %s", desc)
+		}
+	}
 }
 
 func TestSubmitIntegration_ThreeCommitStack(t *testing.T) {
@@ -170,6 +179,76 @@ func TestSubmitIntegration_ThreeCommitStack(t *testing.T) {
 	remoteCommits := getRemoteCommits(t, remoteDir, "main")
 	if len(remoteCommits) != 4 { // initial + 3 new commits
 		t.Errorf("Expected 4 commits on remote main, got %d", len(remoteCommits))
+	}
+
+	// Verify no trailers in any commit
+	changeIDs := getChangeIDs(t, repoDir)
+	for _, changeID := range changeIDs {
+		desc := getDescription(t, repoDir, changeID)
+		if hasTrailer(desc, "forge-parent") {
+			t.Errorf("forge-parent trailer found in commit %s: %s", changeID, desc)
+		}
+	}
+}
+
+func TestSubmitIntegration_WithTrailers(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		t.Skip("jj not found in PATH, skipping integration test")
+	}
+
+	tmpDir, remoteDir, repoDir := setupSubmitTest(t)
+	defer os.RemoveAll(tmpDir)
+
+	// Create and push initial commit
+	writeFile(t, filepath.Join(repoDir, "initial.txt"), "initial content")
+	runCmd(t, repoDir, "jj", "commit", "-m", "Initial commit")
+	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+
+	// Create 2 commits with forge-parent trailers
+	createCommitWithTrailer(t, repoDir, "feat: add feature A", "forge-parent: someParentID")
+	createCommitWithTrailer(t, repoDir, "feat: add feature B", "forge-parent: anotherParentID")
+
+	// Verify trailers exist before submit
+	changeIDs := getChangeIDs(t, repoDir)
+	trailersFoundBefore := 0
+	for _, changeID := range changeIDs {
+		desc := getDescription(t, repoDir, changeID)
+		if hasTrailer(desc, "forge-parent") {
+			trailersFoundBefore++
+		}
+	}
+	if trailersFoundBefore != 2 {
+		t.Errorf("Expected 2 trailers before submit, found %d", trailersFoundBefore)
+	}
+
+	// Execute Submit
+	client := jj.NewClient(repoDir)
+	result, err := Submit(context.Background(), client, "main@og..@-", "og", "main")
+
+	// Verify no error
+	if err != nil {
+		t.Fatalf("Submit() failed: %v", err)
+	}
+
+	// Verify result counts
+	if result.Submitted != 2 {
+		t.Errorf("Expected Submitted=2, got %d", result.Submitted)
+	}
+
+	// Verify trailers removed from all commits
+	changeIDs = getChangeIDs(t, repoDir)
+	for _, changeID := range changeIDs {
+		desc := getDescription(t, repoDir, changeID)
+		if hasTrailer(desc, "forge-parent") {
+			t.Errorf("forge-parent trailer still found in commit %s after submit: %s", changeID, desc)
+		}
+	}
+
+	// Verify commits on remote
+	remoteCommits := getRemoteCommits(t, remoteDir, "main")
+	if len(remoteCommits) != 3 { // initial + 2 new commits
+		t.Errorf("Expected 3 commits on remote main, got %d", len(remoteCommits))
 	}
 }
 

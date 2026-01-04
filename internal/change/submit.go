@@ -15,6 +15,7 @@ type SubmitResult struct {
 
 // Submit adds changes directly to the target branch without PR review.
 // For each revision:
+//   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
 //   - verifies the push succeeded
 func Submit(ctx context.Context, client jj.Client, revset, remote, branch string) (*SubmitResult, error) {
@@ -91,6 +92,15 @@ func Submit(ctx context.Context, client jj.Client, revset, remote, branch string
 	expectedParent = currentRemoteHead
 	for i, rev := range revs {
 		fmt.Printf("\nProcessing commit %d/%d: %s\n", i+1, len(revs), rev.ID)
+		// Remove forge-parent trailer locally before pushing
+		newDescription := jj.RemoveForgeParent(rev.Description)
+		if newDescription != rev.Description {
+			fmt.Printf("  Removing forge-parent trailer from %s...\n", rev.ID)
+			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
+			if err != nil {
+				return nil, fmt.Errorf("removing trailer from %s: %w", rev.ID, err)
+			}
+		}
 		// Move the bookmark to point to this commit, then push it
 		fmt.Printf("  Submitting %s to %s...\n", rev.ID, remoteBookmark)
 		_, err := client.Run(ctx, "bookmark", "set", branch, "-r", rev.ID)
