@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
@@ -67,9 +68,9 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string)
 		// Update trailers
 		var newDescription string
 		if mutableParentID != "" {
-			newDescription = jj.UpdateForgeParent(rev.Description, mutableParentID)
+			newDescription = forge.UpdateParentTrailer(rev.Description, mutableParentID)
 		} else {
-			newDescription = jj.RemoveForgeParent(rev.Description)
+			newDescription = forge.RemoveParentTrailer(rev.Description)
 		}
 		if newDescription != rev.Description {
 			fmt.Printf("Updating trailers for %s...\n", rev.ID)

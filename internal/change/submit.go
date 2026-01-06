@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
@@ -93,7 +94,7 @@ func Submit(ctx context.Context, client jj.Client, revset, remote, branch string
 	for i, rev := range revs {
 		fmt.Printf("\nProcessing commit %d/%d: %s\n", i+1, len(revs), rev.ID)
 		// Remove forge-parent trailer locally before pushing
-		newDescription := jj.RemoveForgeParent(rev.Description)
+		newDescription := forge.RemoveParentTrailer(rev.Description)
 		if newDescription != rev.Description {
 			fmt.Printf("  Removing forge-parent trailer from %s...\n", rev.ID)
 			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
