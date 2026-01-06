@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/msuozzo/jj-forge/internal/change"
+	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +15,8 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
+
 	rootCmd := &cobra.Command{
 		Use:   "jj-forge",
 		Short: "jj-forge is a translation layer between jj and code forges like GitHub",
@@ -34,6 +39,7 @@ func main() {
 			return fmt.Errorf("not yet implemented")
 		},
 	}
+	var submitRemote, submitBranch string
 	submitCmd := &cobra.Command{
 		Use:   "submit REVSET",
 		Short: "Land changes directly to main without PR review",
@@ -44,9 +50,20 @@ PR-based review is not required. For team workflows with code review,
 use 'review open' and 'review submit' instead.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented")
+			revset := args[0]
+
+			client := jj.NewClient(repoPath)
+			result, err := change.Submit(ctx, client, revset, submitRemote, submitBranch)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("Submitted %d change(s)\n", result.Submitted)
+			return nil
 		},
 	}
+	submitCmd.Flags().StringVar(&submitRemote, "remote", "og", "Remote to push to")
+	submitCmd.Flags().StringVar(&submitBranch, "branch", "main", "Target branch to fast-forward")
 
 	changeCmd.AddCommand(uploadCmd)
 	changeCmd.AddCommand(submitCmd)
