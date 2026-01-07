@@ -22,6 +22,9 @@ type Forge interface {
 	// CreateReview creates a new code review.
 	CreateReview(ctx context.Context, repoURI string, params ReviewCreateParams) (*ReviewCreateResult, error)
 
+	// MergeReview merges an open code review.
+	MergeReview(ctx context.Context, repoURI string, reviewNumber int) error
+
 	// FormatID formats a review number into a string ID (e.g. "pr/123").
 	FormatID(number int) string
 

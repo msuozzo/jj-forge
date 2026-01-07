@@ -143,14 +143,39 @@ use 'review open' and 'review submit' instead.`,
 	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
 	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
 
-	reviewSubmitCmd := &cobra.Command{
-		Use:   "submit [REV]",
-		Short: "Submit a pull request for merging through the forge",
-		Args:  cobra.MaximumNArgs(1),
+	var mergeUpstreamRemote, mergeForkRemote string
+	var mergeNoCleanup bool
+	mergeCmd := &cobra.Command{
+		Use:   "merge REV",
+		Short: "Merge a pull request",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented")
+			rev := args[0]
+			jjClient := jj.NewClient(repoPath)
+			configMgr := forge.NewConfigManager(jjClient)
+			// Create GitHub client
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClient(gitDir)
+			// Execute merge command
+			result, err := review.Merge(ctx, jjClient, githubClient, configMgr, review.MergeParams{
+				Rev:            rev,
+				ForkRemote:     mergeForkRemote,
+				UpstreamRemote: mergeUpstreamRemote,
+				NoCleanup:      mergeNoCleanup,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Merged review #%d for change %s\n", result.Number, result.ChangeID)
+			return nil
 		},
 	}
+	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "og", "Remote of fork")
+	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
+	mergeCmd.Flags().BoolVar(&mergeNoCleanup, "no-cleanup", false, "Skip local cleanup after merge")
 
 	closeCmd := &cobra.Command{
 		Use:   "close [REV]",
@@ -162,7 +187,7 @@ use 'review open' and 'review submit' instead.`,
 	}
 
 	reviewCmd.AddCommand(openCmd)
-	reviewCmd.AddCommand(reviewSubmitCmd)
+	reviewCmd.AddCommand(mergeCmd)
 	reviewCmd.AddCommand(closeCmd)
 	rootCmd.AddCommand(reviewCmd)
 

@@ -157,3 +157,44 @@ func TestCreateReview_InvalidOutput(t *testing.T) {
 		t.Errorf("expected 'failed to parse PR number from URL' in error, got: %v", err)
 	}
 }
+
+func TestMergeReview_Success(t *testing.T) {
+	expectedArgs := []string{
+		"pr", "merge",
+		"42",
+		"--repo", "https://github.com/owner/repo",
+		"--squash",
+	}
+
+	executor := func(ctx context.Context, args ...string) (string, error) {
+		if diff := cmp.Diff(args, expectedArgs); diff != "" {
+			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
+		}
+		return "", nil
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", 42)
+	if err != nil {
+		t.Fatalf("MergeReview failed: %v", err)
+	}
+}
+
+func TestMergeReview_Error(t *testing.T) {
+	expectedErr := errors.New("merge failed")
+	executor := func(ctx context.Context, args ...string) (string, error) {
+		return "", expectedErr
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", 42)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to merge PR #42") {
+		t.Errorf("expected 'failed to merge PR #42' in error, got: %v", err)
+	}
+}

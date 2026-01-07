@@ -79,6 +79,28 @@ func (f *FakeForge) CreateReview(ctx context.Context, repoURI string, params for
 	}, nil
 }
 
+// MergeReview marks a fake pull request as merged.
+func (f *FakeForge) MergeReview(ctx context.Context, repoURI string, reviewNumber int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.mergeError != nil {
+		return f.mergeError
+	}
+
+	review, exists := f.reviews[reviewNumber]
+	if !exists {
+		return fmt.Errorf("review #%d not found", reviewNumber)
+	}
+
+	if review.Status != "open" {
+		return fmt.Errorf("review #%d is not open (status: %s)", reviewNumber, review.Status)
+	}
+
+	review.Status = "merged"
+	return nil
+}
+
 // FormatID formats a review number into a string ID (e.g. "pr/123").
 func (f *FakeForge) FormatID(number int) string {
 	return fmt.Sprintf("pr/%d", number)

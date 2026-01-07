@@ -112,6 +112,26 @@ func (c *Client) ParseID(id string) (int, error) {
 	return strconv.Atoi(id)
 }
 
+// MergeReview merges a pull request with squash merge.
+func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber int) error {
+	// Normalize the repo URI to HTTPS format
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return fmt.Errorf("invalid repository URI: %w", err)
+	}
+	args := []string{
+		"pr", "merge",
+		fmt.Sprintf("%d", reviewNumber),
+		"--repo", normalizedURI,
+		"--squash",
+	}
+	_, err = c.executor(ctx, args...)
+	if err != nil {
+		return fmt.Errorf("failed to merge PR #%d: %w", reviewNumber, err)
+	}
+	return nil
+}
+
 // DefaultBranch returns the default branch name of the repository.
 func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, error) {
 	// Normalize the repo URI to HTTPS format
