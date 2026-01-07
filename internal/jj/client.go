@@ -42,6 +42,7 @@ type Client interface {
 	Root(context.Context) (string, error)
 	Revs(context.Context, string) ([]*Rev, error)
 	Rev(context.Context, string) (*Rev, error)
+	RemoteURL(context.Context, string) (string, error)
 }
 
 type client struct {
@@ -145,4 +146,19 @@ func (j *client) Rev(ctx context.Context, revset string) (*Rev, error) {
 		return nil, fmt.Errorf("failed to get one revision for revset %s (got %d)", revset, len(r))
 	}
 	return r[0], nil
+}
+
+// RemoteURL returns the URL for a given git remote.
+func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
+	out, err := j.Run(ctx, "git", "remote", "list")
+	if err != nil {
+		return "", fmt.Errorf("failed to list remotes: %w", err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 && parts[0] == remote {
+			return parts[1], nil
+		}
+	}
+	return "", fmt.Errorf("remote %q not found", remote)
 }
