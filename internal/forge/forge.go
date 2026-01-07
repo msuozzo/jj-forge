@@ -34,6 +34,9 @@ type Forge interface {
 	// MergeReview merges an open code review.
 	MergeReview(ctx context.Context, repoURI string, reviewNumber int) error
 
+	// CloseReview closes a code review without merging.
+	CloseReview(ctx context.Context, repoURI string, reviewNumber int) error
+
 	// FormatID formats a review number into a string ID (e.g. "pr/123").
 	FormatID(number int) string
 

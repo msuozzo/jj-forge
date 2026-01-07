@@ -132,6 +132,25 @@ func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber i
 	return nil
 }
 
+// CloseReview closes a pull request without merging.
+func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewNumber int) error {
+	// Normalize the repo URI to HTTPS format
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return fmt.Errorf("invalid repository URI: %w", err)
+	}
+	args := []string{
+		"pr", "close",
+		fmt.Sprintf("%d", reviewNumber),
+		"--repo", normalizedURI,
+	}
+	_, err = c.executor(ctx, args...)
+	if err != nil {
+		return fmt.Errorf("failed to close PR #%d: %w", reviewNumber, err)
+	}
+	return nil
+}
+
 // DefaultBranch returns the default branch name of the repository.
 func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, error) {
 	// Normalize the repo URI to HTTPS format

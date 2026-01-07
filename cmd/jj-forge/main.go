@@ -177,14 +177,44 @@ use 'review open' and 'review submit' instead.`,
 	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
 	mergeCmd.Flags().BoolVar(&mergeNoCleanup, "no-cleanup", false, "Skip local cleanup after merge")
 
+	var closeForkRemote, closeUpstreamRemote string
+	var closeForce, closeNoCleanup bool
 	closeCmd := &cobra.Command{
 		Use:   "close [REV]",
-		Short: "Close a pull request",
+		Short: "Close a pull request and abandon the change",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented")
+			rev := "@"
+			if len(args) > 0 {
+				rev = args[0]
+			}
+			jjClient := jj.NewClient(repoPath)
+			configMgr := forge.NewConfigManager(jjClient)
+			// Create GitHub client
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClient(gitDir)
+			// Execute close command
+			result, err := review.Close(ctx, jjClient, githubClient, configMgr, review.CloseParams{
+				Rev:            rev,
+				ForkRemote:     closeForkRemote,
+				UpstreamRemote: closeUpstreamRemote,
+				Force:          closeForce,
+				NoCleanup:      closeNoCleanup,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Closed review #%d and abandoned change %s\n", result.Number, result.ChangeID)
+			return nil
 		},
 	}
+	closeCmd.Flags().StringVar(&closeForkRemote, "fork-remote", "og", "Remote to use")
+	closeCmd.Flags().StringVar(&closeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
+	closeCmd.Flags().BoolVar(&closeForce, "force", false, "Skip confirmation prompt")
+	closeCmd.Flags().BoolVar(&closeNoCleanup, "no-cleanup", false, "Skip local cleanup after close")
 
 	reviewCmd.AddCommand(openCmd)
 	reviewCmd.AddCommand(mergeCmd)

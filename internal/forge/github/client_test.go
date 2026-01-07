@@ -198,3 +198,43 @@ func TestMergeReview_Error(t *testing.T) {
 		t.Errorf("expected 'failed to merge PR #42' in error, got: %v", err)
 	}
 }
+
+func TestCloseReview_Success(t *testing.T) {
+	expectedArgs := []string{
+		"pr", "close",
+		"123",
+		"--repo", "https://github.com/owner/repo",
+	}
+
+	executor := func(ctx context.Context, args ...string) (string, error) {
+		if diff := cmp.Diff(args, expectedArgs); diff != "" {
+			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
+		}
+		return "", nil
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.CloseReview(context.Background(), "github.com/owner/repo", 123)
+	if err != nil {
+		t.Fatalf("CloseReview failed: %v", err)
+	}
+}
+
+func TestCloseReview_Error(t *testing.T) {
+	expectedErr := errors.New("close failed")
+	executor := func(ctx context.Context, args ...string) (string, error) {
+		return "", expectedErr
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.CloseReview(context.Background(), "github.com/owner/repo", 123)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to close PR #123") {
+		t.Errorf("expected 'failed to close PR #123' in error, got: %v", err)
+	}
+}
