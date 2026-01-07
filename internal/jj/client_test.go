@@ -67,3 +67,50 @@ func TestRemoteURL(t *testing.T) {
 		})
 	}
 }
+
+func TestGitDir(t *testing.T) {
+	tests := []struct {
+		name       string
+		rootOutput string
+		wantPath   string
+		wantErr    bool
+	}{
+		{
+			name:       "standard path",
+			rootOutput: "/abs/path/to/git\n",
+			wantPath:   "/abs/path/to/git",
+		},
+		{
+			name:       "whitespace trimmed",
+			rootOutput: "  /abs/path/to/git  \n",
+			wantPath:   "/abs/path/to/git",
+		},
+		{
+			name:       "empty output",
+			rootOutput: "",
+			wantPath:   "",
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := func(ctx context.Context, args ...string) (string, error) {
+				if len(args) == 2 && args[0] == "git" && args[1] == "root" {
+					return tt.rootOutput, nil
+				}
+				return "", errors.New("unexpected command")
+			}
+
+			client := NewClientWithExecutor("", executor)
+			got, err := client.GitDir(context.Background())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GitDir() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.wantPath {
+				t.Errorf("GitDir() = %v, want %v", got, tt.wantPath)
+			}
+		})
+	}
+}

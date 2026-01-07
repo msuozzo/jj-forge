@@ -6,7 +6,10 @@ import (
 	"os"
 
 	"github.com/msuozzo/jj-forge/internal/change"
+	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/review"
 	"github.com/spf13/cobra"
 )
 
@@ -93,14 +96,52 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Manage pull request reviews",
 	}
 
+	var openReviewers []string
+	var openUpstreamRemote, openForkRemote string
 	openCmd := &cobra.Command{
 		Use:   "open [REV]",
 		Short: "Create and assign a pull request",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented")
+			rev := args[0]
+			jjClient := jj.NewClient(repoPath)
+			configMgr := forge.NewConfigManager(jjClient)
+			// Create GitHub client
+			// TODO: Detect and select another forge if not github hosted
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClient(gitDir)
+			// Get reviewers (flag or config default)
+			reviewers := openReviewers
+			if len(reviewers) == 0 {
+				defaultReviewer, err := configMgr.GetDefaultReviewer()
+				if err != nil {
+					return fmt.Errorf("failed to get default reviewer: %w", err)
+				}
+				if defaultReviewer != "" {
+					reviewers = []string{defaultReviewer}
+				}
+			}
+			// Execute open command
+			result, err := review.Open(ctx, jjClient, githubClient, configMgr, review.OpenParams{
+				Rev:            rev,
+				Reviewers:      reviewers,
+				UpstreamRemote: openUpstreamRemote,
+				ForkRemote:     openForkRemote,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Created review #%d for change %s\n", result.Number, result.ChangeID)
+			fmt.Printf("URL: %s\n", result.URL)
+			return nil
 		},
 	}
+	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "GitHub usernames to assign as reviewers")
+	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
+	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
 
 	reviewSubmitCmd := &cobra.Command{
 		Use:   "submit [REV]",

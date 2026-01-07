@@ -23,6 +23,20 @@ type RepoInfo struct {
 	Name  string // Repository name
 }
 
+// NormalizeRepoURL converts a remote URL to a canonical HTTPS format.
+// Handles SSH (git@github.com:owner/repo.git), HTTPS formats, and simple owner/repo identifiers.
+// Returns: https://github.com/owner/repo
+func NormalizeRepoURL(url string) (string, error) {
+	// First try to match as a full GitHub URL (SSH or HTTPS)
+	if matches := githubURLRegex.FindStringSubmatch(url); matches != nil && len(matches) >= 3 {
+		owner := matches[1]
+		repo := strings.TrimSuffix(matches[2], ".git")
+		return fmt.Sprintf("https://github.com/%s/%s", owner, repo), nil
+	} else {
+		return "", fmt.Errorf("could not parse URL: %s", url)
+	}
+}
+
 // GetRepoInfo extracts repository information from a git remote URL.
 func GetRepoInfo(ctx context.Context, client jj.Client, remote string) (*RepoInfo, error) {
 	// Get the remote URL

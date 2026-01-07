@@ -43,6 +43,7 @@ type Client interface {
 	Revs(context.Context, string) ([]*Rev, error)
 	Rev(context.Context, string) (*Rev, error)
 	RemoteURL(context.Context, string) (string, error)
+	GitDir(context.Context) (string, error)
 }
 
 type client struct {
@@ -161,4 +162,17 @@ func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("remote %q not found", remote)
+}
+
+// GitDir returns the absolute path to the backing git directory.
+func (j *client) GitDir(ctx context.Context) (string, error) {
+	out, err := j.Run(ctx, "git", "root")
+	if err != nil {
+		return "", fmt.Errorf("failed to get git root: %w", err)
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return "", fmt.Errorf("git root is empty")
+	}
+	return out, nil
 }
