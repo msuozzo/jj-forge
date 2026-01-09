@@ -321,7 +321,7 @@ func TestRunner(t *testing.T) {
 		{
 			name: "personal non-fork",
 			repos: map[string]string{
-				"repos/testuser/my-project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:testuser/my-project.git", "clone_url": "https://github.com/testuser/my-project.git"}`,
+				"repos/testuser/my-project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:testuser/my-project.git", "clone_url": "https://github.com/testuser/my-project.git", "default_branch": "main"}`,
 			},
 			params: Params{
 				URL:            "git@github.com:testuser/my-project.git",
@@ -335,13 +335,14 @@ func TestRunner(t *testing.T) {
 			wantJJ: [][]string{
 				{"git", "clone"},
 				{"git", "remote", "rename"},
+				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@og"},
 			},
 		},
 		{
 			name: "personal fork",
 			repos: map[string]string{
-				"repos/testuser/forked-project":       `{"fork": true, "parent_owner": "upstream-owner", "parent_name": "forked-project", "ssh_url": "git@github.com:testuser/forked-project.git", "clone_url": "https://github.com/testuser/forked-project.git"}`,
-				"repos/upstream-owner/forked-project": `{"ssh_url": "git@github.com:upstream-owner/forked-project.git", "clone_url": "https://github.com/upstream-owner/forked-project.git"}`,
+				"repos/testuser/forked-project":       `{"fork": true, "parent_owner": "upstream-owner", "parent_name": "forked-project", "ssh_url": "git@github.com:testuser/forked-project.git", "clone_url": "https://github.com/testuser/forked-project.git", "default_branch": "main"}`,
+				"repos/upstream-owner/forked-project": `{"ssh_url": "git@github.com:upstream-owner/forked-project.git", "clone_url": "https://github.com/upstream-owner/forked-project.git", "default_branch": "main"}`,
 			},
 			params: Params{
 				URL:            "git@github.com:testuser/forked-project.git",
@@ -356,13 +357,14 @@ func TestRunner(t *testing.T) {
 				{"git", "clone"},
 				{"git", "remote", "rename"},
 				{"git", "remote", "add"},
+				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
 		{
 			name: "external repo with existing fork",
 			repos: map[string]string{
-				"repos/external/project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:external/project.git", "clone_url": "https://github.com/external/project.git"}`,
-				"repos/testuser/project": `{"fork": true, "parent_owner": "external", "parent_name": "project", "ssh_url": "git@github.com:testuser/project.git", "clone_url": "https://github.com/testuser/project.git"}`,
+				"repos/external/project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:external/project.git", "clone_url": "https://github.com/external/project.git", "default_branch": "main"}`,
+				"repos/testuser/project": `{"fork": true, "parent_owner": "external", "parent_name": "project", "ssh_url": "git@github.com:testuser/project.git", "clone_url": "https://github.com/testuser/project.git", "default_branch": "main"}`,
 			},
 			params: Params{
 				URL:            "git@github.com:external/project.git",
@@ -377,6 +379,7 @@ func TestRunner(t *testing.T) {
 				{"git", "clone"},
 				{"git", "remote", "rename"},
 				{"git", "remote", "add"},
+				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
 		{

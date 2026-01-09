@@ -188,7 +188,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	// Track what we'll clone and the upstream info
 	var cloneAnalysis *RepoAnalysis
 	var upstreamOwner, upstreamName string
-	var upstreamSSH, upstreamHTTPS string
+	var upstreamSSH, upstreamHTTPS, upstreamDefaultBranch string
 
 	// Handle different scenarios
 	if !analysis.Exists {
@@ -326,7 +326,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	if workflow == WorkflowPR && upstreamOwner != "" {
 		// Get upstream URLs if we don't have them
 		if upstreamSSH == "" {
-			upstreamSSH, upstreamHTTPS, err = r.ghClient.GetUpstreamInfo(ctx, upstreamOwner, upstreamName)
+			upstreamSSH, upstreamHTTPS, upstreamDefaultBranch, err = r.ghClient.GetUpstreamInfo(ctx, upstreamOwner, upstreamName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get upstream info: %w", err)
 			}
@@ -344,6 +344,25 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 		r.printer.Success(fmt.Sprintf("Added remote '%s' → %s (upstream)", params.UpstreamRemote, upstreamURL))
 		result.UpstreamName = params.UpstreamRemote
 	}
+
+	// Configure trunk() revset alias to point to the correct remote
+	// For main workflow: trunk() = "main@og" (fork remote)
+	// For PR workflow: trunk() = "main@up" (upstream remote)
+	var trunkRemote, defaultBranch string
+	if workflow == WorkflowMain {
+		trunkRemote = params.ForkRemote
+		defaultBranch = cloneAnalysis.DefaultBranch
+	} else {
+		trunkRemote = params.UpstreamRemote
+		defaultBranch = upstreamDefaultBranch
+	}
+
+	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, trunkRemote)
+	_, err = r.jjExecutor(ctx, absClonePath, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure trunk() alias: %w", err)
+	}
+	r.printer.Success(fmt.Sprintf("Configured trunk() → %s", trunkAlias))
 
 	// Print workflow summary
 	r.printer.Info("")

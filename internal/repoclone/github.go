@@ -57,14 +57,15 @@ type RepoRef struct {
 
 // RepoAnalysis contains detailed information about a repository.
 type RepoAnalysis struct {
-	Owner    string   // Repository owner
-	Name     string   // Repository name
-	Exists   bool     // Whether repo exists on GitHub
-	IsMine   bool     // Whether current user owns it
-	IsFork   bool     // Whether it's a fork
-	Parent   *RepoRef // Parent repo if fork (owner/name)
-	SSHURL   string   // SSH clone URL
-	HTTPSURL string   // HTTPS clone URL
+	Owner         string   // Repository owner
+	Name          string   // Repository name
+	Exists        bool     // Whether repo exists on GitHub
+	IsMine        bool     // Whether current user owns it
+	IsFork        bool     // Whether it's a fork
+	Parent        *RepoRef // Parent repo if fork (owner/name)
+	SSHURL        string   // SSH clone URL
+	HTTPSURL      string   // HTTPS clone URL
+	DefaultBranch string   // Default branch name (e.g. "main")
 }
 
 // ParseGitHubURL extracts owner and name from a GitHub URL.
@@ -109,7 +110,8 @@ func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*
 		parent_owner: .parent.owner.login,
 		parent_name: .parent.name,
 		ssh_url: .ssh_url,
-		clone_url: .clone_url
+		clone_url: .clone_url,
+		default_branch: .default_branch
 	}`)
 
 	analysis := &RepoAnalysis{
@@ -129,11 +131,12 @@ func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*
 
 	// Parse the JSON response
 	var repoInfo struct {
-		Fork        bool   `json:"fork"`
-		ParentOwner string `json:"parent_owner"`
-		ParentName  string `json:"parent_name"`
-		SSHURL      string `json:"ssh_url"`
-		CloneURL    string `json:"clone_url"`
+		Fork          bool   `json:"fork"`
+		ParentOwner   string `json:"parent_owner"`
+		ParentName    string `json:"parent_name"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
 	}
 	if err := json.Unmarshal([]byte(output), &repoInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse repo info: %w", err)
@@ -144,6 +147,7 @@ func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*
 	analysis.IsFork = repoInfo.Fork
 	analysis.SSHURL = repoInfo.SSHURL
 	analysis.HTTPSURL = repoInfo.CloneURL
+	analysis.DefaultBranch = repoInfo.DefaultBranch
 
 	if repoInfo.Fork && repoInfo.ParentOwner != "" {
 		analysis.Parent = &RepoRef{
@@ -170,7 +174,8 @@ func (c *GitHubClient) FindMyFork(ctx context.Context, upstreamOwner, upstreamNa
 		parent_owner: .parent.owner.login,
 		parent_name: .parent.name,
 		ssh_url: .ssh_url,
-		clone_url: .clone_url
+		clone_url: .clone_url,
+		default_branch: .default_branch
 	}`)
 
 	if err != nil {
@@ -183,11 +188,12 @@ func (c *GitHubClient) FindMyFork(ctx context.Context, upstreamOwner, upstreamNa
 
 	// Parse the response
 	var repoInfo struct {
-		Fork        bool   `json:"fork"`
-		ParentOwner string `json:"parent_owner"`
-		ParentName  string `json:"parent_name"`
-		SSHURL      string `json:"ssh_url"`
-		CloneURL    string `json:"clone_url"`
+		Fork          bool   `json:"fork"`
+		ParentOwner   string `json:"parent_owner"`
+		ParentName    string `json:"parent_name"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
 	}
 	if err := json.Unmarshal([]byte(output), &repoInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse fork info: %w", err)
@@ -199,13 +205,14 @@ func (c *GitHubClient) FindMyFork(ctx context.Context, upstreamOwner, upstreamNa
 	}
 
 	return &RepoAnalysis{
-		Owner:    authUser,
-		Name:     upstreamName,
-		Exists:   true,
-		IsMine:   true,
-		IsFork:   true,
-		SSHURL:   repoInfo.SSHURL,
-		HTTPSURL: repoInfo.CloneURL,
+		Owner:         authUser,
+		Name:          upstreamName,
+		Exists:        true,
+		IsMine:        true,
+		IsFork:        true,
+		SSHURL:        repoInfo.SSHURL,
+		HTTPSURL:      repoInfo.CloneURL,
+		DefaultBranch: repoInfo.DefaultBranch,
 		Parent: &RepoRef{
 			Owner: upstreamOwner,
 			Name:  upstreamName,
@@ -232,28 +239,31 @@ func (c *GitHubClient) CreateFork(ctx context.Context, upstreamOwner, upstreamNa
 	apiPath := fmt.Sprintf("repos/%s/%s", authUser, upstreamName)
 	output, err := c.executor(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
-		clone_url: .clone_url
+		clone_url: .clone_url,
+		default_branch: .default_branch
 	}`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fork info after creation: %w", err)
 	}
 
 	var repoInfo struct {
-		SSHURL   string `json:"ssh_url"`
-		CloneURL string `json:"clone_url"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
 	}
 	if err := json.Unmarshal([]byte(output), &repoInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse fork info: %w", err)
 	}
 
 	return &RepoAnalysis{
-		Owner:    authUser,
-		Name:     upstreamName,
-		Exists:   true,
-		IsMine:   true,
-		IsFork:   true,
-		SSHURL:   repoInfo.SSHURL,
-		HTTPSURL: repoInfo.CloneURL,
+		Owner:         authUser,
+		Name:          upstreamName,
+		Exists:        true,
+		IsMine:        true,
+		IsFork:        true,
+		SSHURL:        repoInfo.SSHURL,
+		HTTPSURL:      repoInfo.CloneURL,
+		DefaultBranch: repoInfo.DefaultBranch,
 		Parent: &RepoRef{
 			Owner: upstreamOwner,
 			Name:  upstreamName,
@@ -285,49 +295,54 @@ func (c *GitHubClient) CreateRepo(ctx context.Context, name string, private bool
 	apiPath := fmt.Sprintf("repos/%s/%s", authUser, name)
 	output, err := c.executor(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
-		clone_url: .clone_url
+		clone_url: .clone_url,
+		default_branch: .default_branch
 	}`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repo info after creation: %w", err)
 	}
 
 	var repoInfo struct {
-		SSHURL   string `json:"ssh_url"`
-		CloneURL string `json:"clone_url"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
 	}
 	if err := json.Unmarshal([]byte(output), &repoInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse repo info: %w", err)
 	}
 
 	return &RepoAnalysis{
-		Owner:    authUser,
-		Name:     name,
-		Exists:   true,
-		IsMine:   true,
-		IsFork:   false,
-		SSHURL:   repoInfo.SSHURL,
-		HTTPSURL: repoInfo.CloneURL,
+		Owner:         authUser,
+		Name:          name,
+		Exists:        true,
+		IsMine:        true,
+		IsFork:        false,
+		SSHURL:        repoInfo.SSHURL,
+		HTTPSURL:      repoInfo.CloneURL,
+		DefaultBranch: repoInfo.DefaultBranch,
 	}, nil
 }
 
-// GetUpstreamInfo gets the SSH and HTTPS URLs for an upstream repository.
-func (c *GitHubClient) GetUpstreamInfo(ctx context.Context, owner, name string) (sshURL, httpsURL string, err error) {
+// GetUpstreamInfo gets the SSH and HTTPS URLs and default branch for an upstream repository.
+func (c *GitHubClient) GetUpstreamInfo(ctx context.Context, owner, name string) (sshURL, httpsURL, defaultBranch string, err error) {
 	apiPath := fmt.Sprintf("repos/%s/%s", owner, name)
 	output, err := c.executor(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
-		clone_url: .clone_url
+		clone_url: .clone_url,
+		default_branch: .default_branch
 	}`)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get upstream info: %w", err)
+		return "", "", "", fmt.Errorf("failed to get upstream info: %w", err)
 	}
 
 	var repoInfo struct {
-		SSHURL   string `json:"ssh_url"`
-		CloneURL string `json:"clone_url"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
 	}
 	if err := json.Unmarshal([]byte(output), &repoInfo); err != nil {
-		return "", "", fmt.Errorf("failed to parse upstream info: %w", err)
+		return "", "", "", fmt.Errorf("failed to parse upstream info: %w", err)
 	}
 
-	return repoInfo.SSHURL, repoInfo.CloneURL, nil
+	return repoInfo.SSHURL, repoInfo.CloneURL, repoInfo.DefaultBranch, nil
 }
