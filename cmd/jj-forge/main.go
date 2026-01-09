@@ -10,6 +10,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/repoclone"
 	"github.com/msuozzo/jj-forge/internal/review"
 	"github.com/spf13/cobra"
 )
@@ -257,6 +258,60 @@ use 'review open' and 'review submit' instead.`,
 	reviewCmd.AddCommand(mergeCmd)
 	reviewCmd.AddCommand(closeCmd)
 	rootCmd.AddCommand(reviewCmd)
+
+	// Repo command group
+	repoCmd := &cobra.Command{
+		Use:   "repo",
+		Short: "Repository setup and configuration",
+	}
+
+	var cloneForkRemote, cloneUpstreamRemote string
+	var cloneUseHTTPS, cloneNoFork bool
+	cloneCmd := &cobra.Command{
+		Use:   "clone <url> [path]",
+		Short: "Clone repository with intelligent workflow detection",
+		Long: `Clone and configure a repository with automatic workflow detection.
+
+Workflow is determined by repository ownership:
+  - Your non-fork repos: Develop-on-main workflow
+  - Your fork repos: PR-based workflow
+  - External repos: Creates fork, then PR-based workflow
+
+The command will:
+  - Analyze repository ownership and fork status
+  - Clone or create the repository
+  - Configure appropriate remotes (og/up)
+  - Set up workflow preferences
+
+Examples:
+  jj-forge repo clone git@github.com:me/my-project.git
+  jj-forge repo clone https://github.com/external/project.git
+  jj-forge repo clone git@github.com:owner/repo.git custom-dir`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			url := args[0]
+			var path string
+			if len(args) > 1 {
+				path = args[1]
+			}
+			_, err := repoclone.Run(ctx, repoclone.Params{
+				URL:            url,
+				Path:           path,
+				ForkRemote:     cloneForkRemote,
+				UpstreamRemote: cloneUpstreamRemote,
+				UseHTTPS:       cloneUseHTTPS,
+				NoFork:         cloneNoFork,
+			})
+			return err
+		},
+	}
+	cloneCmd.Flags().StringVar(&cloneForkRemote, "fork-remote", "og", "Name for fork/personal remote")
+	cloneCmd.Flags().StringVar(&cloneUpstreamRemote, "upstream-remote", "up", "Name for upstream remote")
+	cloneCmd.Flags().BoolVar(&cloneUseHTTPS, "https", false, "Use HTTPS instead of SSH for remotes")
+	cloneCmd.Flags().BoolVar(&cloneNoFork, "no-fork", false, "Don't create fork for external repos (fail instead)")
+
+	repoCmd.AddCommand(cloneCmd)
+	rootCmd.AddCommand(repoCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
