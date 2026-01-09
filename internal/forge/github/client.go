@@ -180,6 +180,93 @@ func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, err
 	return branch, nil
 }
 
+// FindReview searches for a review by branch name.
+func (c *Client) FindReview(ctx context.Context, repoURI, branch string) (*forge.ReviewDetails, error) {
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return nil, fmt.Errorf("invalid repository URI: %w", err)
+	}
+	// Search for PR with specific head branch
+	args := []string{
+		"pr", "list",
+		"--repo", normalizedURI,
+		"--head", branch,
+		"--state", "all",
+		"--json", "number,url,state",
+		"--limit", "1",
+	}
+	output, err := c.executor(ctx, nil, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PRs: %w", err)
+	}
+
+	var reviews []struct {
+		Number int    `json:"number"`
+		URL    string `json:"url"`
+		State  string `json:"state"`
+	}
+	if err := json.Unmarshal([]byte(output), &reviews); err != nil {
+		return nil, fmt.Errorf("failed to parse PR list: %w", err)
+	}
+
+	if len(reviews) == 0 {
+		return nil, nil // No review found
+	}
+
+	return &forge.ReviewDetails{
+		Number: reviews[0].Number,
+		URL:    reviews[0].URL,
+		State:  mapState(reviews[0].State),
+	}, nil
+}
+
+// GetReview retrieves details of a specific review.
+func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*forge.ReviewDetails, error) {
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return nil, fmt.Errorf("invalid repository URI: %w", err)
+	}
+
+	args := []string{
+		"pr", "view",
+		fmt.Sprintf("%d", number),
+		"--repo", normalizedURI,
+		"--json", "number,url,state",
+	}
+	output, err := c.executor(ctx, nil, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR #%d: %w", number, err)
+	}
+
+	var review struct {
+		Number int    `json:"number"`
+		URL    string `json:"url"`
+		State  string `json:"state"`
+	}
+	if err := json.Unmarshal([]byte(output), &review); err != nil {
+		return nil, fmt.Errorf("failed to parse PR details: %w", err)
+	}
+
+	return &forge.ReviewDetails{
+		Number: review.Number,
+		URL:    review.URL,
+		State:  mapState(review.State),
+	}, nil
+}
+
+func mapState(state string) forge.ReviewState {
+	switch strings.ToLower(state) {
+	case "open":
+		return forge.ReviewStateOpen
+	case "merged":
+		return forge.ReviewStateMerged
+	case "closed":
+		return forge.ReviewStateClosed
+	default:
+		return forge.ReviewStateClosed // Default to closed for unknown states
+	}
+}
+
 const rulesetName = "reject-forge-parent-trailer"
 
 // SetupRuleset configures a ruleset on GitHub to prevent merging commits with forge-parent.

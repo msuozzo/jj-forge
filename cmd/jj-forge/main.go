@@ -296,6 +296,50 @@ use 'review open' and 'review submit' instead.`,
 	closeCmd.Flags().BoolVar(&closeForce, "force", false, "Skip confirmation prompt")
 	closeCmd.Flags().BoolVar(&closeNoCleanup, "no-cleanup", false, "Skip local cleanup after close")
 
+	var importUpstreamRemote string
+	var importAll bool
+	importCmd := &cobra.Command{
+		Use:   "import [REV]",
+		Short: "Find and import pull requests for revisions",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jjClient := jj.NewClient(repoPath)
+			var rev string
+			if len(args) > 0 {
+				rev = args[0]
+			} else if !importAll {
+				var err error
+				rev, err = resolveDefaultRev(ctx, jjClient)
+				if err != nil {
+					return err
+				}
+			}
+			if rev != "" && importAll {
+				return fmt.Errorf("rev and --all are mutually exclusive")
+			}
+			configMgr := forge.NewConfigManager(jjClient)
+			// Create GitHub client
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClient(gitDir)
+			result, err := review.Import(ctx, jjClient, githubClient, configMgr, review.ImportParams{
+				Rev:            rev,
+				UpstreamRemote: importUpstreamRemote,
+				All:            importAll,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Imported %d new review(s), updated %d existing review(s)\n", result.Added, result.Updated)
+			return nil
+		},
+	}
+	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "up", "Remote to search for PRs")
+	importCmd.Flags().BoolVar(&importAll, "all", false, "Check all mutable revisions")
+
+	reviewCmd.AddCommand(importCmd)
 	reviewCmd.AddCommand(openCmd)
 	reviewCmd.AddCommand(mergeCmd)
 	reviewCmd.AddCommand(closeCmd)

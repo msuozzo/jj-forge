@@ -153,8 +153,8 @@ func (f *FakeForge) SetDefaultBranch(branch string) {
 	f.defaultBranch = branch
 }
 
-// GetReview returns a review by number (for testing assertions).
-func (f *FakeForge) GetReview(number int) (*Review, bool) {
+// GetTestReview returns a review by number (for testing assertions).
+func (f *FakeForge) GetTestReview(number int) (*Review, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -189,3 +189,37 @@ func (f *FakeForge) ReviewCount() int {
 	defer f.mu.Unlock()
 	return len(f.reviews)
 }
+
+// FindReview searches for a review by branch name.
+func (f *FakeForge) FindReview(ctx context.Context, repoURI, branch string) (*forge.ReviewDetails, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	for _, r := range f.reviews {
+		if r.Head == branch {
+			return &forge.ReviewDetails{
+				Number: r.Number,
+				URL:    r.URL,
+				State:  forge.ReviewState(r.Status),
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetReview retrieves details of a specific review.
+func (f *FakeForge) GetReview(ctx context.Context, repoURI string, number int) (*forge.ReviewDetails, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	r, exists := f.reviews[number]
+	if !exists {
+		return nil, fmt.Errorf("review #%d not found", number)
+	}
+	return &forge.ReviewDetails{
+		Number: r.Number,
+		URL:    r.URL,
+		State:  forge.ReviewState(r.Status),
+	}, nil
+}
+

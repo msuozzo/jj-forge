@@ -34,6 +34,7 @@ type Rev struct {
 	IsEmpty         bool
 	Description     string
 	Parents         []string
+	Bookmarks       []string // e.g., ["push-abc123", "main"]
 	RemoteBookmarks []string // e.g., ["og/push-abc123", "origin/main"]
 }
 
@@ -95,6 +96,7 @@ func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 		"!immutable",
 		"empty",
 		`parents.map(|c| c.change_id().short()).join(",")`,
+		`bookmarks.map(|b| b.name()).join(",")`,
 		`remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")`,
 		"description.escape_json()",
 		`"\n"`,
@@ -114,7 +116,7 @@ func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 			return nil, fmt.Errorf("unexpected log entry format: %q", line)
 		}
 		var description string
-		if err := json.Unmarshal([]byte(parts[8]), &description); err != nil {
+		if err := json.Unmarshal([]byte(parts[9]), &description); err != nil {
 			return nil, fmt.Errorf("bad json encoding: %w", err)
 		}
 		revs = append(revs, &Rev{
@@ -125,7 +127,8 @@ func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 			IsMutable:       parts[4] == "true",
 			IsEmpty:         parts[5] == "true",
 			Parents:         splitNonEmpty(parts[6], ","),
-			RemoteBookmarks: splitNonEmpty(parts[7], ","),
+			Bookmarks:       splitNonEmpty(parts[7], ","),
+			RemoteBookmarks: splitNonEmpty(parts[8], ","),
 			Description:     description,
 		})
 	}

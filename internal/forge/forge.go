@@ -26,6 +26,12 @@ const (
 	ReviewStateMerged ReviewState = "merged"
 )
 
+// ReviewDetails contains details about a code review.
+type ReviewDetails struct {
+	Number int
+	URL    string
+	State  ReviewState
+}
 // Forge defines the interface for interacting with code forges.
 type Forge interface {
 	// CreateReview creates a new code review.
@@ -36,6 +42,12 @@ type Forge interface {
 
 	// CloseReview closes a code review without merging.
 	CloseReview(ctx context.Context, repoURI string, reviewNumber int) error
+
+	// FindReview searches for a review by branch name.
+	FindReview(ctx context.Context, repoURI, branch string) (*ReviewDetails, error)
+
+	// GetReview retrieves details of a specific review.
+	GetReview(ctx context.Context, repoURI string, number int) (*ReviewDetails, error)
 
 	// FormatID formats a review number into a string ID (e.g. "pr/123").
 	FormatID(number int) string

@@ -13,7 +13,7 @@ import (
 )
 
 const testRemote = "og"
-const templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
+const templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++bookmarks.map(|b| b.name()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
 
 func TestOpen_Success(t *testing.T) {
 	repo := jjtest.NewFakeRepo()
@@ -87,7 +87,7 @@ func TestOpen_Success(t *testing.T) {
 	}
 
 	// Verify review was created in forge
-	review, exists := fakeForge.GetReview(1)
+	review, exists := fakeForge.GetTestReview(1)
 	if !exists {
 		t.Fatal("review not created in forge")
 	}
@@ -183,7 +183,7 @@ func TestOpen_StripsTrailers(t *testing.T) {
 	}
 
 	// Verify review was created in forge WITHOUT the internal trailer
-	review, _ := fakeForge.GetReview(result.Number)
+	review, _ := fakeForge.GetTestReview(result.Number)
 	if review.Body != "This is the body" {
 		t.Errorf("expected body 'This is the body', got %q", review.Body)
 	}
@@ -609,7 +609,7 @@ func TestOpen_CrossRepo(t *testing.T) {
 	}
 
 	// Verify review was created with fork-owner:push-aaaaaaaaaaaa as head
-	review, exists := fakeForge.GetReview(result.Number)
+	review, exists := fakeForge.GetTestReview(result.Number)
 	if !exists {
 		t.Fatal("review not created in forge")
 	}

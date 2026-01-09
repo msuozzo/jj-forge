@@ -118,7 +118,7 @@ func TestMerge_Success(t *testing.T) {
 	}
 
 	// Verify review was merged in forge
-	review, exists := fakeForge.GetReview(1)
+	review, exists := fakeForge.GetTestReview(result.Number)
 	if !exists {
 		t.Fatal("review not found in forge")
 	}

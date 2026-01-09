@@ -147,7 +147,7 @@ func (m *ConfigManager) AddReviewRecord(rec ReviewRecord) error {
 	if !found {
 		records = append(records, rec)
 	}
-	return m.saveRecords(records)
+	return m.SaveRecords(records)
 }
 
 // RemoveReviewRecord removes a forge review record from the config by ChangeID.
@@ -165,10 +165,11 @@ func (m *ConfigManager) RemoveReviewRecord(changeID string) error {
 	if len(nextRecords) == len(records) {
 		return nil // Not found, nothing to do
 	}
-	return m.saveRecords(nextRecords)
+	return m.SaveRecords(nextRecords)
 }
 
-func (m *ConfigManager) saveRecords(records []ReviewRecord) error {
+// SaveRecords saves the list of review records to the config.
+func (m *ConfigManager) SaveRecords(records []ReviewRecord) error {
 	// Convert records to strings
 	var reviewsRaw []string
 	for _, r := range records {

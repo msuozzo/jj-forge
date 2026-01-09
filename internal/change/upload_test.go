@@ -488,4 +488,4 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 }
 
 // templateMatcher matches the jj log template used by client.Revs()
-var templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
+var templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++bookmarks.map(|b| b.name()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`

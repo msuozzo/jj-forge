@@ -21,6 +21,7 @@ type Commit struct {
 	IsMutable       bool
 	IsConflicted    bool
 	IsEmpty         bool
+	Bookmarks       []string // e.g., ["push-abc123"]
 	RemoteBookmarks []string // e.g., ["og/push-abc123"]
 }
 
@@ -145,14 +146,15 @@ func LogOutput(ids ...string) func(*FakeRepo) string {
 			if commitID == "" {
 				commitID = c.ID // default to change ID if not set
 			}
-			// Format: ID CommitID conflict divergent mutable empty parents remote_bookmarks description
-			line := fmt.Sprintf("%s %s %v false %v %v %s %s %s",
+			// Format: ID CommitID conflict divergent mutable empty parents bookmarks remote_bookmarks description
+			line := fmt.Sprintf("%s %s %v false %v %v %s %s %s %s",
 				c.ID,
 				commitID,
 				c.IsConflicted,
 				c.IsMutable,
 				c.IsEmpty,
 				strings.Join(c.Parents, ","),
+				strings.Join(c.Bookmarks, ","),
 				strings.Join(c.RemoteBookmarks, ","),
 				string(descJSON),
 			)
