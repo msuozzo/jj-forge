@@ -352,7 +352,36 @@ Examples:
 	cloneCmd.Flags().BoolVar(&cloneUseHTTPS, "https", false, "Use HTTPS instead of SSH for remotes")
 	cloneCmd.Flags().BoolVar(&cloneNoFork, "no-fork", false, "Don't create fork for external repos (fail instead)")
 
+	var rulesetUpstreamRemote string
+	setupRulesetCmd := &cobra.Command{
+		Use:   "setup-ruleset",
+		Short: "Add a GitHub ruleset to prevent merging forge-parent commits",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jjClient := jj.NewClient(repoPath)
+			// Create GitHub client
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClient(gitDir)
+			// Get upstream URL
+			upstreamURL, err := jjClient.RemoteURL(ctx, rulesetUpstreamRemote)
+			if err != nil {
+				return fmt.Errorf("failed to get upstream URL: %w", err)
+			}
+			// Execute setup-ruleset command
+			err = githubClient.SetupRuleset(ctx, upstreamURL)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully added ruleset to %s\n", upstreamURL)
+			return nil
+		},
+	}
+	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "up", "Remote to target")
+
 	repoCmd.AddCommand(cloneCmd)
+	repoCmd.AddCommand(setupRulesetCmd)
 	rootCmd.AddCommand(repoCmd)
 
 	if err := rootCmd.Execute(); err != nil {

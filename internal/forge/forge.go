@@ -45,4 +45,7 @@ type Forge interface {
 
 	// DefaultBranch returns the default branch name of the repository.
 	DefaultBranch(ctx context.Context, repoURI string) (string, error)
+
+	// SetupRuleset configures a ruleset on the forge to prevent merging commits with forge-parent.
+	SetupRuleset(ctx context.Context, repoURI string) error
 }

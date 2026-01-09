@@ -21,7 +21,7 @@ func TestCreateReview_Success(t *testing.T) {
 		"--reviewer", "reviewer1",
 	}
 
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -63,7 +63,7 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 		"--reviewer", "user2",
 	}
 
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -86,7 +86,7 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 }
 
 func TestCreateReview_NoReviewers(t *testing.T) {
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		// Verify no --reviewer flags present
 		for i, arg := range args {
 			if arg == "--reviewer" {
@@ -113,7 +113,7 @@ func TestCreateReview_NoReviewers(t *testing.T) {
 
 func TestCreateReview_ExecutorError(t *testing.T) {
 	expectedErr := errors.New("gh command failed")
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -136,7 +136,7 @@ func TestCreateReview_ExecutorError(t *testing.T) {
 }
 
 func TestCreateReview_InvalidOutput(t *testing.T) {
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		return "invalid-url-format", nil
 	}
 
@@ -166,7 +166,7 @@ func TestMergeReview_Success(t *testing.T) {
 		"--squash",
 	}
 
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -183,7 +183,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 func TestMergeReview_Error(t *testing.T) {
 	expectedErr := errors.New("merge failed")
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -206,7 +206,7 @@ func TestCloseReview_Success(t *testing.T) {
 		"--repo", "https://github.com/owner/repo",
 	}
 
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -223,7 +223,7 @@ func TestCloseReview_Success(t *testing.T) {
 
 func TestCloseReview_Error(t *testing.T) {
 	expectedErr := errors.New("close failed")
-	executor := func(ctx context.Context, args ...string) (string, error) {
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -236,5 +236,85 @@ func TestCloseReview_Error(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "failed to close PR #123") {
 		t.Errorf("expected 'failed to close PR #123' in error, got: %v", err)
+	}
+}
+
+func TestSetupRuleset_Success(t *testing.T) {
+	var gotListArgs []string
+	var gotCreateArgs []string
+	var gotStdin []byte
+
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+		// First call: list existing rulesets (GET)
+		if len(gotListArgs) == 0 && stdin == nil {
+			gotListArgs = args
+			return "[]", nil // No existing rulesets
+		}
+		// Second call: create ruleset (POST)
+		gotCreateArgs = args
+		gotStdin = stdin
+		return "{}", nil
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.SetupRuleset(context.Background(), "github.com/owner/repo")
+	if err != nil {
+		t.Fatalf("SetupRuleset failed: %v", err)
+	}
+
+	// Verify list call
+	if len(gotListArgs) == 0 {
+		t.Fatal("expected list rulesets call")
+	}
+	expectedListPath := "/repos/owner/repo/rulesets"
+	if gotListArgs[len(gotListArgs)-1] != expectedListPath {
+		t.Errorf("expected list API path %s, got %s", expectedListPath, gotListArgs[len(gotListArgs)-1])
+	}
+
+	// Verify create call
+	if len(gotCreateArgs) == 0 {
+		t.Fatal("expected create ruleset call")
+	}
+	createArgsStr := strings.Join(gotCreateArgs, " ")
+	if !strings.Contains(createArgsStr, "--method POST") {
+		t.Errorf("expected POST method in create args, got: %v", gotCreateArgs)
+	}
+	expectedCreatePath := "/repos/owner/repo/rulesets"
+	if !strings.Contains(createArgsStr, expectedCreatePath) {
+		t.Errorf("expected create API path %s in args, got: %v", expectedCreatePath, gotCreateArgs)
+	}
+
+	// Verify stdin contains the ruleset JSON with correct name and pattern
+	stdinStr := string(gotStdin)
+	if !strings.Contains(stdinStr, `"name": "reject-forge-parent-trailer"`) {
+		t.Errorf("expected ruleset name 'reject-forge-parent-trailer' in stdin, got: %s", stdinStr)
+	}
+	if !strings.Contains(stdinStr, `"pattern": "forge-parent:"`) {
+		t.Errorf("expected pattern 'forge-parent:' in stdin, got: %s", stdinStr)
+	}
+}
+
+func TestSetupRuleset_AlreadyExists(t *testing.T) {
+	callCount := 0
+	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+		callCount++
+		if callCount == 1 {
+			// Return existing ruleset with matching name
+			return `[{"name": "reject-forge-parent-trailer"}]`, nil
+		}
+		t.Fatal("should not make a second call when ruleset already exists")
+		return "", nil
+	}
+
+	client := NewClientWithExecutor("/git", executor)
+
+	err := client.SetupRuleset(context.Background(), "github.com/owner/repo")
+	if err != nil {
+		t.Fatalf("SetupRuleset failed: %v", err)
+	}
+
+	if callCount != 1 {
+		t.Errorf("expected 1 API call (list only), got %d", callCount)
 	}
 }

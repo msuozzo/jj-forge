@@ -139,6 +139,13 @@ func (f *FakeForge) DefaultBranch(ctx context.Context, repoURI string) (string, 
 	return f.defaultBranch, nil
 }
 
+// SetupRuleset implements forge.Forge.
+func (f *FakeForge) SetupRuleset(ctx context.Context, repoURI string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return nil
+}
+
 // SetDefaultBranch sets the default branch name.
 func (f *FakeForge) SetDefaultBranch(branch string) {
 	f.mu.Lock()

@@ -3,6 +3,7 @@ package github
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +14,7 @@ import (
 )
 
 // Executor defines the function signature for running gh commands.
-type Executor func(ctx context.Context, args ...string) (stdout string, err error)
+type Executor func(ctx context.Context, stdin []byte, args ...string) (stdout string, err error)
 
 // Client implements the forge.Forge interface for GitHub using the gh CLI.
 type Client struct {
@@ -39,11 +40,14 @@ func NewClientWithExecutor(gitDir string, exec Executor) *Client {
 
 // defaultExecutor creates an executor that runs gh commands with proper GIT_DIR.
 func defaultExecutor(gitDir string) Executor {
-	return func(ctx context.Context, args ...string) (string, error) {
+	return func(ctx context.Context, stdin []byte, args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, "gh", args...)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
+		if len(stdin) > 0 {
+			cmd.Stdin = bytes.NewReader(stdin)
+		}
 		// Set GIT_DIR environment variable if provided
 		if gitDir != "" {
 			cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_DIR=%s", gitDir))
@@ -74,7 +78,7 @@ func (c *Client) CreateReview(ctx context.Context, repoURI string, params forge.
 	for _, reviewer := range params.Reviewers {
 		args = append(args, "--reviewer", reviewer)
 	}
-	output, err := c.executor(ctx, args...)
+	output, err := c.executor(ctx, nil, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -125,7 +129,7 @@ func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber i
 		"--repo", normalizedURI,
 		"--squash",
 	}
-	_, err = c.executor(ctx, args...)
+	_, err = c.executor(ctx, nil, args...)
 	if err != nil {
 		return fmt.Errorf("failed to merge PR #%d: %w", reviewNumber, err)
 	}
@@ -144,7 +148,7 @@ func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewNumber i
 		fmt.Sprintf("%d", reviewNumber),
 		"--repo", normalizedURI,
 	}
-	_, err = c.executor(ctx, args...)
+	_, err = c.executor(ctx, nil, args...)
 	if err != nil {
 		return fmt.Errorf("failed to close PR #%d: %w", reviewNumber, err)
 	}
@@ -165,7 +169,7 @@ func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, err
 		"--json", "defaultBranchRef",
 		"--template", "{{.defaultBranchRef.name}}",
 	}
-	output, err := c.executor(ctx, args...)
+	output, err := c.executor(ctx, nil, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get default branch: %w", err)
 	}
@@ -174,4 +178,79 @@ func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, err
 		return "", fmt.Errorf("gh repo view returned empty default branch")
 	}
 	return branch, nil
+}
+
+const rulesetName = "reject-forge-parent-trailer"
+
+// SetupRuleset configures a ruleset on GitHub to prevent merging commits with forge-parent.
+// It is idempotent: if a ruleset with the expected name already exists, it is left as-is.
+func (c *Client) SetupRuleset(ctx context.Context, repoURI string) error {
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return fmt.Errorf("invalid repository URI: %w", err)
+	}
+	// Extract owner/repo from normalizedURI
+	// https://github.com/owner/repo -> owner/repo
+	path := strings.TrimPrefix(normalizedURI, "https://github.com/")
+	apiPath := fmt.Sprintf("/repos/%s/rulesets", path)
+	// Check for existing ruleset with the same name.
+	listArgs := []string{
+		"api",
+		"-H", "Accept: application/vnd.github+json",
+		"-H", "X-GitHub-Api-Version: 2022-11-28",
+		apiPath,
+	}
+	listOutput, err := c.executor(ctx, nil, listArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to list rulesets: %w", err)
+	}
+	var existingRulesets []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal([]byte(listOutput), &existingRulesets); err != nil {
+		return fmt.Errorf("failed to parse rulesets: %w", err)
+	}
+	for _, rs := range existingRulesets {
+		if rs.Name == rulesetName {
+			return nil // Already exists
+		}
+	}
+	rulesetJSON := `{
+  "name": "` + rulesetName + `",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "commit_message_pattern",
+      "parameters": {
+        "operator": "contains",
+        "pattern": "forge-parent:",
+        "negate": true,
+        "name": ""
+      }
+    }
+  ],
+  "bypass_actors": []
+}`
+	createArgs := []string{
+		"api",
+		"--method", "POST",
+		"-H", "Accept: application/vnd.github+json",
+		"-H", "X-GitHub-Api-Version: 2022-11-28",
+		apiPath,
+		"--input", "-",
+	}
+	_, err = c.executor(ctx, []byte(rulesetJSON), createArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to setup ruleset: %w", err)
+	}
+	return nil
 }
