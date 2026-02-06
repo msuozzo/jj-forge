@@ -44,19 +44,17 @@ func Open(
 		return nil, fmt.Errorf("change %s has not been uploaded to %s. Run: jj-forge change upload %s", rev.ID, params.ForkRemote, rev.ID)
 	}
 	// Check if a review already exists
-	records, err := configMgr.GetReviewRecords()
+	existingRecord, err := configMgr.GetReviewByChangeID(rev.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
-	for _, record := range records {
-		if record.ChangeID == rev.ID {
-			if record.Status == "open" {
-				return nil, fmt.Errorf("review already exists for change %s: %s", rev.ID, record.URL)
-			} else if record.Status == "merged" {
-				return nil, fmt.Errorf("change %s was already merged in review %s", rev.ID, record.ForgeID)
-			}
-			// If status is "closed", we can create a new review
+	if existingRecord != nil {
+		if existingRecord.Status == "open" {
+			return nil, fmt.Errorf("review already exists for change %s: %s", rev.ID, existingRecord.URL)
+		} else if existingRecord.Status == "merged" {
+			return nil, fmt.Errorf("change %s was already merged in review %s", rev.ID, existingRecord.ForgeID)
 		}
+		// If status is "closed", we can create a new review
 	}
 	// Determine base branch
 	upstreamRemoteURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)

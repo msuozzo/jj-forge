@@ -160,6 +160,21 @@ func (m *ConfigManager) saveRecords(records []ReviewRecord) error {
 	return err
 }
 
+// GetReviewByChangeID finds a review record by change ID.
+// Returns nil if no record is found.
+func (m *ConfigManager) GetReviewByChangeID(changeID string) (*ReviewRecord, error) {
+	records, err := m.GetReviewRecords()
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range records {
+		if r.ChangeID == changeID {
+			return &r, nil
+		}
+	}
+	return nil, nil
+}
+
 // GetDefaultReviewer retrieves the default reviewer from the config.
 // Returns an empty string if no default reviewer is configured.
 func (m *ConfigManager) GetDefaultReviewer() (string, error) {
