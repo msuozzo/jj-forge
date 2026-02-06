@@ -46,6 +46,42 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 type ForgeConfig struct {
 	DefaultReviewer string   `toml:"default-reviewer,omitempty"`
 	Reviews         []string `toml:"reviews,omitempty"`
+	CheckCommand    string   `toml:"check-command,omitempty"`
+	Checks          []string `toml:"checks,omitempty"`
+}
+
+// Check verdict values.
+const (
+	CheckVerdictPass = "pass"
+	CheckVerdictFail = "fail"
+)
+
+// CheckVerdict represents the result of running a check command on a change.
+type CheckVerdict struct {
+	ChangeID string // jj change ID
+	Verdict  string // CheckVerdictPass or CheckVerdictFail
+	CommitID string // commit ID at time of check (detects staleness)
+}
+
+// checkVerdictSep is the separator for serialized check verdicts.
+const checkVerdictSep = "\n"
+
+// String returns the serialized string representation of the verdict.
+func (v CheckVerdict) String() string {
+	return strings.Join([]string{v.ChangeID, v.Verdict, v.CommitID}, checkVerdictSep)
+}
+
+// ParseCheckVerdict parses a serialized string into a CheckVerdict.
+func ParseCheckVerdict(s string) (CheckVerdict, error) {
+	parts := strings.Split(s, checkVerdictSep)
+	if len(parts) != 3 {
+		return CheckVerdict{}, fmt.Errorf("invalid check verdict format: %q", s)
+	}
+	return CheckVerdict{
+		ChangeID: parts[0],
+		Verdict:  parts[1],
+		CommitID: parts[2],
+	}, nil
 }
 
 // ConfigManager handles reading and writing jj-forge configuration.
@@ -183,4 +219,89 @@ func (m *ConfigManager) GetDefaultReviewer() (string, error) {
 		return "", err
 	}
 	return cfg.DefaultReviewer, nil
+}
+
+// GetCheckCommand retrieves the configured check command.
+// Returns an empty string if no check command is configured.
+func (m *ConfigManager) GetCheckCommand() (string, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return "", err
+	}
+	return cfg.CheckCommand, nil
+}
+
+// GetCheckVerdicts retrieves all stored check verdicts from the config.
+func (m *ConfigManager) GetCheckVerdicts() ([]CheckVerdict, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return nil, err
+	}
+	var verdicts []CheckVerdict
+	for _, s := range cfg.Checks {
+		v, err := ParseCheckVerdict(s)
+		if err != nil {
+			return nil, err
+		}
+		verdicts = append(verdicts, v)
+	}
+	return verdicts, nil
+}
+
+// SetCheckVerdict adds or updates a check verdict in the config (upsert by ChangeID).
+func (m *ConfigManager) SetCheckVerdict(v CheckVerdict) error {
+	verdicts, err := m.GetCheckVerdicts()
+	if err != nil {
+		return err
+	}
+	found := false
+	for i, existing := range verdicts {
+		if existing.ChangeID == v.ChangeID {
+			verdicts[i] = v
+			found = true
+			break
+		}
+	}
+	if !found {
+		verdicts = append(verdicts, v)
+	}
+	return m.saveVerdicts(verdicts)
+}
+
+// GetCheckVerdictByChangeID finds a check verdict by change ID.
+// Returns nil if no verdict is found.
+func (m *ConfigManager) GetCheckVerdictByChangeID(changeID string) (*CheckVerdict, error) {
+	verdicts, err := m.GetCheckVerdicts()
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range verdicts {
+		if v.ChangeID == changeID {
+			return &v, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *ConfigManager) saveVerdicts(verdicts []CheckVerdict) error {
+	var checksRaw []string
+	for _, v := range verdicts {
+		checksRaw = append(checksRaw, v.String())
+	}
+	var wrapper struct {
+		Checks []string `toml:"checks"`
+	}
+	wrapper.Checks = checksRaw
+	tomlBytes, err := toml.Marshal(wrapper)
+	if err != nil {
+		return err
+	}
+	tomlStr := string(tomlBytes)
+	startIdx := strings.Index(tomlStr, "[")
+	if startIdx == -1 {
+		return fmt.Errorf("unexpected TOML format")
+	}
+	arrayValue := strings.TrimSpace(tomlStr[startIdx:])
+	_, err = m.client.Run(context.Background(), "config", "set", "--repo", "forge.checks", arrayValue)
+	return err
 }

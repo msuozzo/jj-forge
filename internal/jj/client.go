@@ -27,6 +27,7 @@ func defaultExecutor(ctx context.Context, args ...string) (string, error) {
 // Rev holds detailed information about a single revision.
 type Rev struct {
 	ID              string
+	CommitID        string
 	IsMutable       bool
 	IsConflicted    bool
 	IsDivergent     bool
@@ -88,6 +89,7 @@ func (j *client) Root(ctx context.Context) (abspath string, err error) {
 func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 	tplParts := []string{
 		"change_id.short()",
+		"commit_id.short()",
 		"conflict",
 		"divergent",
 		"!immutable",
@@ -112,17 +114,18 @@ func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 			return nil, fmt.Errorf("unexpected log entry format: %q", line)
 		}
 		var description string
-		if err := json.Unmarshal([]byte(parts[7]), &description); err != nil {
+		if err := json.Unmarshal([]byte(parts[8]), &description); err != nil {
 			return nil, fmt.Errorf("bad json encoding: %w", err)
 		}
 		revs = append(revs, &Rev{
 			ID:              parts[0],
-			IsConflicted:    parts[1] == "true",
-			IsDivergent:     parts[2] == "true",
-			IsMutable:       parts[3] == "true",
-			IsEmpty:         parts[4] == "true",
-			Parents:         splitNonEmpty(parts[5], ","),
-			RemoteBookmarks: splitNonEmpty(parts[6], ","),
+			CommitID:        parts[1],
+			IsConflicted:    parts[2] == "true",
+			IsDivergent:     parts[3] == "true",
+			IsMutable:       parts[4] == "true",
+			IsEmpty:         parts[5] == "true",
+			Parents:         splitNonEmpty(parts[6], ","),
+			RemoteBookmarks: splitNonEmpty(parts[7], ","),
 			Description:     description,
 		})
 	}

@@ -13,7 +13,7 @@ import (
 )
 
 const testRemote = "og"
-const templateMatcher = `change_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
+const templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
 
 func TestOpen_Success(t *testing.T) {
 	repo := jjtest.NewFakeRepo()

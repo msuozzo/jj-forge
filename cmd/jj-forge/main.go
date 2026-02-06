@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/msuozzo/jj-forge/internal/change"
+	"github.com/msuozzo/jj-forge/internal/check"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/jj"
@@ -27,6 +28,20 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVarP(&repoPath, "repo", "R", "", "Path to the repository")
 
+	// Check command
+	checkCmd := &cobra.Command{
+		Use:   "check REVSET",
+		Short: "Run the configured check command against the given revset",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			revset := args[0]
+			client := jj.NewClient(repoPath)
+			configMgr := forge.NewConfigManager(client)
+			return check.Run(ctx, client, configMgr, revset, true, check.DefaultRunner)
+		},
+	}
+	rootCmd.AddCommand(checkCmd)
+
 	// Change command group
 	changeCmd := &cobra.Command{
 		Use:   "change",
@@ -34,6 +49,7 @@ func main() {
 	}
 
 	var uploadRemote string
+	var uploadSkipCheck bool
 	uploadCmd := &cobra.Command{
 		Use:   "upload REVSET",
 		Short: "Synchronize content and dependency structure to the remote",
@@ -42,6 +58,12 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			revset := args[0]
 			client := jj.NewClient(repoPath)
+			if !uploadSkipCheck {
+				configMgr := forge.NewConfigManager(client)
+				if err := check.Run(ctx, client, configMgr, revset, false, check.DefaultRunner); err != nil {
+					return err
+				}
+			}
 			result, err := change.Upload(ctx, client, revset, uploadRemote)
 			if err != nil {
 				return err
@@ -59,8 +81,10 @@ func main() {
 		},
 	}
 	uploadCmd.Flags().StringVar(&uploadRemote, "remote", "og", "Remote to push to")
+	uploadCmd.Flags().BoolVar(&uploadSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var submitRemote, submitBranch string
+	var submitSkipCheck bool
 	submitCmd := &cobra.Command{
 		Use:   "submit REVSET",
 		Short: "Land changes directly to main without PR review",
@@ -74,6 +98,12 @@ use 'review open' and 'review submit' instead.`,
 			revset := args[0]
 
 			client := jj.NewClient(repoPath)
+			if !submitSkipCheck {
+				configMgr := forge.NewConfigManager(client)
+				if err := check.Run(ctx, client, configMgr, revset, false, check.DefaultRunner); err != nil {
+					return err
+				}
+			}
 			result, err := change.Submit(ctx, client, revset, submitRemote, submitBranch)
 			if err != nil {
 				return err
@@ -85,6 +115,7 @@ use 'review open' and 'review submit' instead.`,
 	}
 	submitCmd.Flags().StringVar(&submitRemote, "remote", "og", "Remote to push to")
 	submitCmd.Flags().StringVar(&submitBranch, "branch", "main", "Target branch to fast-forward")
+	submitCmd.Flags().BoolVar(&submitSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	changeCmd.AddCommand(uploadCmd)
 	changeCmd.AddCommand(submitCmd)
@@ -144,7 +175,7 @@ use 'review open' and 'review submit' instead.`,
 	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
 
 	var mergeUpstreamRemote, mergeForkRemote string
-	var mergeNoCleanup bool
+	var mergeNoCleanup, mergeSkipCheck bool
 	mergeCmd := &cobra.Command{
 		Use:   "merge REV",
 		Short: "Merge a pull request",
@@ -153,6 +184,11 @@ use 'review open' and 'review submit' instead.`,
 			rev := args[0]
 			jjClient := jj.NewClient(repoPath)
 			configMgr := forge.NewConfigManager(jjClient)
+			if !mergeSkipCheck {
+				if err := check.Run(ctx, jjClient, configMgr, rev, false, check.DefaultRunner); err != nil {
+					return err
+				}
+			}
 			// Create GitHub client
 			gitDir, err := jjClient.GitDir(ctx)
 			if err != nil {
@@ -176,6 +212,7 @@ use 'review open' and 'review submit' instead.`,
 	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "og", "Remote of fork")
 	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
 	mergeCmd.Flags().BoolVar(&mergeNoCleanup, "no-cleanup", false, "Skip local cleanup after merge")
+	mergeCmd.Flags().BoolVar(&mergeSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var closeForkRemote, closeUpstreamRemote string
 	var closeForce, closeNoCleanup bool

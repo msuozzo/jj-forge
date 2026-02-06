@@ -15,6 +15,7 @@ import (
 // Commit defines the properties for a commit in the fake repo.
 type Commit struct {
 	ID              string
+	CommitID        string
 	Parents         []string
 	Description     string
 	IsMutable       bool
@@ -140,9 +141,14 @@ func LogOutput(ids ...string) func(*FakeRepo) string {
 				panic(fmt.Sprintf("test setup error: commit %s missing from fake repo", id))
 			}
 			descJSON, _ := json.Marshal(c.Description)
-			// Format: ID conflict divergent mutable empty parents remote_bookmarks description
-			line := fmt.Sprintf("%s %v false %v %v %s %s %s",
+			commitID := c.CommitID
+			if commitID == "" {
+				commitID = c.ID // default to change ID if not set
+			}
+			// Format: ID CommitID conflict divergent mutable empty parents remote_bookmarks description
+			line := fmt.Sprintf("%s %s %v false %v %v %s %s %s",
 				c.ID,
+				commitID,
 				c.IsConflicted,
 				c.IsMutable,
 				c.IsEmpty,

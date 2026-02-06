@@ -59,8 +59,12 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
 		// Extract the key name after "forge."
 		if key == "forge.reviews" {
 			m.config["reviews"] = value
+		} else if key == "forge.checks" {
+			m.config["checks"] = value
 		} else if key == "forge.default-reviewer" {
 			m.config["default-reviewer"] = value
+		} else if key == "forge.check-command" {
+			m.config["check-command"] = value
 		} else {
 			m.config[key] = value
 		}
@@ -220,5 +224,133 @@ func TestGetDefaultReviewer(t *testing.T) {
 	}
 	if reviewer != "" {
 		t.Errorf("expected empty reviewer, got %q", reviewer)
+	}
+}
+
+func TestGetCheckCommand(t *testing.T) {
+	// Test: no config
+	mock1 := newMockClient()
+	mgr1 := NewConfigManager(mock1)
+	cmd, err := mgr1.GetCheckCommand()
+	if err != nil {
+		t.Fatalf("GetCheckCommand failed: %v", err)
+	}
+	if cmd != "" {
+		t.Errorf("expected empty command, got %q", cmd)
+	}
+
+	// Test: config with check-command
+	mock2 := newMockClient()
+	mock2.config["check-command"] = "\"echo hello\""
+	mgr2 := NewConfigManager(mock2)
+	cmd, err = mgr2.GetCheckCommand()
+	if err != nil {
+		t.Fatalf("GetCheckCommand failed: %v", err)
+	}
+	if cmd != "echo hello" {
+		t.Errorf("expected command 'echo hello', got %q", cmd)
+	}
+}
+
+func TestCheckVerdictCRUD(t *testing.T) {
+	mock := newMockClient()
+	mgr := NewConfigManager(mock)
+
+	v1 := CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "abc123"}
+	v2 := CheckVerdict{ChangeID: "c2", Verdict: CheckVerdictFail, CommitID: "def456"}
+
+	// Test Add
+	if err := mgr.SetCheckVerdict(v1); err != nil {
+		t.Fatalf("SetCheckVerdict failed: %v", err)
+	}
+	if err := mgr.SetCheckVerdict(v2); err != nil {
+		t.Fatalf("SetCheckVerdict failed: %v", err)
+	}
+
+	// Test GetAll
+	verdicts, err := mgr.GetCheckVerdicts()
+	if err != nil {
+		t.Fatalf("GetCheckVerdicts failed: %v", err)
+	}
+	if len(verdicts) != 2 {
+		t.Errorf("expected 2 verdicts, got %d", len(verdicts))
+	}
+
+	// Test GetByChangeID
+	got, err := mgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected verdict, got nil")
+	}
+	if diff := cmp.Diff(v1, *got); diff != "" {
+		t.Errorf("GetCheckVerdictByChangeID mismatch (-want +got):\n%s", diff)
+	}
+
+	// Test GetByChangeID not found
+	got, err = mgr.GetCheckVerdictByChangeID("nonexistent")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+
+	// Test Update (upsert)
+	v1Updated := CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictFail, CommitID: "abc789"}
+	if err := mgr.SetCheckVerdict(v1Updated); err != nil {
+		t.Fatalf("SetCheckVerdict update failed: %v", err)
+	}
+	verdicts, err = mgr.GetCheckVerdicts()
+	if err != nil {
+		t.Fatalf("GetCheckVerdicts failed: %v", err)
+	}
+	if len(verdicts) != 2 {
+		t.Errorf("expected 2 verdicts after update, got %d", len(verdicts))
+	}
+	got, err = mgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected verdict, got nil")
+	}
+	if diff := cmp.Diff(v1Updated, *got); diff != "" {
+		t.Errorf("updated verdict mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestParseCheckVerdict(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected CheckVerdict
+		wantErr  bool
+	}{
+		{
+			input:    "abc\npass\ncommit123",
+			expected: CheckVerdict{ChangeID: "abc", Verdict: CheckVerdictPass, CommitID: "commit123"},
+		},
+		{
+			input:    "xyz\nfail\ncommit456",
+			expected: CheckVerdict{ChangeID: "xyz", Verdict: CheckVerdictFail, CommitID: "commit456"},
+		},
+		{
+			input:   "invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		got, err := ParseCheckVerdict(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ParseCheckVerdict(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr {
+			if diff := cmp.Diff(tt.expected, got); diff != "" {
+				t.Errorf("ParseCheckVerdict(%q) mismatch (-want +got):\n%s", tt.input, diff)
+			}
+		}
 	}
 }
