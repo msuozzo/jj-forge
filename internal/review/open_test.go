@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -290,7 +291,7 @@ func TestOpen_EmptyDescription(t *testing.T) {
 		t.Fatal("expected error for empty description, got nil")
 	}
 
-	if !contains(err.Error(), "empty description") {
+	if !strings.Contains(err.Error(), "empty description") {
 		t.Errorf("expected 'empty description' in error, got: %v", err)
 	}
 
@@ -329,7 +330,7 @@ func TestOpen_NotUploaded(t *testing.T) {
 		t.Fatal("expected error for not uploaded, got nil")
 	}
 
-	if !contains(err.Error(), "has not been uploaded") {
+	if !strings.Contains(err.Error(), "has not been uploaded") {
 		t.Errorf("expected 'has not been uploaded' in error, got: %v", err)
 	}
 
@@ -395,7 +396,7 @@ func TestOpen_AlreadyExists(t *testing.T) {
 		t.Fatal("expected error for already exists, got nil")
 	}
 
-	if !contains(err.Error(), "review already exists") {
+	if !strings.Contains(err.Error(), "review already exists") {
 		t.Errorf("expected 'review already exists' in error, got: %v", err)
 	}
 
@@ -451,7 +452,7 @@ func TestOpen_ForgeError(t *testing.T) {
 		t.Fatal("expected error from forge, got nil")
 	}
 
-	if !contains(err.Error(), "failed to create review") {
+	if !strings.Contains(err.Error(), "failed to create review") {
 		t.Errorf("expected 'failed to create review' in error, got: %v", err)
 	}
 
@@ -624,16 +625,3 @@ func TestOpen_CrossRepo(t *testing.T) {
 	scenario.Verify()
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
