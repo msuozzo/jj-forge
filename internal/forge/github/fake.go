@@ -18,7 +18,7 @@ type Review struct {
 	Head      string
 	Base      string
 	Reviewers []string
-	Status    string // "open", "merged", "closed"
+	Status    string // One of open,merged,closed
 	URL       string
 }
 

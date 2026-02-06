@@ -102,7 +102,7 @@ func TestParseReviewRecord(t *testing.T) {
 				ChangeID: "abc",
 				ForgeID:  "pr/123",
 				URL:      "http://url",
-				Status:   "open",
+				Status:   ReviewStateOpen,
 			},
 			wantErr: false,
 		},
@@ -153,7 +153,7 @@ func TestConfigManager(t *testing.T) {
 
 	// Test Update
 	rec1Updated := rec1
-	rec1Updated.Status = "merged"
+	rec1Updated.Status = ReviewStateMerged
 	if err := mgr.AddReviewRecord(rec1Updated); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestConfigManager(t *testing.T) {
 	found := false
 	for _, r := range records {
 		if r.ChangeID == "c1" {
-			if r.Status != "merged" {
+			if r.Status != ReviewStateMerged {
 				t.Errorf("expected status 'merged', got %q", r.Status)
 			}
 			found = true

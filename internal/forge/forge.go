@@ -17,6 +17,15 @@ type ReviewCreateResult struct {
 	URL    string // URL to the review (e.g., https://github.com/owner/repo/pull/123)
 }
 
+// ReviewState represents the state of a code review.
+type ReviewState string
+
+const (
+	ReviewStateOpen   ReviewState = "open"
+	ReviewStateClosed ReviewState = "closed"
+	ReviewStateMerged ReviewState = "merged"
+)
+
 // Forge defines the interface for interacting with code forges.
 type Forge interface {
 	// CreateReview creates a new code review.

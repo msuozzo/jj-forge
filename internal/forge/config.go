@@ -20,12 +20,12 @@ type ReviewRecord struct {
 	ChangeID string
 	ForgeID  string
 	URL      string
-	Status   string
+	Status   ReviewState
 }
 
 // String returns the pipe-delimited string representation of the record.
 func (r ReviewRecord) String() string {
-	return strings.Join([]string{r.ChangeID, r.ForgeID, r.URL, r.Status}, recordSep)
+	return strings.Join([]string{r.ChangeID, r.ForgeID, r.URL, string(r.Status)}, recordSep)
 }
 
 // ParseReviewRecord parses a pipe-delimited string into a ReviewRecord.
@@ -38,7 +38,7 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 		ChangeID: parts[0],
 		ForgeID:  parts[1],
 		URL:      parts[2],
-		Status:   parts[3],
+		Status:   ReviewState(parts[3]),
 	}, nil
 }
 

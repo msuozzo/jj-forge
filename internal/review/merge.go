@@ -42,10 +42,10 @@ func Merge(
 	if reviewRecord == nil {
 		return nil, fmt.Errorf("no review found for change %s. Create one with: jj-forge review open %s", rev.ID, rev.ID)
 	}
-	if reviewRecord.Status == "merged" {
+	if reviewRecord.Status == forge.ReviewStateMerged {
 		return nil, fmt.Errorf("review #%s for change %s is already merged", reviewRecord.ForgeID, rev.ID)
 	}
-	if reviewRecord.Status == "closed" {
+	if reviewRecord.Status == forge.ReviewStateClosed {
 		return nil, fmt.Errorf("review #%s for change %s is closed. Reopen it or create a new review", reviewRecord.ForgeID, rev.ID)
 	}
 	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
@@ -83,8 +83,7 @@ func Merge(
 			fmt.Printf("Warning: failed to fetch: %v\n", err)
 		}
 	}
-	// Update config status to "merged"
-	reviewRecord.Status = "merged"
+	reviewRecord.Status = forge.ReviewStateMerged
 	if err := configMgr.AddReviewRecord(*reviewRecord); err != nil {
 		return nil, fmt.Errorf("failed to update review status: %w", err)
 	}

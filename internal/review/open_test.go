@@ -121,8 +121,8 @@ func TestOpen_Success(t *testing.T) {
 		t.Errorf("expected ChangeID aaaaaaaaaaaa in config, got %s", records[0].ChangeID)
 	}
 
-	if records[0].Status != "open" {
-		t.Errorf("expected status 'open' in config, got %s", records[0].Status)
+	if records[0].Status != forge.ReviewStateOpen {
+		t.Errorf("expected status %q in config, got %s", forge.ReviewStateOpen, records[0].Status)
 	}
 
 	scenario.Verify()
@@ -379,7 +379,7 @@ func TestOpen_AlreadyExists(t *testing.T) {
 		ChangeID: "aaaaaaaaaaaa",
 		ForgeID:  "pr/42",
 		URL:      "https://github.com/owner/repo/pull/42",
-		Status:   "open",
+		Status:   forge.ReviewStateOpen,
 	})
 	if err != nil {
 		t.Fatalf("failed to add config record: %v", err)
@@ -524,7 +524,7 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 		ChangeID: "aaaaaaaaaaaa",
 		ForgeID:  "pr/42",
 		URL:      "https://github.com/owner/repo/pull/42",
-		Status:   "closed",
+		Status:   forge.ReviewStateClosed,
 	})
 	if err != nil {
 		t.Fatalf("failed to add config record: %v", err)

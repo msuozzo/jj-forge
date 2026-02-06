@@ -49,12 +49,12 @@ func Open(
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 	if existingRecord != nil {
-		if existingRecord.Status == "open" {
+		if existingRecord.Status == forge.ReviewStateOpen {
 			return nil, fmt.Errorf("review already exists for change %s: %s", rev.ID, existingRecord.URL)
-		} else if existingRecord.Status == "merged" {
+		} else if existingRecord.Status == forge.ReviewStateMerged {
 			return nil, fmt.Errorf("change %s was already merged in review %s", rev.ID, existingRecord.ForgeID)
 		}
-		// If status is "closed", we can create a new review
+		// If status is closed, we can create a new review
 	}
 	// Determine base branch
 	upstreamRemoteURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)
@@ -90,7 +90,7 @@ func Open(
 		ChangeID: rev.ID,
 		ForgeID:  forgeClient.FormatID(result.Number),
 		URL:      result.URL,
-		Status:   "open",
+		Status:   forge.ReviewStateOpen,
 	}
 	if err := configMgr.AddReviewRecord(record); err != nil {
 		return nil, fmt.Errorf("failed to save review record: %w", err)

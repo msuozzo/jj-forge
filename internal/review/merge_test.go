@@ -92,7 +92,7 @@ func TestMerge_Success(t *testing.T) {
 		ChangeID: "aaaaaaaaaaaa",
 		ForgeID:  "pr/1",
 		URL:      "https://github.com/owner/repo/pull/1",
-		Status:   "open",
+		Status:   forge.ReviewStateOpen,
 	})
 	if err != nil {
 		t.Fatalf("failed to add config record: %v", err)
@@ -207,7 +207,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 		ChangeID: "aaaaaaaaaaaa",
 		ForgeID:  "pr/1",
 		URL:      "https://github.com/owner/repo/pull/1",
-		Status:   "open",
+		Status:   forge.ReviewStateOpen,
 	})
 	if err != nil {
 		t.Fatalf("failed to add config record: %v", err)
@@ -234,12 +234,12 @@ func TestMerge_NoCleanup(t *testing.T) {
 func TestMerge_StatusErrors(t *testing.T) {
 	tests := []struct {
 		name    string
-		status  string // "" means no pre-existing record
+		status  forge.ReviewState // "" means no pre-existing record
 		wantErr string
 	}{
 		{"no review found", "", "no review found"},
-		{"already merged", "merged", "already merged"},
-		{"review closed", "closed", "is closed"},
+		{"already merged", forge.ReviewStateMerged, "already merged"},
+		{"review closed", forge.ReviewStateClosed, "is closed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -361,7 +361,7 @@ func TestMerge_ForgeError(t *testing.T) {
 		ChangeID: "aaaaaaaaaaaa",
 		ForgeID:  "pr/1",
 		URL:      "https://github.com/owner/repo/pull/1",
-		Status:   "open",
+		Status:   forge.ReviewStateOpen,
 	})
 	if err != nil {
 		t.Fatalf("failed to add config record: %v", err)
