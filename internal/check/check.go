@@ -3,35 +3,18 @@ package check
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 
+	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
-
-// CommandRunner is an injectable function type for running check commands.
-type CommandRunner func(ctx context.Context, repoPath, command string) error
-
-// DefaultRunner runs a command via jj util exec -- sh -c <command>.
-func DefaultRunner(ctx context.Context, repoPath, command string) error {
-	var args []string
-	if repoPath != "" {
-		args = append(args, "-R", repoPath)
-	}
-	args = append(args, "util", "exec", "--", "sh", "-c", command)
-	cmd := exec.CommandContext(ctx, "jj", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
 
 // Run executes the configured check command against the given revset.
 //
 // When force is true, the command is always executed (used by standalone jj-forge check).
 // When force is false, execution is skipped if all changes already have passing
 // verdicts with matching commit IDs (used by upload/submit/merge).
-func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner CommandRunner) error {
+func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner cmd.Executor) error {
 	// Read check command from config
 	checkCmd, err := configMgr.GetCheckCommand()
 	if err != nil {
@@ -69,7 +52,12 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return fmt.Errorf("failed to get repo root: %w", err)
 	}
 	// TODO: Execute at the specific revision once multi-rev support lands.
-	runErr := runner(ctx, repoPath, checkCmd)
+	args := []string{"jj"}
+	if repoPath != "" {
+		args = append(args, "-R", repoPath)
+	}
+	args = append(args, "util", "exec", "--", "sh", "-c", checkCmd)
+	_, runErr := runner(ctx, cmd.Opts{}, args...)
 	// Store verdict
 	verdictStr := forge.CheckVerdictPass
 	if runErr != nil {

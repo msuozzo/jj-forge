@@ -2,13 +2,13 @@ package repoclone
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/msuozzo/jj-forge/internal/cmd"
 )
 
 // WorkflowType represents the workflow mode for the repository.
@@ -37,24 +37,6 @@ type Result struct {
 	Workflow     WorkflowType // Detected workflow type
 	ForkRemote   string       // Name of the fork/personal remote
 	UpstreamName string       // Name of the upstream remote (empty for main workflow)
-}
-
-// JJExecutor defines the function signature for running jj commands.
-type JJExecutor func(ctx context.Context, workDir string, args ...string) (stdout string, err error)
-
-// defaultJJExecutor implements JJExecutor using os/exec to run "jj".
-func defaultJJExecutor(ctx context.Context, workDir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "jj", args...)
-	if workDir != "" {
-		cmd.Dir = workDir
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("command failed: jj %s\nerror: %w\nstderr: %s", strings.Join(args, " "), err, stderr.String())
-	}
-	return stdout.String(), nil
 }
 
 // Prompter handles user interaction for confirmations and choices.
@@ -136,7 +118,7 @@ func (p *DefaultPrinter) Step(msg string)    { fmt.Printf("⟳ %s\n", msg) }
 // Runner orchestrates the clone operation.
 type Runner struct {
 	ghClient   *GitHubClient
-	jjExecutor JJExecutor
+	jjExecutor cmd.Executor
 	prompter   Prompter
 	printer    Printer
 }
@@ -145,14 +127,14 @@ type Runner struct {
 func NewRunner() *Runner {
 	return &Runner{
 		ghClient:   NewGitHubClient(),
-		jjExecutor: defaultJJExecutor,
+		jjExecutor: cmd.DefaultExecutor,
 		prompter:   &DefaultPrompter{},
 		printer:    &DefaultPrinter{},
 	}
 }
 
 // NewRunnerWithDeps creates a Runner with custom dependencies (for testing).
-func NewRunnerWithDeps(ghClient *GitHubClient, jjExecutor JJExecutor, prompter Prompter, printer Printer) *Runner {
+func NewRunnerWithDeps(ghClient *GitHubClient, jjExecutor cmd.Executor, prompter Prompter, printer Printer) *Runner {
 	return &Runner{
 		ghClient:   ghClient,
 		jjExecutor: jjExecutor,
@@ -293,7 +275,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 
 	// Clone the repository
 	r.printer.Step("Cloning repository...")
-	_, err = r.jjExecutor(ctx, "", "git", "clone", cloneURL, clonePath)
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "git", "clone", cloneURL, clonePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
@@ -309,7 +291,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 
 	// Rename origin to fork-remote name
 	if params.ForkRemote != "origin" {
-		_, err = r.jjExecutor(ctx, absClonePath, "git", "remote", "rename", "origin", params.ForkRemote)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "rename", "origin", params.ForkRemote)...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rename origin remote: %w", err)
 		}
@@ -337,7 +319,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 			upstreamURL = upstreamHTTPS
 		}
 
-		_, err = r.jjExecutor(ctx, absClonePath, "git", "remote", "add", params.UpstreamRemote, upstreamURL)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "add", params.UpstreamRemote, upstreamURL)...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add upstream remote: %w", err)
 		}
@@ -358,7 +340,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	}
 
 	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, trunkRemote)
-	_, err = r.jjExecutor(ctx, absClonePath, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure trunk() alias: %w", err)
 	}

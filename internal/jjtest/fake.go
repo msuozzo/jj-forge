@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
@@ -85,14 +86,14 @@ func NewScenario(t *testing.T, repo *FakeRepo, calls ...Call) *Scenario {
 }
 
 // Executor returns an executor function for use with jj.NewClientWithExecutor.
-func (s *Scenario) Executor() jj.Executor {
-	return func(ctx context.Context, args ...string) (string, error) {
+func (s *Scenario) Executor() cmd.Executor {
+	return func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		s.T.Helper()
 
-		// Strip -R flag if present
-		cmdArgs := args
-		if len(args) > 1 && args[0] == "-R" {
-			cmdArgs = args[2:]
+		// Strip binary name and -R flag if present
+		cmdArgs := args[1:]
+		if len(cmdArgs) > 1 && cmdArgs[0] == "-R" {
+			cmdArgs = cmdArgs[2:]
 		}
 
 		if s.idx >= len(s.Calls) {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
@@ -101,9 +102,9 @@ func TestRunNoConfig(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	ran := false
-	runner := func(ctx context.Context, repoPath, command string) error {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		ran = true
-		return nil
+		return "", nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
@@ -121,14 +122,21 @@ func TestRunPass(t *testing.T) {
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, repoPath, command string) error {
-		if command != "echo hello" {
-			t.Errorf("expected command 'echo hello', got %q", command)
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+		// args: [-R /fake/repo util exec -- sh -c "echo hello"]
+		wantSuffix := []string{"util", "exec", "--", "sh", "-c", "echo hello"}
+		gotSuffix := args[len(args)-len(wantSuffix):]
+		for i, w := range wantSuffix {
+			if gotSuffix[i] != w {
+				t.Errorf("arg %d = %q, want %q", i, gotSuffix[i], w)
+			}
 		}
-		if repoPath != "/fake/repo" {
-			t.Errorf("expected repoPath '/fake/repo', got %q", repoPath)
+		if len(args) >= 2 && args[0] == "-R" {
+			if args[1] != "/fake/repo" {
+				t.Errorf("expected repoPath '/fake/repo', got %q", args[1])
+			}
 		}
-		return nil
+		return "", nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
@@ -158,8 +166,8 @@ func TestRunFail(t *testing.T) {
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, repoPath, command string) error {
-		return fmt.Errorf("exit status 1")
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+		return "", fmt.Errorf("exit status 1")
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
@@ -196,9 +204,9 @@ func TestRunSkipCached(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, repoPath, command string) error {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		ran = true
-		return nil
+		return "", nil
 	}
 
 	// force=false should skip execution
@@ -227,9 +235,9 @@ func TestRunForceIgnoresCache(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, repoPath, command string) error {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		ran = true
-		return nil
+		return "", nil
 	}
 
 	// force=true should run regardless
@@ -251,9 +259,9 @@ func TestRunMultipleRevs(t *testing.T) {
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, repoPath, command string) error {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		t.Error("runner should not have been called")
-		return nil
+		return "", nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
@@ -278,9 +286,9 @@ func TestRunStaleCache(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, repoPath, command string) error {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		ran = true
-		return nil
+		return "", nil
 	}
 
 	// force=false, but commit ID changed — should re-run

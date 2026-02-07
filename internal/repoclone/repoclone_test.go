@@ -7,13 +7,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/msuozzo/jj-forge/internal/cmd"
 )
 
 // fakeGHExecutor builds a gh executor from a username and a map of
 // API path ("repos/owner/name") → JSON response. Missing entries return 404.
-func fakeGHExecutor(t *testing.T, user string, repos map[string]string) Executor {
+func fakeGHExecutor(t *testing.T, user string, repos map[string]string) cmd.Executor {
 	t.Helper()
-	return func(ctx context.Context, args ...string) (string, error) {
+	return func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		if len(args) >= 2 && args[0] == "api" && args[1] == "user" {
 			return user + "\n", nil
 		}
@@ -30,9 +32,9 @@ func fakeGHExecutor(t *testing.T, user string, repos map[string]string) Executor
 }
 
 // recordingJJExecutor returns a jj executor that records all commands.
-func recordingJJExecutor() (JJExecutor, *[][]string) {
+func recordingJJExecutor() (cmd.Executor, *[][]string) {
 	var cmds [][]string
-	exec := func(ctx context.Context, workDir string, args ...string) (string, error) {
+	exec := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
 		cmds = append(cmds, args)
 		return "", nil
 	}
@@ -333,9 +335,9 @@ func TestRunner(t *testing.T) {
 				ClonePath: "/tmp/test-clone", Workflow: WorkflowMain, ForkRemote: "og",
 			},
 			wantJJ: [][]string{
-				{"git", "clone"},
-				{"git", "remote", "rename"},
-				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@og"},
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@og"},
 			},
 		},
 		{
@@ -354,10 +356,10 @@ func TestRunner(t *testing.T) {
 				ClonePath: "/tmp/test-clone", Workflow: WorkflowPR, ForkRemote: "og", UpstreamName: "up",
 			},
 			wantJJ: [][]string{
-				{"git", "clone"},
-				{"git", "remote", "rename"},
-				{"git", "remote", "add"},
-				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "add"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
 		{
@@ -376,10 +378,10 @@ func TestRunner(t *testing.T) {
 				ClonePath: "/tmp/test-clone", Workflow: WorkflowPR, ForkRemote: "og", UpstreamName: "up",
 			},
 			wantJJ: [][]string{
-				{"git", "clone"},
-				{"git", "remote", "rename"},
-				{"git", "remote", "add"},
-				{"config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "add"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
 		{

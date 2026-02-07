@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/msuozzo/jj-forge/internal/cmd"
 )
 
 func TestRemoteURL(t *testing.T) {
@@ -48,7 +50,8 @@ func TestRemoteURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := func(ctx context.Context, args ...string) (string, error) {
+			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+				args = args[1:] // strip binary name
 				if len(args) == 3 && args[0] == "git" && args[1] == "remote" && args[2] == "list" {
 					return tt.listOutput, nil
 				}
@@ -95,7 +98,8 @@ func TestGitDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := func(ctx context.Context, args ...string) (string, error) {
+			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+				args = args[1:] // strip binary name
 				if len(args) == 2 && args[0] == "git" && args[1] == "root" {
 					return tt.rootOutput, nil
 				}

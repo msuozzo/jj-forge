@@ -3,10 +3,12 @@ package github
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 )
 
@@ -21,7 +23,8 @@ func TestCreateReview_Success(t *testing.T) {
 		"--reviewer", "reviewer1",
 	}
 
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -63,7 +66,8 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 		"--reviewer", "user2",
 	}
 
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -86,7 +90,8 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 }
 
 func TestCreateReview_NoReviewers(t *testing.T) {
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		// Verify no --reviewer flags present
 		for i, arg := range args {
 			if arg == "--reviewer" {
@@ -113,7 +118,7 @@ func TestCreateReview_NoReviewers(t *testing.T) {
 
 func TestCreateReview_ExecutorError(t *testing.T) {
 	expectedErr := errors.New("gh command failed")
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -136,7 +141,7 @@ func TestCreateReview_ExecutorError(t *testing.T) {
 }
 
 func TestCreateReview_InvalidOutput(t *testing.T) {
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		return "invalid-url-format", nil
 	}
 
@@ -166,7 +171,8 @@ func TestMergeReview_Success(t *testing.T) {
 		"--squash",
 	}
 
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -183,7 +189,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 func TestMergeReview_Error(t *testing.T) {
 	expectedErr := errors.New("merge failed")
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -206,7 +212,8 @@ func TestCloseReview_Success(t *testing.T) {
 		"--repo", "https://github.com/owner/repo",
 	}
 
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
@@ -223,7 +230,7 @@ func TestCloseReview_Success(t *testing.T) {
 
 func TestCloseReview_Error(t *testing.T) {
 	expectedErr := errors.New("close failed")
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		return "", expectedErr
 	}
 
@@ -244,15 +251,18 @@ func TestSetupRuleset_Success(t *testing.T) {
 	var gotCreateArgs []string
 	var gotStdin []byte
 
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		args = args[1:] // strip binary name
 		// First call: list existing rulesets (GET)
-		if len(gotListArgs) == 0 && stdin == nil {
+		if len(gotListArgs) == 0 && opts.Stdin == nil {
 			gotListArgs = args
 			return "[]", nil // No existing rulesets
 		}
 		// Second call: create ruleset (POST)
 		gotCreateArgs = args
-		gotStdin = stdin
+		if opts.Stdin != nil {
+			gotStdin, _ = io.ReadAll(opts.Stdin)
+		}
 		return "{}", nil
 	}
 
@@ -297,7 +307,8 @@ func TestSetupRuleset_Success(t *testing.T) {
 
 func TestSetupRuleset_AlreadyExists(t *testing.T) {
 	callCount := 0
-	executor := func(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		_ = args[0] // binary name
 		callCount++
 		if callCount == 1 {
 			// Return existing ruleset with matching name

@@ -1,28 +1,13 @@
 package jj
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/msuozzo/jj-forge/internal/cmd"
 )
-
-// Executor defines the function signature for running shell commands.
-type Executor func(ctx context.Context, args ...string) (stdout string, err error)
-
-// defaultExecutor implements Executor using os/exec to run "jj".
-func defaultExecutor(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "jj", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("command failed: jj %s\nerror: %w\nstderr: %s", strings.Join(args, " "), err, stderr.String())
-	}
-	return stdout.String(), nil
-}
 
 // Rev holds detailed information about a single revision.
 type Rev struct {
@@ -50,19 +35,19 @@ type Client interface {
 
 type client struct {
 	repository string
-	executor   Executor
+	executor   cmd.Executor
 }
 
 // NewClient creates a client with the default executor.
 func NewClient(repository string) Client {
 	return &client{
 		repository: repository,
-		executor:   defaultExecutor,
+		executor:   cmd.DefaultExecutor,
 	}
 }
 
 // NewClientWithExecutor creates a client with a custom executor.
-func NewClientWithExecutor(repository string, exec Executor) Client {
+func NewClientWithExecutor(repository string, exec cmd.Executor) Client {
 	return &client{
 		repository: repository,
 		executor:   exec,
@@ -74,7 +59,7 @@ func (j *client) Run(ctx context.Context, args ...string) (string, error) {
 	if j.repository != "" {
 		args = append([]string{"-R", j.repository}, args...)
 	}
-	return j.executor(ctx, args...)
+	return j.executor(ctx, cmd.Opts{}, append([]string{"jj"}, args...)...)
 }
 
 // Root returns the repo root path.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
+	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/jj"
@@ -47,7 +48,7 @@ func main() {
 				}
 			}
 			configMgr := forge.NewConfigManager(client)
-			return check.Run(ctx, client, configMgr, revset, true, check.DefaultRunner)
+			return check.Run(ctx, client, configMgr, revset, true, cmdpkg.DefaultExecutor)
 		},
 	}
 	rootCmd.AddCommand(checkCmd)
@@ -79,7 +80,7 @@ func main() {
 			}
 			if !uploadSkipCheck {
 				configMgr := forge.NewConfigManager(client)
-				if err := check.Run(ctx, client, configMgr, revset, false, check.DefaultRunner); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, cmdpkg.DefaultExecutor); err != nil {
 					return err
 				}
 			}
@@ -119,7 +120,7 @@ use 'review open' and 'review submit' instead.`,
 			client := jj.NewClient(repoPath)
 			if !submitSkipCheck {
 				configMgr := forge.NewConfigManager(client)
-				if err := check.Run(ctx, client, configMgr, revset, false, check.DefaultRunner); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, cmdpkg.DefaultExecutor); err != nil {
 					return err
 				}
 			}
@@ -222,7 +223,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			configMgr := forge.NewConfigManager(jjClient)
 			if !mergeSkipCheck {
-				if err := check.Run(ctx, jjClient, configMgr, rev, false, check.DefaultRunner); err != nil {
+				if err := check.Run(ctx, jjClient, configMgr, rev, false, cmdpkg.DefaultExecutor); err != nil {
 					return err
 				}
 			}

@@ -624,4 +624,3 @@ func TestOpen_CrossRepo(t *testing.T) {
 
 	scenario.Verify()
 }
-

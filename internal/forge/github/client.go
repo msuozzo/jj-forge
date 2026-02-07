@@ -10,16 +10,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 )
 
-// Executor defines the function signature for running gh commands.
-type Executor func(ctx context.Context, stdin []byte, args ...string) (stdout string, err error)
-
 // Client implements the forge.Forge interface for GitHub using the gh CLI.
 type Client struct {
-	gitDir   string   // Path to .git directory for GIT_DIR env var
-	executor Executor // Function to execute gh commands
+	gitDir   string       // Path to .git directory for GIT_DIR env var
+	executor cmd.Executor // Function to execute gh commands
 }
 
 // NewClient creates a GitHub client with the default executor.
@@ -31,29 +29,34 @@ func NewClient(gitDir string) *Client {
 }
 
 // NewClientWithExecutor creates a GitHub client with a custom executor (for testing).
-func NewClientWithExecutor(gitDir string, exec Executor) *Client {
+func NewClientWithExecutor(gitDir string, exec cmd.Executor) *Client {
 	return &Client{
 		gitDir:   gitDir,
 		executor: exec,
 	}
 }
 
-// defaultExecutor creates an executor that runs gh commands with proper GIT_DIR.
-func defaultExecutor(gitDir string) Executor {
-	return func(ctx context.Context, stdin []byte, args ...string) (string, error) {
-		cmd := exec.CommandContext(ctx, "gh", args...)
+// run calls the executor with "gh" prepended to args.
+func (c *Client) run(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	return c.executor(ctx, opts, append([]string{"gh"}, args...)...)
+}
+
+// defaultExecutor creates an executor that runs commands with proper GIT_DIR.
+func defaultExecutor(gitDir string) cmd.Executor {
+	return func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		c := exec.CommandContext(ctx, args[0], args[1:]...)
 		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		if len(stdin) > 0 {
-			cmd.Stdin = bytes.NewReader(stdin)
+		c.Stdout = &stdout
+		c.Stderr = &stderr
+		if opts.Stdin != nil {
+			c.Stdin = opts.Stdin
 		}
 		// Set GIT_DIR environment variable if provided
 		if gitDir != "" {
-			cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_DIR=%s", gitDir))
+			c.Env = append(os.Environ(), fmt.Sprintf("GIT_DIR=%s", gitDir))
 		}
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("gh command failed: %w\nstderr: %s", err, stderr.String())
+		if err := c.Run(); err != nil {
+			return "", fmt.Errorf("command failed: %s\nerror: %w\nstderr: %s", strings.Join(args, " "), err, stderr.String())
 		}
 		return stdout.String(), nil
 	}
@@ -78,7 +81,7 @@ func (c *Client) CreateReview(ctx context.Context, repoURI string, params forge.
 	for _, reviewer := range params.Reviewers {
 		args = append(args, "--reviewer", reviewer)
 	}
-	output, err := c.executor(ctx, nil, args...)
+	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -129,7 +132,7 @@ func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber i
 		"--repo", normalizedURI,
 		"--squash",
 	}
-	_, err = c.executor(ctx, nil, args...)
+	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return fmt.Errorf("failed to merge PR #%d: %w", reviewNumber, err)
 	}
@@ -148,7 +151,7 @@ func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewNumber i
 		fmt.Sprintf("%d", reviewNumber),
 		"--repo", normalizedURI,
 	}
-	_, err = c.executor(ctx, nil, args...)
+	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return fmt.Errorf("failed to close PR #%d: %w", reviewNumber, err)
 	}
@@ -169,7 +172,7 @@ func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, err
 		"--json", "defaultBranchRef",
 		"--template", "{{.defaultBranchRef.name}}",
 	}
-	output, err := c.executor(ctx, nil, args...)
+	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get default branch: %w", err)
 	}
@@ -195,7 +198,7 @@ func (c *Client) FindReview(ctx context.Context, repoURI, branch string) (*forge
 		"--json", "number,url,state",
 		"--limit", "1",
 	}
-	output, err := c.executor(ctx, nil, args...)
+	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list PRs: %w", err)
 	}
@@ -233,7 +236,7 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 		"--repo", normalizedURI,
 		"--json", "number,url,state",
 	}
-	output, err := c.executor(ctx, nil, args...)
+	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR #%d: %w", number, err)
 	}
@@ -287,7 +290,7 @@ func (c *Client) SetupRuleset(ctx context.Context, repoURI string) error {
 		"-H", "X-GitHub-Api-Version: 2022-11-28",
 		apiPath,
 	}
-	listOutput, err := c.executor(ctx, nil, listArgs...)
+	listOutput, err := c.run(ctx, cmd.Opts{}, listArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to list rulesets: %w", err)
 	}
@@ -335,7 +338,7 @@ func (c *Client) SetupRuleset(ctx context.Context, repoURI string) error {
 		apiPath,
 		"--input", "-",
 	}
-	_, err = c.executor(ctx, []byte(rulesetJSON), createArgs...)
+	_, err = c.run(ctx, cmd.Opts{Stdin: bytes.NewReader([]byte(rulesetJSON))}, createArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to setup ruleset: %w", err)
 	}
