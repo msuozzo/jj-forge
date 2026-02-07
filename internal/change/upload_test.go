@@ -3,12 +3,16 @@ package change
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/jjtest"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 const testRemote = "og"
+
+var testUI = ui.New(io.Discard, ui.ColorNever)
 
 func TestUpload_SingleMutableCommit(t *testing.T) {
 	// Single mutable commit on top of immutable root.
@@ -37,7 +41,7 @@ func TestUpload_SingleMutableCommit(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -82,7 +86,7 @@ func TestUpload_TwoCommitStack(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -138,7 +142,7 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -178,7 +182,7 @@ func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -221,7 +225,7 @@ func TestUpload_TrailerRemoval(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -254,7 +258,7 @@ func TestUpload_PushFailure(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	_, err := Upload(context.Background(), client, "mutable()", testRemote)
+	_, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err == nil {
 		t.Fatal("Upload() expected error, got nil")
 	}
@@ -275,7 +279,7 @@ func TestUpload_EmptyRevset(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "none()", testRemote)
+	result, err := Upload(context.Background(), client, "none()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -304,7 +308,7 @@ func TestUpload_SkipEmptyCommit(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -335,7 +339,7 @@ func TestUpload_SkipAnonymousCommit(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -371,7 +375,7 @@ func TestUpload_SkipSyncedCommit(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -425,7 +429,7 @@ func TestUpload_PushWhenTrailerChangedEvenIfSynced(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -468,7 +472,7 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 	)
 
 	client := scenario.Client()
-	result, err := Upload(context.Background(), client, "mutable()", testRemote)
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}

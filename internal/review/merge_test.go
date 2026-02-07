@@ -103,6 +103,7 @@ func TestMerge_Success(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		NoCleanup:      false,
+		UI:             testUI,
 	})
 
 	if err != nil {
@@ -218,6 +219,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		NoCleanup:      true,
+		UI:             testUI,
 	})
 
 	if err != nil {
@@ -300,6 +302,7 @@ func TestMerge_StatusErrors(t *testing.T) {
 			_, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
 				Rev:        "@",
 				ForkRemote: testRemote,
+				UI:         testUI,
 			})
 
 			if err == nil {
@@ -371,6 +374,7 @@ func TestMerge_ForgeError(t *testing.T) {
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
+		UI:             testUI,
 	})
 
 	if err == nil {

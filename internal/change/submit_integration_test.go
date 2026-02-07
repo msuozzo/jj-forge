@@ -4,6 +4,7 @@ package change
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
+
+var integrationTestUI = ui.New(io.Discard, ui.ColorNever)
 
 // Helper functions specific to submit tests
 // Note: runCmd, runCmdOutput, writeFile, getChangeIDs, and getDescription
@@ -109,7 +113,7 @@ func TestSubmitIntegration_SingleCommit(t *testing.T) {
 
 	// 5. Execute Submit on the just-created commit (@-)
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, "@-", "og", "main")
+	result, err := Submit(context.Background(), client, "@-", "og", "main", integrationTestUI)
 
 	// 6. Verify no error
 	if err != nil {
@@ -163,7 +167,7 @@ func TestSubmitIntegration_ThreeCommitStack(t *testing.T) {
 
 	// Execute Submit (use main@og..@- to get all commits between remote and parent of working copy)
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, "main@og..@-", "og", "main")
+	result, err := Submit(context.Background(), client, "main@og..@-", "og", "main", integrationTestUI)
 
 	// Verify no error
 	if err != nil {
@@ -224,7 +228,7 @@ func TestSubmitIntegration_WithTrailers(t *testing.T) {
 
 	// Execute Submit
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, "main@og..@-", "og", "main")
+	result, err := Submit(context.Background(), client, "main@og..@-", "og", "main", integrationTestUI)
 
 	// Verify no error
 	if err != nil {
@@ -269,7 +273,7 @@ func TestSubmitIntegration_EmptyRevset(t *testing.T) {
 
 	// Execute Submit with empty revset (no mutable commits)
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, "none()", "og", "main")
+	result, err := Submit(context.Background(), client, "none()", "og", "main", integrationTestUI)
 
 	// Verify no error
 	if err != nil {
@@ -318,7 +322,7 @@ func TestSubmitIntegration_NonLinearStackFails(t *testing.T) {
 
 	// Try to submit - should fail validation
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, "@-", "og", "main")
+	result, err := Submit(context.Background(), client, "@-", "og", "main", integrationTestUI)
 
 	// Verify error occurred
 	if err == nil {
@@ -380,7 +384,7 @@ func TestSubmitIntegration_NotBasedOnRemoteHeadFails(t *testing.T) {
 	// Now try to submit commit A, which is based on old remote head (X), not current (Y)
 	// This should fail validation
 	client := jj.NewClient(repoDir)
-	result, err := Submit(context.Background(), client, commitA, "og", "main")
+	result, err := Submit(context.Background(), client, commitA, "og", "main", integrationTestUI)
 
 	// Verify error occurred
 	if err == nil {

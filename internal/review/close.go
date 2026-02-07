@@ -9,6 +9,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // CloseParams contains parameters for the close command.
@@ -18,6 +19,7 @@ type CloseParams struct {
 	UpstreamRemote string // Remote to close PR in
 	Force          bool   // Skip confirmation if true
 	NoCleanup      bool   // Skip local cleanup if true
+	UI             *ui.UI // UI for styled output
 }
 
 // CloseResult contains the result of the close command.
@@ -80,21 +82,22 @@ func Close(
 	}
 	// Cleanup (unless --no-cleanup)
 	if !params.NoCleanup {
+		u := params.UI
 		bookmarkName := fmt.Sprintf("push-%s", rev.ID)
 		// Delete bookmark
-		fmt.Printf("Deleting bookmark %s...\n", bookmarkName)
+		fmt.Fprintf(u, "Deleting bookmark %s...\n", u.Styled("bookmark", bookmarkName))
 		_, err = jjClient.Run(ctx, "bookmark", "delete", bookmarkName)
 		if err != nil {
-			fmt.Printf("Warning: failed to delete bookmark %s: %v\n", bookmarkName, err)
+			u.PrintWarning("failed to delete bookmark %s: %v", bookmarkName, err)
 		}
 		// Push bookmark deletion
-		fmt.Printf("Pushing bookmark deletion to %s...\n", params.ForkRemote)
+		fmt.Fprintf(u, "Pushing bookmark deletion to %s...\n", u.Styled("remote", params.ForkRemote))
 		_, err = jjClient.Run(ctx, "git", "push", "--remote", params.ForkRemote, "--bookmark", bookmarkName)
 		if err != nil {
-			fmt.Printf("Warning: failed to push bookmark deletion: %v\n", err)
+			u.PrintWarning("failed to push bookmark deletion: %v", err)
 		}
 		// Abandon the change
-		fmt.Printf("Abandoning change %s...\n", rev.ID)
+		fmt.Fprintf(u, "Abandoning change %s...\n", u.Styled("change_id", rev.ID))
 		_, err = jjClient.Run(ctx, "abandon", rev.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to abandon change: %w", err)

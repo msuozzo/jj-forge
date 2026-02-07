@@ -103,6 +103,7 @@ func TestClose_Success(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		Force:          true,
+		UI:             testUI,
 	})
 
 	if err != nil {
@@ -209,6 +210,7 @@ func TestClose_StatusErrors(t *testing.T) {
 				Rev:        "@",
 				ForkRemote: testRemote,
 				Force:      true,
+				UI:         testUI,
 			})
 
 			if err == nil {
@@ -281,6 +283,7 @@ func TestClose_ForgeError(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		Force:          true,
+		UI:             testUI,
 	})
 
 	if err == nil {
@@ -375,6 +378,7 @@ func TestClose_AbandonFailure(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		Force:          true,
+		UI:             testUI,
 	})
 
 	if err == nil {

@@ -4,21 +4,30 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
 	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
+	"github.com/msuozzo/jj-forge/internal/help"
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/repoclone"
 	"github.com/msuozzo/jj-forge/internal/review"
+	"github.com/msuozzo/jj-forge/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var (
 	repoPath    string
 	debugPrompt string
+	colorFlag   string
+)
+
+var (
+	stdoutUI *ui.UI
+	stderrUI *ui.UI
 )
 
 var jjConfirmOps = [][]string{
@@ -68,10 +77,40 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "jj-forge",
 		Short: "jj-forge is a translation layer between jj and code forges like GitHub",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			var mode ui.ColorMode
+			switch colorFlag {
+			case "always":
+				mode = ui.ColorAlways
+			case "never":
+				mode = ui.ColorNever
+			default:
+				mode = ui.ColorAuto
+			}
+			stdoutUI = ui.New(os.Stdout, mode)
+			stderrUI = ui.New(os.Stderr, mode)
+		},
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&repoPath, "repo", "R", "", "Path to the repository")
 	rootCmd.PersistentFlags().StringVar(&debugPrompt, "debug-prompt", "none", "Prompt before commands: none, writes, all")
+	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "When to use colors (always, never, auto)")
+
+	// Set up help renderer with lazy UI resolution so --color flag takes effect
+	help.Setup(rootCmd, func() *ui.UI {
+		var mode ui.ColorMode
+		switch colorFlag {
+		case "always":
+			mode = ui.ColorAlways
+		case "never":
+			mode = ui.ColorNever
+		default:
+			mode = ui.ColorAuto
+		}
+		return ui.New(os.Stdout, mode)
+	})
 
 	// Check command
 	checkCmd := &cobra.Command{
@@ -100,6 +139,10 @@ func main() {
 	changeCmd := &cobra.Command{
 		Use:   "change",
 		Short: "Manage change content and lifecycle",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
 	}
 
 	var uploadRemote string
@@ -127,17 +170,17 @@ func main() {
 					return err
 				}
 			}
-			result, err := change.Upload(ctx, client, revset, uploadRemote)
+			result, err := change.Upload(ctx, client, revset, uploadRemote, stdoutUI)
 			if err != nil {
 				return err
 			}
 
 			// Print summary
 			if result.Pushed > 0 || result.TrailersUpdated > 0 {
-				fmt.Printf("Pushed %d change(s), updated %d trailer(s)\n", result.Pushed, result.TrailersUpdated)
+				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", result.Pushed, result.TrailersUpdated)
 			}
 			if result.Skipped > 0 {
-				fmt.Printf("Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
 					result.Skipped, result.SkippedEmpty, result.SkippedAnonymous, result.SkippedSynced)
 			}
 			return nil
@@ -167,12 +210,12 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			result, err := change.Submit(ctx, client, revset, submitRemote, submitBranch)
+			result, err := change.Submit(ctx, client, revset, submitRemote, submitBranch, stdoutUI)
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("Submitted %d change(s)\n", result.Submitted)
+			fmt.Fprintf(stdoutUI, "Submitted %d change(s)\n", result.Submitted)
 			return nil
 		},
 	}
@@ -188,6 +231,10 @@ use 'review open' and 'review submit' instead.`,
 	reviewCmd := &cobra.Command{
 		Use:   "review",
 		Short: "Manage pull request reviews",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
 	}
 
 	var openReviewers []string
@@ -237,8 +284,10 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Created review #%d for change %s\n", result.Number, result.ChangeID)
-			fmt.Printf("URL: %s\n", result.URL)
+			fmt.Fprintf(stdoutUI, "Created review %s for change %s\n",
+				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+				stdoutUI.Styled("change_id", result.ChangeID))
+			fmt.Fprintf(stdoutUI, "URL: %s\n", stdoutUI.Styled("url", result.URL))
 			return nil
 		},
 	}
@@ -282,11 +331,14 @@ use 'review open' and 'review submit' instead.`,
 				ForkRemote:     mergeForkRemote,
 				UpstreamRemote: mergeUpstreamRemote,
 				NoCleanup:      mergeNoCleanup,
+				UI:             stdoutUI,
 			})
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Merged review #%d for change %s\n", result.Number, result.ChangeID)
+			fmt.Fprintf(stdoutUI, "Merged review %s for change %s\n",
+				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+				stdoutUI.Styled("change_id", result.ChangeID))
 			return nil
 		},
 	}
@@ -327,11 +379,14 @@ use 'review open' and 'review submit' instead.`,
 				UpstreamRemote: closeUpstreamRemote,
 				Force:          closeForce,
 				NoCleanup:      closeNoCleanup,
+				UI:             stdoutUI,
 			})
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Closed review #%d and abandoned change %s\n", result.Number, result.ChangeID)
+			fmt.Fprintf(stdoutUI, "Closed review %s and abandoned change %s\n",
+				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+				stdoutUI.Styled("change_id", result.ChangeID))
 			return nil
 		},
 	}
@@ -376,7 +431,7 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Imported %d new review(s), updated %d existing review(s)\n", result.Added, result.Updated)
+			fmt.Fprintf(stdoutUI, "Imported %d new review(s), updated %d existing review(s)\n", result.Added, result.Updated)
 			return nil
 		},
 	}
@@ -393,6 +448,10 @@ use 'review open' and 'review submit' instead.`,
 	repoCmd := &cobra.Command{
 		Use:   "repo",
 		Short: "Repository setup and configuration",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
 	}
 
 	var cloneForkRemote, cloneUpstreamRemote string
@@ -470,7 +529,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Successfully added ruleset to %s\n", upstreamURL)
+			fmt.Fprintf(stdoutUI, "Successfully added ruleset to %s\n", stdoutUI.Styled("url", upstreamURL))
 			return nil
 		},
 	}
@@ -481,7 +540,53 @@ Examples:
 	rootCmd.AddCommand(repoCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if stderrUI == nil {
+			stderrUI = ui.New(os.Stderr, ui.ColorAuto)
+		}
+		if !printUnknownCommandError(stderrUI, err) {
+			stderrUI.PrintError(err)
+		}
 		os.Exit(1)
 	}
+}
+
+// printUnknownCommandError detects Cobra's "unknown command" errors and prints
+// them in jj's style. Returns true if the error was handled.
+func printUnknownCommandError(u *ui.UI, err error) bool {
+	msg := err.Error()
+	// Cobra format: `unknown command "X" for "Y"` optionally followed by
+	// `\n\nDid you mean this?\n\t<suggestion>`
+	if !strings.HasPrefix(msg, "unknown command \"") {
+		return false
+	}
+	// Extract the subcommand name between the first pair of quotes.
+	start := len("unknown command \"")
+	end := strings.Index(msg[start:], "\"")
+	if end < 0 {
+		return false
+	}
+	sub := msg[start : start+end]
+
+	// Extract the command path between the second pair of quotes.
+	rest := msg[start+end+len("\" for \""):]
+	cmdEnd := strings.Index(rest, "\"")
+	if cmdEnd < 0 {
+		return false
+	}
+	cmdPath := rest[:cmdEnd]
+
+	heading := u.Styled("error_heading", "Error: ")
+	errMsg := u.Styled("error", fmt.Sprintf("unrecognized subcommand '%s'", sub))
+	fmt.Fprintf(u, "%s%s\n", heading, errMsg)
+	// Preserve "Did you mean" suggestions.
+	if i := strings.Index(msg, "\n\nDid you mean"); i >= 0 {
+		fmt.Fprintf(u, "%s", msg[i+1:strings.LastIndex(msg, "\n")+1])
+	}
+	fmt.Fprintf(u, "\n%s %s %s %s\n\nFor more information, try '%s'.\n",
+		u.Styled("help_header", "Usage:"),
+		u.Styled("help_command", cmdPath),
+		u.Styled("help_placeholder", "[OPTIONS]"),
+		u.Styled("help_placeholder", "<COMMAND>"),
+		u.Styled("help_command", "--help"))
+	return true
 }

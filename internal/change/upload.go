@@ -8,6 +8,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // UploadResult contains statistics about the upload operation.
@@ -21,7 +22,7 @@ type UploadResult struct {
 }
 
 // Upload orchestrates the trailer updates and pushing of a stack of revisions.
-func Upload(ctx context.Context, client jj.Client, revset string, remote string) (*UploadResult, error) {
+func Upload(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*UploadResult, error) {
 	stack, err := client.Revs(ctx, revset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stack: %w", err)
@@ -43,14 +44,14 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string)
 	for _, rev := range stack {
 		// Skip empty commits
 		if rev.IsEmpty {
-			fmt.Printf("Skipping empty change: %s\n", rev.ID)
+			fmt.Fprintf(u, "Skipping empty change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedEmpty++
 			result.Skipped++
 			continue
 		}
 		// Skip anonymous commits (empty description)
 		if strings.TrimSpace(rev.Description) == "" {
-			fmt.Printf("Skipping anonymous change: %s\n", rev.ID)
+			fmt.Fprintf(u, "Skipping anonymous change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedAnonymous++
 			result.Skipped++
 			continue
@@ -73,7 +74,7 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string)
 			newDescription = forge.RemoveParentTrailer(rev.Description)
 		}
 		if newDescription != rev.Description {
-			fmt.Printf("Updating trailers for %s...\n", rev.ID)
+			fmt.Fprintf(u, "Updating trailers for %s...\n", u.Styled("change_id", rev.ID))
 			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update trailers for %s: %w", rev.ID, err)
@@ -81,13 +82,13 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string)
 			result.TrailersUpdated++
 			// After describe, the commit has changed, so we need to push
 		} else if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
-			fmt.Printf("Skipping synced change: %s\n", rev.ID)
+			fmt.Fprintf(u, "Skipping synced change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedSynced++
 			result.Skipped++
 			continue
 		}
 		// Push the revision
-		fmt.Printf("Pushing %s to %s...\n", rev.ID, remote)
+		fmt.Fprintf(u, "Pushing %s to %s...\n", u.Styled("change_id", rev.ID), u.Styled("remote", remote))
 		_, err = client.Run(ctx, "git", "push", "--change", rev.ID, "--remote", remote, "--allow-new")
 		if err != nil {
 			return nil, fmt.Errorf("failed to push %s: %w", rev.ID, err)

@@ -4,6 +4,7 @@ package change
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
+
+var uploadIntegrationTestUI = ui.New(io.Discard, ui.ColorNever)
 
 // TestUploadIntegration tests the upload flow with a real jj repo.
 // Run with: go test -tags=integration ./internal/stack/
@@ -71,7 +75,7 @@ func TestUploadIntegration(t *testing.T) {
 	// Run upload
 	ctx := context.Background()
 	client := jj.NewClient(repoDir)
-	result, err := Upload(ctx, client, "mutable()", "og")
+	result, err := Upload(ctx, client, "mutable()", "og", uploadIntegrationTestUI)
 	if err != nil {
 		t.Fatalf("Upload() error = %v", err)
 	}
@@ -144,7 +148,7 @@ func TestUploadIntegration_Idempotent(t *testing.T) {
 	client := jj.NewClient(repoDir)
 
 	// First upload
-	result1, err := Upload(ctx, client, "mutable()", "og")
+	result1, err := Upload(ctx, client, "mutable()", "og", uploadIntegrationTestUI)
 	if err != nil {
 		t.Fatalf("first Upload() error = %v", err)
 	}
@@ -156,7 +160,7 @@ func TestUploadIntegration_Idempotent(t *testing.T) {
 	desc1Before := getDescription(t, repoDir, changeIDs[1])
 
 	// Second upload should skip already-synced commits
-	result2, err := Upload(ctx, client, "mutable()", "og")
+	result2, err := Upload(ctx, client, "mutable()", "og", uploadIntegrationTestUI)
 	if err != nil {
 		t.Fatalf("second Upload() error = %v", err)
 	}

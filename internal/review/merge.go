@@ -6,6 +6,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // MergeParams contains parameters for the merge command.
@@ -14,6 +15,7 @@ type MergeParams struct {
 	ForkRemote     string // Remote where the branch is pushed
 	UpstreamRemote string // Remote to merge PR from
 	NoCleanup      bool   // Skip local cleanup if true
+	UI             *ui.UI // UI for styled output
 }
 
 // MergeResult contains the result of the merge command.
@@ -63,24 +65,25 @@ func Merge(
 	// Cleanup (unless --no-cleanup)
 	if !params.NoCleanup {
 		bookmarkName := fmt.Sprintf("push-%s", rev.ID)
+		u := params.UI
 		// Delete bookmark
-		fmt.Printf("Deleting bookmark %s...\n", bookmarkName)
+		fmt.Fprintf(u, "Deleting bookmark %s...\n", u.Styled("bookmark", bookmarkName))
 		_, err = jjClient.Run(ctx, "bookmark", "delete", bookmarkName)
 		if err != nil {
 			// Non-fatal: log warning and continue
-			fmt.Printf("Warning: failed to delete bookmark %s: %v\n", bookmarkName, err)
+			u.PrintWarning("failed to delete bookmark %s: %v", bookmarkName, err)
 		}
 		// Push bookmark deletion
-		fmt.Printf("Pushing bookmark deletion to %s...\n", params.ForkRemote)
+		fmt.Fprintf(u, "Pushing bookmark deletion to %s...\n", u.Styled("remote", params.ForkRemote))
 		_, err = jjClient.Run(ctx, "git", "push", "--remote", params.ForkRemote, "--bookmark", bookmarkName)
 		if err != nil {
-			fmt.Printf("Warning: failed to push bookmark deletion: %v\n", err)
+			u.PrintWarning("failed to push bookmark deletion: %v", err)
 		}
 		// Fetch from upstream to update state
-		fmt.Printf("Fetching from %s...\n", params.UpstreamRemote)
+		fmt.Fprintf(u, "Fetching from %s...\n", u.Styled("remote", params.UpstreamRemote))
 		_, err = jjClient.Run(ctx, "git", "fetch", "--remote", params.UpstreamRemote)
 		if err != nil {
-			fmt.Printf("Warning: failed to fetch: %v\n", err)
+			u.PrintWarning("failed to fetch: %v", err)
 		}
 	}
 	reviewRecord.Status = forge.ReviewStateMerged
