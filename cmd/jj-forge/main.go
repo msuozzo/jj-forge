@@ -95,12 +95,16 @@ func main() {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	rootCmd.CompletionOptions.SetDefaultShellCompDirective(cobra.ShellCompDirectiveNoFileComp)
 
 	rootCmd.PersistentFlags().StringVarP(&repoPath, "repo", "R", "", "Path to the repository")
 	rootCmd.PersistentFlags().StringVar(&debugPrompt, "debug-prompt", "none", "Prompt before commands: none, writes, all")
 	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "When to use colors (always, never, auto)")
 	rootCmd.PersistentFlags().BoolVar(&detached, "_detached", false, "Internal: indicates this process was re-exec'd in detached mode")
 	rootCmd.PersistentFlags().MarkHidden("_detached")
+	rootCmd.MarkPersistentFlagDirname("repo")
+	rootCmd.RegisterFlagCompletionFunc("color", cobra.FixedCompletions([]string{"always", "never", "auto"}, cobra.ShellCompDirectiveNoFileComp))
+	rootCmd.RegisterFlagCompletionFunc("debug-prompt", cobra.FixedCompletions([]string{"none", "writes", "all"}, cobra.ShellCompDirectiveNoFileComp))
 
 	// Set up help renderer with lazy UI resolution so --color flag takes effect
 	help.Setup(rootCmd, func() *ui.UI {
@@ -120,9 +124,10 @@ func main() {
 	var checkForce bool
 	var checkDetach bool
 	checkCmd := &cobra.Command{
-		Use:   "check [REVSET]",
-		Short: "Run the configured check command against the given revset",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "check [REVSET]",
+		Short:             "Run the configured check command against the given revset",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			repoRoot, err := client.Root(ctx)
@@ -176,10 +181,11 @@ func main() {
 	var uploadRemote string
 	var uploadSkipCheck bool
 	uploadCmd := &cobra.Command{
-		Use:   "upload [REVSET]",
-		Short: "Synchronize content and dependency structure to the remote",
-		Long:  `Analyzes the stack, updates forge-parent trailers, and pushes to the remote.`,
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "upload [REVSET]",
+		Short:             "Synchronize content and dependency structure to the remote",
+		Long:              `Analyzes the stack, updates forge-parent trailers, and pushes to the remote.`,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var revset string
@@ -227,7 +233,8 @@ func main() {
 This is suitable for solo projects or develop-on-main workflows where
 PR-based review is not required. For team workflows with code review,
 use 'review open' and 'review submit' instead.`,
-		Args: cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			revset := args[0]
 
@@ -268,9 +275,10 @@ use 'review open' and 'review submit' instead.`,
 	var openReviewers []string
 	var openUpstreamRemote, openForkRemote string
 	openCmd := &cobra.Command{
-		Use:   "open [REV]",
-		Short: "Create and assign a pull request",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "open [REV]",
+		Short:             "Create and assign a pull request",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
@@ -326,9 +334,10 @@ use 'review open' and 'review submit' instead.`,
 	var mergeUpstreamRemote, mergeForkRemote string
 	var mergeNoCleanup, mergeSkipCheck bool
 	mergeCmd := &cobra.Command{
-		Use:   "merge [REV]",
-		Short: "Merge a pull request",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "merge [REV]",
+		Short:             "Merge a pull request",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
@@ -378,9 +387,10 @@ use 'review open' and 'review submit' instead.`,
 	var closeForkRemote, closeUpstreamRemote string
 	var closeForce, closeNoCleanup bool
 	closeCmd := &cobra.Command{
-		Use:   "close [REV]",
-		Short: "Close a pull request and abandon the change",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "close [REV]",
+		Short:             "Close a pull request and abandon the change",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
@@ -426,9 +436,10 @@ use 'review open' and 'review submit' instead.`,
 	var importUpstreamRemote string
 	var importAll bool
 	importCmd := &cobra.Command{
-		Use:   "import [REV]",
-		Short: "Find and import pull requests for revisions",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "import [REV]",
+		Short:             "Find and import pull requests for revisions",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
@@ -487,6 +498,12 @@ use 'review open' and 'review submit' instead.`,
 	cloneCmd := &cobra.Command{
 		Use:   "clone <url> [path]",
 		Short: "Clone repository with intelligent workflow detection",
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			if len(args) == 1 {
+				return nil, cobra.ShellCompDirectiveFilterDirs
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		Long: `Clone and configure a repository with automatic workflow detection.
 
 Workflow is determined by repository ownership:
@@ -537,8 +554,9 @@ Examples:
 
 	var rulesetUpstreamRemote string
 	setupRulesetCmd := &cobra.Command{
-		Use:   "setup-ruleset",
-		Short: "Add a GitHub ruleset to prevent merging forge-parent commits",
+		Use:               "setup-ruleset",
+		Short:             "Add a GitHub ruleset to prevent merging forge-parent commits",
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			// Create GitHub client
