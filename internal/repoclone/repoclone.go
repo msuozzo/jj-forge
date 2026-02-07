@@ -1,12 +1,10 @@
 package repoclone
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
 )
@@ -41,62 +39,8 @@ type Result struct {
 
 // Prompter handles user interaction for confirmations and choices.
 type Prompter interface {
-	Confirm(prompt string, defaultYes bool) (bool, error)
+	cmd.Prompter
 	Choose(prompt string, options []string, defaultIndex int) (int, error)
-}
-
-// DefaultPrompter implements Prompter using stdin/stdout.
-type DefaultPrompter struct{}
-
-// Confirm asks the user a yes/no question.
-func (p *DefaultPrompter) Confirm(prompt string, defaultYes bool) (bool, error) {
-	suffix := " (Y/n): "
-	if !defaultYes {
-		suffix = " (y/N): "
-	}
-	fmt.Print(prompt + suffix)
-
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return false, err
-	}
-	response = strings.TrimSpace(strings.ToLower(response))
-
-	if response == "" {
-		return defaultYes, nil
-	}
-	return response == "y" || response == "yes", nil
-}
-
-// Choose asks the user to select from a list of options.
-func (p *DefaultPrompter) Choose(prompt string, options []string, defaultIndex int) (int, error) {
-	fmt.Println(prompt)
-	for i, opt := range options {
-		marker := "  "
-		if i == defaultIndex {
-			marker = "> "
-		}
-		fmt.Printf("%s%d. %s\n", marker, i+1, opt)
-	}
-	fmt.Print("Choice: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return 0, err
-	}
-	response = strings.TrimSpace(response)
-
-	if response == "" {
-		return defaultIndex, nil
-	}
-
-	var choice int
-	if _, err := fmt.Sscanf(response, "%d", &choice); err != nil || choice < 1 || choice > len(options) {
-		return 0, fmt.Errorf("invalid choice: %s", response)
-	}
-	return choice - 1, nil
 }
 
 // Printer handles output messages.
@@ -128,7 +72,7 @@ func NewRunner() *Runner {
 	return &Runner{
 		ghClient:   NewGitHubClient(),
 		jjExecutor: cmd.DefaultExecutor,
-		prompter:   &DefaultPrompter{},
+		prompter:   &cmd.DefaultPrompter{},
 		printer:    &DefaultPrinter{},
 	}
 }

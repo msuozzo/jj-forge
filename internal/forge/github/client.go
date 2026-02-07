@@ -41,6 +41,11 @@ func (c *Client) run(ctx context.Context, opts cmd.Opts, args ...string) (string
 	return c.executor(ctx, opts, append([]string{"gh"}, args...)...)
 }
 
+// DefaultExecutor creates an executor that runs commands with proper GIT_DIR.
+func DefaultExecutor(gitDir string) cmd.Executor {
+	return defaultExecutor(gitDir)
+}
+
 // defaultExecutor creates an executor that runs commands with proper GIT_DIR.
 func defaultExecutor(gitDir string) cmd.Executor {
 	return func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {

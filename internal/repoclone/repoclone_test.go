@@ -316,8 +316,8 @@ func TestRunner(t *testing.T) {
 		name       string
 		repos      map[string]string
 		params     Params
-		wantErr    string  // substring match; empty = expect success
-		wantResult *Result // nil when wantErr is set
+		wantErr    string     // substring match; empty = expect success
+		wantResult *Result    // nil when wantErr is set
 		wantJJ     [][]string // expected jj command prefixes, in order
 	}{
 		{

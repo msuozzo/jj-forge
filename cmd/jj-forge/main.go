@@ -17,8 +17,50 @@ import (
 )
 
 var (
-	repoPath string
+	repoPath    string
+	debugPrompt string
 )
+
+var jjConfirmOps = [][]string{
+	{"describe"},
+	{"git", "push"},
+	{"bookmark", "set"},
+	{"bookmark", "delete"},
+	{"abandon"},
+	{"util", "exec"},
+}
+
+var ghConfirmOps = [][]string{
+	{"pr", "create"},
+	{"pr", "merge"},
+	{"pr", "close"},
+	{"repo", "fork"},
+	{"repo", "create"},
+	{"api", "--method"},
+}
+
+func newJJExecutor() cmdpkg.Executor {
+	switch debugPrompt {
+	case "all":
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, nil)
+	case "writes":
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, jjConfirmOps)
+	default:
+		return cmdpkg.DefaultExecutor
+	}
+}
+
+func newGHExecutor(gitDir string) cmdpkg.Executor {
+	base := github.DefaultExecutor(gitDir)
+	switch debugPrompt {
+	case "all":
+		return cmdpkg.NewPromptingExecutor(base, &cmdpkg.DefaultPrompter{}, nil)
+	case "writes":
+		return cmdpkg.NewPromptingExecutor(base, &cmdpkg.DefaultPrompter{}, ghConfirmOps)
+	default:
+		return base
+	}
+}
 
 func main() {
 	ctx := context.Background()
@@ -29,6 +71,7 @@ func main() {
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&repoPath, "repo", "R", "", "Path to the repository")
+	rootCmd.PersistentFlags().StringVar(&debugPrompt, "debug-prompt", "none", "Prompt before commands: none, writes, all")
 
 	// Check command
 	checkCmd := &cobra.Command{
@@ -36,7 +79,7 @@ func main() {
 		Short: "Run the configured check command against the given revset",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client := jj.NewClient(repoPath)
+			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var revset string
 			if len(args) > 0 {
 				revset = args[0]
@@ -48,7 +91,7 @@ func main() {
 				}
 			}
 			configMgr := forge.NewConfigManager(client)
-			return check.Run(ctx, client, configMgr, revset, true, cmdpkg.DefaultExecutor)
+			return check.Run(ctx, client, configMgr, revset, true, newJJExecutor())
 		},
 	}
 	rootCmd.AddCommand(checkCmd)
@@ -67,7 +110,7 @@ func main() {
 		Long:  `Analyzes the stack, updates forge-parent trailers, and pushes to the remote.`,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client := jj.NewClient(repoPath)
+			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var revset string
 			if len(args) > 0 {
 				revset = args[0]
@@ -80,7 +123,7 @@ func main() {
 			}
 			if !uploadSkipCheck {
 				configMgr := forge.NewConfigManager(client)
-				if err := check.Run(ctx, client, configMgr, revset, false, cmdpkg.DefaultExecutor); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {
 					return err
 				}
 			}
@@ -117,10 +160,10 @@ use 'review open' and 'review submit' instead.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			revset := args[0]
 
-			client := jj.NewClient(repoPath)
+			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			if !submitSkipCheck {
 				configMgr := forge.NewConfigManager(client)
-				if err := check.Run(ctx, client, configMgr, revset, false, cmdpkg.DefaultExecutor); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {
 					return err
 				}
 			}
@@ -154,7 +197,7 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Create and assign a pull request",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jjClient := jj.NewClient(repoPath)
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
 			if len(args) > 0 {
 				rev = args[0]
@@ -172,7 +215,7 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return fmt.Errorf("failed to get git directory: %w", err)
 			}
-			githubClient := github.NewClient(gitDir)
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Get reviewers (flag or config default)
 			reviewers := openReviewers
 			if len(reviewers) == 0 {
@@ -210,7 +253,7 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Merge a pull request",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jjClient := jj.NewClient(repoPath)
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
 			if len(args) > 0 {
 				rev = args[0]
@@ -223,7 +266,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			configMgr := forge.NewConfigManager(jjClient)
 			if !mergeSkipCheck {
-				if err := check.Run(ctx, jjClient, configMgr, rev, false, cmdpkg.DefaultExecutor); err != nil {
+				if err := check.Run(ctx, jjClient, configMgr, rev, false, newJJExecutor()); err != nil {
 					return err
 				}
 			}
@@ -232,7 +275,7 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return fmt.Errorf("failed to get git directory: %w", err)
 			}
-			githubClient := github.NewClient(gitDir)
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Execute merge command
 			result, err := review.Merge(ctx, jjClient, githubClient, configMgr, review.MergeParams{
 				Rev:            rev,
@@ -259,7 +302,7 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Close a pull request and abandon the change",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jjClient := jj.NewClient(repoPath)
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
 			if len(args) > 0 {
 				rev = args[0]
@@ -276,7 +319,7 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return fmt.Errorf("failed to get git directory: %w", err)
 			}
-			githubClient := github.NewClient(gitDir)
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Execute close command
 			result, err := review.Close(ctx, jjClient, githubClient, configMgr, review.CloseParams{
 				Rev:            rev,
@@ -304,7 +347,7 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Find and import pull requests for revisions",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jjClient := jj.NewClient(repoPath)
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			var rev string
 			if len(args) > 0 {
 				rev = args[0]
@@ -324,7 +367,7 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return fmt.Errorf("failed to get git directory: %w", err)
 			}
-			githubClient := github.NewClient(gitDir)
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			result, err := review.Import(ctx, jjClient, githubClient, configMgr, review.ImportParams{
 				Rev:            rev,
 				UpstreamRemote: importUpstreamRemote,
@@ -381,14 +424,22 @@ Examples:
 			if len(args) > 1 {
 				path = args[1]
 			}
-			_, err := repoclone.Run(ctx, repoclone.Params{
+			params := repoclone.Params{
 				URL:            url,
 				Path:           path,
 				ForkRemote:     cloneForkRemote,
 				UpstreamRemote: cloneUpstreamRemote,
 				UseHTTPS:       cloneUseHTTPS,
 				NoFork:         cloneNoFork,
-			})
+			}
+			var runner *repoclone.Runner
+			if debugPrompt != "none" {
+				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor(""))
+				runner = repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, &repoclone.DefaultPrinter{})
+			} else {
+				runner = repoclone.NewRunner()
+			}
+			_, err := runner.Run(ctx, params)
 			return err
 		},
 	}
@@ -402,13 +453,13 @@ Examples:
 		Use:   "setup-ruleset",
 		Short: "Add a GitHub ruleset to prevent merging forge-parent commits",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jjClient := jj.NewClient(repoPath)
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
 			// Create GitHub client
 			gitDir, err := jjClient.GitDir(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get git directory: %w", err)
 			}
-			githubClient := github.NewClient(gitDir)
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Get upstream URL
 			upstreamURL, err := jjClient.RemoteURL(ctx, rulesetUpstreamRemote)
 			if err != nil {
