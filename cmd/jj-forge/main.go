@@ -31,12 +31,21 @@ func main() {
 
 	// Check command
 	checkCmd := &cobra.Command{
-		Use:   "check REVSET",
+		Use:   "check [REVSET]",
 		Short: "Run the configured check command against the given revset",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			revset := args[0]
 			client := jj.NewClient(repoPath)
+			var revset string
+			if len(args) > 0 {
+				revset = args[0]
+			} else {
+				var err error
+				revset, err = resolveDefaultRev(ctx, client)
+				if err != nil {
+					return err
+				}
+			}
 			configMgr := forge.NewConfigManager(client)
 			return check.Run(ctx, client, configMgr, revset, true, check.DefaultRunner)
 		},
@@ -52,13 +61,22 @@ func main() {
 	var uploadRemote string
 	var uploadSkipCheck bool
 	uploadCmd := &cobra.Command{
-		Use:   "upload REVSET",
+		Use:   "upload [REVSET]",
 		Short: "Synchronize content and dependency structure to the remote",
 		Long:  `Analyzes the stack, updates forge-parent trailers, and pushes to the remote.`,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			revset := args[0]
 			client := jj.NewClient(repoPath)
+			var revset string
+			if len(args) > 0 {
+				revset = args[0]
+			} else {
+				var err error
+				revset, err = resolveDefaultRev(ctx, client)
+				if err != nil {
+					return err
+				}
+			}
 			if !uploadSkipCheck {
 				configMgr := forge.NewConfigManager(client)
 				if err := check.Run(ctx, client, configMgr, revset, false, check.DefaultRunner); err != nil {
@@ -133,10 +151,19 @@ use 'review open' and 'review submit' instead.`,
 	openCmd := &cobra.Command{
 		Use:   "open [REV]",
 		Short: "Create and assign a pull request",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rev := args[0]
 			jjClient := jj.NewClient(repoPath)
+			var rev string
+			if len(args) > 0 {
+				rev = args[0]
+			} else {
+				var err error
+				rev, err = resolveDefaultRev(ctx, jjClient)
+				if err != nil {
+					return err
+				}
+			}
 			configMgr := forge.NewConfigManager(jjClient)
 			// Create GitHub client
 			// TODO: Detect and select another forge if not github hosted
@@ -178,12 +205,21 @@ use 'review open' and 'review submit' instead.`,
 	var mergeUpstreamRemote, mergeForkRemote string
 	var mergeNoCleanup, mergeSkipCheck bool
 	mergeCmd := &cobra.Command{
-		Use:   "merge REV",
+		Use:   "merge [REV]",
 		Short: "Merge a pull request",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rev := args[0]
 			jjClient := jj.NewClient(repoPath)
+			var rev string
+			if len(args) > 0 {
+				rev = args[0]
+			} else {
+				var err error
+				rev, err = resolveDefaultRev(ctx, jjClient)
+				if err != nil {
+					return err
+				}
+			}
 			configMgr := forge.NewConfigManager(jjClient)
 			if !mergeSkipCheck {
 				if err := check.Run(ctx, jjClient, configMgr, rev, false, check.DefaultRunner); err != nil {
@@ -222,11 +258,17 @@ use 'review open' and 'review submit' instead.`,
 		Short: "Close a pull request and abandon the change",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rev := "@"
+			jjClient := jj.NewClient(repoPath)
+			var rev string
 			if len(args) > 0 {
 				rev = args[0]
+			} else {
+				var err error
+				rev, err = resolveDefaultRev(ctx, jjClient)
+				if err != nil {
+					return err
+				}
 			}
-			jjClient := jj.NewClient(repoPath)
 			configMgr := forge.NewConfigManager(jjClient)
 			// Create GitHub client
 			gitDir, err := jjClient.GitDir(ctx)
