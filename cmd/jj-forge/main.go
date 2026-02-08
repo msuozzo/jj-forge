@@ -113,6 +113,7 @@ func main() {
 	})
 
 	// Check command
+	var checkForce bool
 	checkCmd := &cobra.Command{
 		Use:   "check [REVSET]",
 		Short: "Run the configured check command against the given revset",
@@ -130,9 +131,10 @@ func main() {
 				}
 			}
 			configMgr := forge.NewConfigManager(client)
-			return check.Run(ctx, client, configMgr, revset, true, newJJExecutor())
+			return check.Run(ctx, client, configMgr, revset, checkForce, newJJExecutor())
 		},
 	}
+	checkCmd.Flags().BoolVar(&checkForce, "force", false, "Re-run checks even if cached verdicts are passing")
 	rootCmd.AddCommand(checkCmd)
 
 	// Change command group
