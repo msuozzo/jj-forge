@@ -1,0 +1,34 @@
+[template-aliases]
+# Utils
+"second_line(s)" = '''s.remove_prefix(s.first_line() ++ "\n").first_line()'''
+"third_line(s)" = '''s.remove_prefix(s.first_line() ++ "\n" ++ second_line(s) ++ "\n").first_line()'''
+
+# Forge Change
+"forge_change_exists(change_id)" = '''
+config("forge.reviews") && config("forge.reviews").as_string_list().any(|s| s.starts_with(change_id.short()))
+'''
+"forge_change_uri(change_id)" = '''
+if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short())).map(|s| third_line(s)).join(""))
+'''
+"forge_change_name(change_id)" = '''
+if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short())).map(|s| second_line(s)).join(""))
+'''
+
+# Forge Check
+"forge_check_exists(change_id, commit_id)" = '''
+config("forge.checks") && config("forge.checks").as_string_list().any(|s| s.starts_with(change_id.short()) && s.ends_with(commit_id.short()))
+'''
+"forge_check_matches(change_id, commit_id, verdict)" = '''
+config("forge.checks") && config("forge.checks").as_string_list().filter(|s| s.starts_with(change_id.short()) && s.ends_with(commit_id.short())).any(|s| second_line(s) == verdict)
+'''
+
+# Formatters
+"format_forge_check(commit)" = '''
+if(!immutable && forge_check_exists(change_id, commit_id),
+  if(forge_check_matches(change_id, commit_id, "pass"), label("hint", "ci/√"),
+  if(forge_check_matches(change_id, commit_id, "running"), label("description placeholder", "ci/~"),
+  if(forge_check_matches(change_id, commit_id, "fail"), label("error heading", "ci/X")))))
+'''
+"format_forge_change(commit)" = '''
+if(!immutable && forge_change_exists(change_id), label("error", hyperlink(forge_change_uri(change_id), forge_change_name(change_id))))
+'''
