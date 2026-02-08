@@ -132,8 +132,13 @@ func TestRunNoConfig(t *testing.T) {
 }
 
 func TestRunPass(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
+	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -171,8 +176,13 @@ func TestRunPass(t *testing.T) {
 }
 
 func TestRunFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
+	mock.root = tmpDir
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -230,8 +240,13 @@ func TestRunSkipCached(t *testing.T) {
 }
 
 func TestRunForceIgnoresCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
+	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -418,9 +433,14 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 
 func TestRunMultipleRevs_WorkingCopySpecialCase(t *testing.T) {
 	// When all revisions are the working copy (single rev = wc), no pool is needed.
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.wcRev = revs[0]
+	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -481,8 +501,13 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 }
 
 func TestRunStaleCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "newcommit", IsMutable: true}}
 	mock := newMockClient(revs)
+	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -508,5 +533,75 @@ func TestRunStaleCache(t *testing.T) {
 	}
 	if !ran {
 		t.Error("runner should have been called when commit ID is stale")
+	}
+}
+
+func TestRunImmutableSkipped(t *testing.T) {
+	// All revisions are immutable — should be a no-op.
+	revs := []*jj.Rev{
+		{ID: "c1", CommitID: "abc", IsMutable: false},
+		{ID: "c2", CommitID: "def", IsMutable: false},
+	}
+	mock := newMockClient(revs)
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	ran := false
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+		ran = true
+		return "", nil
+	}
+
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ran {
+		t.Error("runner should not have been called for immutable revisions")
+	}
+}
+
+func TestRunMixedMutability(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	revs := []*jj.Rev{
+		{ID: "c1", CommitID: "abc", IsMutable: true},
+		{ID: "c2", CommitID: "def", IsMutable: false}, // immutable — should be skipped
+	}
+	mock := newMockClient(revs)
+	mock.wcRev = revs[0] // c1 is working copy
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	var checkedIDs sync.Map
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "util exec") {
+			checkedIDs.Store("c1", true)
+		}
+		return "", nil
+	}
+
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// c1 (mutable) should have been checked.
+	if _, ok := checkedIDs.Load("c1"); !ok {
+		t.Error("mutable revision c1 should have been checked")
+	}
+
+	// c2 (immutable) should not have a verdict stored.
+	verdict, err := configMgr.GetCheckVerdictByChangeID("c2")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if verdict != nil {
+		t.Errorf("immutable revision c2 should not have a verdict, got %v", verdict)
 	}
 }

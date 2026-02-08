@@ -71,6 +71,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
 	}
+	lock, err := acquireLock(filepath.Join(repoPath, ".jj"))
+	if err != nil {
+		return err
+	}
+	defer lock.release()
 	// Partition: working copy vs others
 	wcRev, err := client.Rev(ctx, "@")
 	if err != nil {
