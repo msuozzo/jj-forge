@@ -9,6 +9,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
 	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/detach"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/help"
@@ -23,6 +24,7 @@ var (
 	repoPath    string
 	debugPrompt string
 	colorFlag   string
+	detached    bool
 )
 
 var (
@@ -97,6 +99,8 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&repoPath, "repo", "R", "", "Path to the repository")
 	rootCmd.PersistentFlags().StringVar(&debugPrompt, "debug-prompt", "none", "Prompt before commands: none, writes, all")
 	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "When to use colors (always, never, auto)")
+	rootCmd.PersistentFlags().BoolVar(&detached, "_detached", false, "Internal: indicates this process was re-exec'd in detached mode")
+	rootCmd.PersistentFlags().MarkHidden("_detached")
 
 	// Set up help renderer with lazy UI resolution so --color flag takes effect
 	help.Setup(rootCmd, func() *ui.UI {
@@ -114,12 +118,29 @@ func main() {
 
 	// Check command
 	var checkForce bool
+	var checkDetach bool
 	checkCmd := &cobra.Command{
 		Use:   "check [REVSET]",
 		Short: "Run the configured check command against the given revset",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
+			repoRoot, err := client.Root(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get repo root: %w", err)
+			}
+			if checkDetach {
+				pid, err := detach.Exec("check", repoRoot)
+				if err != nil {
+					return err
+				}
+				logPath := fmt.Sprintf(".jj/forge/check.log")
+				fmt.Fprintf(os.Stderr, "jj-forge check running in background (pid %d), logging to %s\n", pid, logPath)
+				return nil
+			}
+			if detached {
+				defer detach.Cleanup("check", repoRoot)
+			}
 			var revset string
 			if len(args) > 0 {
 				revset = args[0]
@@ -135,6 +156,7 @@ func main() {
 		},
 	}
 	checkCmd.Flags().BoolVar(&checkForce, "force", false, "Re-run checks even if cached verdicts are passing")
+	checkCmd.Flags().BoolVar(&checkDetach, "detach", false, "Run in the background")
 	rootCmd.AddCommand(checkCmd)
 
 	// Change command group
