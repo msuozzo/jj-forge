@@ -161,6 +161,16 @@ func main() {
 				}
 			}
 			configMgr := forge.NewConfigManager(client)
+			checkCommand, err := configMgr.GetCheckCommand()
+			if err != nil {
+				return fmt.Errorf("failed to get check command: %w", err)
+			}
+			if checkCommand == "" {
+				return &ui.UserError{
+					Msg:  "no check command configured",
+					Hint: "Run 'jj config set --repo forge.check-command \"<command>\"' to configure one.",
+				}
+			}
 			return check.Run(ctx, client, configMgr, revset, checkForce, newJJExecutor())
 		},
 	}
