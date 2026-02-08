@@ -52,8 +52,9 @@ type ForgeConfig struct {
 
 // Check verdict values.
 const (
-	CheckVerdictPass = "pass"
-	CheckVerdictFail = "fail"
+	CheckVerdictPass    = "pass"
+	CheckVerdictFail    = "fail"
+	CheckVerdictRunning = "running"
 )
 
 // CheckVerdict represents the result of running a check command on a change.
@@ -265,6 +266,28 @@ func (m *ConfigManager) SetCheckVerdict(v CheckVerdict) error {
 	}
 	if !found {
 		verdicts = append(verdicts, v)
+	}
+	return m.saveVerdicts(verdicts)
+}
+
+// SetCheckVerdicts adds or updates multiple check verdicts in one batch (single read + single write).
+func (m *ConfigManager) SetCheckVerdicts(updates []CheckVerdict) error {
+	verdicts, err := m.GetCheckVerdicts()
+	if err != nil {
+		return err
+	}
+	for _, u := range updates {
+		found := false
+		for i, existing := range verdicts {
+			if existing.ChangeID == u.ChangeID {
+				verdicts[i] = u
+				found = true
+				break
+			}
+		}
+		if !found {
+			verdicts = append(verdicts, u)
+		}
 	}
 	return m.saveVerdicts(verdicts)
 }

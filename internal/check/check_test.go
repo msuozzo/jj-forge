@@ -561,6 +561,73 @@ func TestRunImmutableSkipped(t *testing.T) {
 	}
 }
 
+func TestRunSetsRunningBeforeExecution(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
+	mock := newMockClient(revs)
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	// Two-phase channel sync: runner signals it has started, test reads
+	// verdict to confirm "running", then unblocks the runner.
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "echo hello") {
+			started <- struct{}{}
+			<-proceed
+		}
+		return "", nil
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(context.Background(), mock, configMgr, "@", true, runner)
+	}()
+
+	// Wait for runner to signal it has started.
+	<-started
+
+	// Read the verdict — it should be "running" since the check hasn't completed yet.
+	verdict, err := configMgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if verdict == nil {
+		t.Fatal("expected verdict, got nil")
+	}
+	if verdict.Verdict != forge.CheckVerdictRunning {
+		t.Errorf("expected verdict 'running' during execution, got %q", verdict.Verdict)
+	}
+	if verdict.CommitID != "abc123" {
+		t.Errorf("expected commit ID 'abc123', got %q", verdict.CommitID)
+	}
+
+	// Unblock the runner and wait for Run to finish.
+	close(proceed)
+	if err := <-errCh; err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// After completion, the verdict should be overwritten to "pass".
+	verdict, err = configMgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	if verdict == nil {
+		t.Fatal("expected verdict, got nil")
+	}
+	if verdict.Verdict != forge.CheckVerdictPass {
+		t.Errorf("expected verdict 'pass' after completion, got %q", verdict.Verdict)
+	}
+}
+
 func TestRunMixedMutability(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {

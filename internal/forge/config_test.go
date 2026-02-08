@@ -336,6 +336,10 @@ func TestParseCheckVerdict(t *testing.T) {
 			expected: CheckVerdict{ChangeID: "xyz", Verdict: CheckVerdictFail, CommitID: "commit456"},
 		},
 		{
+			input:    "def\nrunning\ncommit789",
+			expected: CheckVerdict{ChangeID: "def", Verdict: CheckVerdictRunning, CommitID: "commit789"},
+		},
+		{
 			input:   "invalid",
 			wantErr: true,
 		},
@@ -352,5 +356,74 @@ func TestParseCheckVerdict(t *testing.T) {
 				t.Errorf("ParseCheckVerdict(%q) mismatch (-want +got):\n%s", tt.input, diff)
 			}
 		}
+	}
+}
+
+func TestSetCheckVerdictsBatch(t *testing.T) {
+	mock := newMockClient()
+	mgr := NewConfigManager(mock)
+
+	// Pre-populate one verdict.
+	if err := mgr.SetCheckVerdict(CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "aaa"}); err != nil {
+		t.Fatalf("SetCheckVerdict failed: %v", err)
+	}
+
+	// Batch: update c1, insert c2 and c3.
+	batch := []CheckVerdict{
+		{ChangeID: "c1", Verdict: CheckVerdictRunning, CommitID: "bbb"},
+		{ChangeID: "c2", Verdict: CheckVerdictRunning, CommitID: "ccc"},
+		{ChangeID: "c3", Verdict: CheckVerdictRunning, CommitID: "ddd"},
+	}
+	if err := mgr.SetCheckVerdicts(batch); err != nil {
+		t.Fatalf("SetCheckVerdicts failed: %v", err)
+	}
+
+	verdicts, err := mgr.GetCheckVerdicts()
+	if err != nil {
+		t.Fatalf("GetCheckVerdicts failed: %v", err)
+	}
+	if len(verdicts) != 3 {
+		t.Fatalf("expected 3 verdicts, got %d", len(verdicts))
+	}
+
+	// Verify c1 was updated (not duplicated).
+	v1, err := mgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1 == nil {
+		t.Fatal("expected c1 verdict, got nil")
+	}
+	if v1.Verdict != CheckVerdictRunning || v1.CommitID != "bbb" {
+		t.Errorf("c1: got verdict=%q commit=%q, want running/bbb", v1.Verdict, v1.CommitID)
+	}
+
+	// Verify c2 and c3 were inserted.
+	for _, id := range []string{"c2", "c3"} {
+		v, err := mgr.GetCheckVerdictByChangeID(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v == nil {
+			t.Fatalf("expected %s verdict, got nil", id)
+		}
+		if v.Verdict != CheckVerdictRunning {
+			t.Errorf("%s: got verdict=%q, want running", id, v.Verdict)
+		}
+	}
+
+	// Count subprocess calls: initial SetCheckVerdict (2 calls) + SetCheckVerdicts (2 calls) + reads for verification.
+	// The key thing is that SetCheckVerdicts only adds 2 calls (one read + one write), not 2*len(batch).
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	var setCalls int
+	for _, call := range mock.callLog {
+		if len(call) >= 2 && call[0] == "config" && call[1] == "set" {
+			setCalls++
+		}
+	}
+	// Expect exactly 2 config set calls: one from initial SetCheckVerdict, one from SetCheckVerdicts.
+	if setCalls != 2 {
+		t.Errorf("expected 2 config set calls, got %d", setCalls)
 	}
 }

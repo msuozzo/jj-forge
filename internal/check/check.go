@@ -94,6 +94,18 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 			poolChecks = append(poolChecks, rev)
 		}
 	}
+	// Write "running" verdicts before starting execution.
+	var runningVerdicts []forge.CheckVerdict
+	for _, rev := range toCheck {
+		runningVerdicts = append(runningVerdicts, forge.CheckVerdict{
+			ChangeID: rev.ID,
+			Verdict:  forge.CheckVerdictRunning,
+			CommitID: rev.CommitID,
+		})
+	}
+	if err := configMgr.SetCheckVerdicts(runningVerdicts); err != nil {
+		return fmt.Errorf("failed to set running verdicts: %w", err)
+	}
 	// Initialize pool only if needed
 	var pool *WorkPool
 	if len(poolChecks) > 0 {
