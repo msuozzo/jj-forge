@@ -133,17 +133,17 @@ func main() {
 			if err != nil {
 				return err
 			}
+			proc := detach.New("check", forgeDir, detach.FlagReplace("--detach", "--_detached"))
 			if checkDetach {
-				pid, err := detach.Exec("check", forgeDir)
+				pid, err := proc.Start(os.Args)
 				if err != nil {
 					return err
 				}
-				logPath := fmt.Sprintf(".jj/forge/check.log")
-				fmt.Fprintf(os.Stderr, "jj-forge check running in background (pid %d), logging to %s\n", pid, logPath)
+				fmt.Fprintf(os.Stderr, "jj-forge check running in background (pid %d), logging to %s\n", pid, proc.LogPath())
 				return nil
 			}
 			if detached {
-				defer detach.Cleanup("check", forgeDir)
+				defer proc.Cleanup()
 			}
 			var revset string
 			if len(args) > 0 {

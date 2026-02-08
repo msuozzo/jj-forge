@@ -11,26 +11,59 @@ import (
 	"syscall"
 )
 
-// Exec re-invokes the current process as a detached background child.
-//
-// It rewrites os.Args to replace --detach with --_detached, redirects
-// stdout/stderr to a log file under dir, and detaches the child
-// into its own session. The caller should print the returned PID and exit.
+// ArgTransform transforms args for the child process re-invocation.
+// Required by New to force callers to explicitly decide how the child
+// process will identify itself as the detached instance.
+type ArgTransform func(args []string) []string
+
+// FlagReplace returns an ArgTransform that replaces oldFlag with newFlag
+// in the args. If oldFlag is not found, newFlag is appended.
+func FlagReplace(oldFlag, newFlag string) ArgTransform {
+	return func(args []string) []string {
+		return rewriteArgs(args, oldFlag, newFlag)
+	}
+}
+
+// NoTransform returns args unchanged. Use when the child process identifies
+// itself through some other mechanism.
+func NoTransform() ArgTransform {
+	return func(args []string) []string {
+		return args
+	}
+}
+
+// Cmd holds the shared state for a detached process lifecycle.
+type Cmd struct {
+	name      string
+	dir       string
+	transform ArgTransform
+}
+
+// New creates a Cmd that manages a detached process named name under dir.
+// The transform controls how os.Args are rewritten for the child invocation.
+func New(name, dir string, transform ArgTransform) *Cmd {
+	return &Cmd{name: name, dir: dir, transform: transform}
+}
+
+// Start re-invokes the current executable as a detached background child.
+// args should be os.Args; the package resolves the executable via
+// os.Executable() and applies the configured transform to args[1:].
+// It redirects stdout/stderr to a log file under dir and detaches the child
+// into its own session.
 //
 // Single-instance enforcement: if a live process for the same name already
-// exists (tracked via <dir>/<name>.pid), Exec returns an error.
-func Exec(name, dir string) (pid int, err error) {
-	pidPath := filepath.Join(dir, name+".pid")
+// exists (tracked via <dir>/<name>.pid), Start returns an error.
+func (c *Cmd) Start(args []string) (pid int, err error) {
+	pidPath := filepath.Join(c.dir, c.name+".pid")
 	// Single-instance check.
 	if existingPID, alive := readLivePID(pidPath); alive {
-		return 0, fmt.Errorf("jj-forge %s is already running (pid %d)", name, existingPID)
+		return 0, fmt.Errorf("jj-forge %s is already running (pid %d)", c.name, existingPID)
 	}
 	selfExe, err := os.Executable()
 	if err != nil {
 		return 0, fmt.Errorf("finding executable: %w", err)
 	}
-	childArgs := rewriteArgs(os.Args[1:])
-	logPath := filepath.Join(dir, name+".log")
+	logPath := c.LogPath()
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return 0, fmt.Errorf("opening log file: %w", err)
@@ -40,6 +73,7 @@ func Exec(name, dir string) (pid int, err error) {
 		logFile.Close()
 		return 0, fmt.Errorf("opening /dev/null: %w", err)
 	}
+	childArgs := c.transform(args[1:])
 	child := exec.Command(selfExe, childArgs...)
 	child.Stdin = devNull
 	child.Stdout = logFile
@@ -67,27 +101,32 @@ func Exec(name, dir string) (pid int, err error) {
 	return childPID, nil
 }
 
-// Cleanup removes the PID file for name. It should be deferred by the
-// detached child process on exit.
-func Cleanup(name, dir string) {
-	os.Remove(filepath.Join(dir, name+".pid"))
+// Cleanup removes the PID file. It should be deferred by the detached child
+// process on exit.
+func (c *Cmd) Cleanup() {
+	os.Remove(filepath.Join(c.dir, c.name+".pid"))
 }
 
-// rewriteArgs copies args, replacing --detach with --_detached.
-// If --detach is not found, --_detached is appended.
-func rewriteArgs(args []string) []string {
+// LogPath returns the path to the log file for this detached process.
+func (c *Cmd) LogPath() string {
+	return filepath.Join(c.dir, c.name+".log")
+}
+
+// rewriteArgs copies args, replacing oldFlag with newFlag.
+// If oldFlag is not found, newFlag is appended.
+func rewriteArgs(args []string, oldFlag, newFlag string) []string {
 	out := make([]string, len(args))
 	replaced := false
 	for i, arg := range args {
-		if arg == "--detach" {
-			out[i] = "--_detached"
+		if arg == oldFlag {
+			out[i] = newFlag
 			replaced = true
 		} else {
 			out[i] = arg
 		}
 	}
 	if !replaced {
-		out = append(out, "--_detached")
+		out = append(out, newFlag)
 	}
 	return out
 }

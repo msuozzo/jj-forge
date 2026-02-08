@@ -9,7 +9,7 @@ import (
 
 func TestRewriteArgs_ReplacesDetach(t *testing.T) {
 	args := []string{"check", "--force", "--detach", "@-"}
-	got := rewriteArgs(args)
+	got := rewriteArgs(args, "--detach", "--_detached")
 	want := []string{"check", "--force", "--_detached", "@-"}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d", len(got), len(want))
@@ -23,7 +23,7 @@ func TestRewriteArgs_ReplacesDetach(t *testing.T) {
 
 func TestRewriteArgs_AppendsIfMissing(t *testing.T) {
 	args := []string{"check", "@-"}
-	got := rewriteArgs(args)
+	got := rewriteArgs(args, "--detach", "--_detached")
 	if got[len(got)-1] != "--_detached" {
 		t.Errorf("last arg = %q, want --_detached", got[len(got)-1])
 	}
@@ -33,7 +33,7 @@ func TestRewriteArgs_DoesNotMutateInput(t *testing.T) {
 	args := []string{"check", "--detach"}
 	orig := make([]string, len(args))
 	copy(orig, args)
-	_ = rewriteArgs(args)
+	_ = rewriteArgs(args, "--detach", "--_detached")
 	for i := range args {
 		if args[i] != orig[i] {
 			t.Errorf("input mutated: arg[%d] = %q, want %q", i, args[i], orig[i])
@@ -93,7 +93,8 @@ func TestCleanup_RemovesPIDFile(t *testing.T) {
 	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte("12345\n"), 0644)
 
-	Cleanup("check", dir)
+	proc := New("check", dir, NoTransform())
+	proc.Cleanup()
 
 	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
 		t.Error("PID file should have been removed")
@@ -102,17 +103,19 @@ func TestCleanup_RemovesPIDFile(t *testing.T) {
 
 func TestCleanup_NoErrorOnMissing(t *testing.T) {
 	// Should not panic when PID file or directory doesn't exist.
-	Cleanup("check", filepath.Join(t.TempDir(), "nonexistent"))
+	proc := New("check", filepath.Join(t.TempDir(), "nonexistent"), NoTransform())
+	proc.Cleanup()
 }
 
-func TestExec_SingleInstanceEnforcement(t *testing.T) {
+func TestStart_SingleInstanceEnforcement(t *testing.T) {
 	dir := t.TempDir()
 
 	// Write PID file with our own PID (which is alive).
 	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644)
 
-	_, err := Exec("check", dir)
+	proc := New("check", dir, NoTransform())
+	_, err := proc.Start([]string{"jj-forge", "check", "--_detached"})
 	if err == nil {
 		t.Fatal("expected error for already-running process")
 	}
@@ -121,17 +124,54 @@ func TestExec_SingleInstanceEnforcement(t *testing.T) {
 	}
 }
 
-func TestExec_StaleInstanceAllowed(t *testing.T) {
+func TestStart_StaleInstanceAllowed(t *testing.T) {
 	dir := t.TempDir()
 
 	// Write PID file with a dead PID.
 	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte("999999999\n"), 0644)
 
-	// The Exec call will fail later (bad executable), but the single-instance
+	// The Start call will fail later (bad executable), but the single-instance
 	// check should pass — the stale PID is cleaned up.
-	_, err := Exec("check", dir)
+	proc := New("check", dir, NoTransform())
+	_, err := proc.Start([]string{"jj-forge", "check", "--_detached"})
 	if err != nil && err.Error() == "jj-forge check is already running (pid 999999999)" {
 		t.Error("stale PID should not block a new instance")
+	}
+}
+
+func TestLogPath(t *testing.T) {
+	proc := New("check", "/some/dir", NoTransform())
+	want := "/some/dir/check.log"
+	if got := proc.LogPath(); got != want {
+		t.Errorf("LogPath() = %q, want %q", got, want)
+	}
+}
+
+func TestFlagReplace(t *testing.T) {
+	transform := FlagReplace("--detach", "--_detached")
+	got := transform([]string{"check", "--force", "--detach", "@-"})
+	want := []string{"check", "--force", "--_detached", "@-"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("arg[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestNoTransform(t *testing.T) {
+	transform := NoTransform()
+	args := []string{"check", "--force"}
+	got := transform(args)
+	if len(got) != len(args) {
+		t.Fatalf("len = %d, want %d", len(got), len(args))
+	}
+	for i := range got {
+		if got[i] != args[i] {
+			t.Errorf("arg[%d] = %q, want %q", i, got[i], args[i])
+		}
 	}
 }
