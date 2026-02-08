@@ -14,17 +14,13 @@ import (
 // Exec re-invokes the current process as a detached background child.
 //
 // It rewrites os.Args to replace --detach with --_detached, redirects
-// stdout/stderr to a log file under .jj/forge/, and detaches the child
+// stdout/stderr to a log file under dir, and detaches the child
 // into its own session. The caller should print the returned PID and exit.
 //
 // Single-instance enforcement: if a live process for the same name already
-// exists (tracked via .jj/forge/<name>.pid), Exec returns an error.
-func Exec(name, repoRoot string) (pid int, err error) {
-	forgeDir := filepath.Join(repoRoot, ".jj", "forge")
-	if err := os.MkdirAll(forgeDir, 0755); err != nil {
-		return 0, fmt.Errorf("creating forge directory: %w", err)
-	}
-	pidPath := filepath.Join(forgeDir, name+".pid")
+// exists (tracked via <dir>/<name>.pid), Exec returns an error.
+func Exec(name, dir string) (pid int, err error) {
+	pidPath := filepath.Join(dir, name+".pid")
 	// Single-instance check.
 	if existingPID, alive := readLivePID(pidPath); alive {
 		return 0, fmt.Errorf("jj-forge %s is already running (pid %d)", name, existingPID)
@@ -34,7 +30,7 @@ func Exec(name, repoRoot string) (pid int, err error) {
 		return 0, fmt.Errorf("finding executable: %w", err)
 	}
 	childArgs := rewriteArgs(os.Args[1:])
-	logPath := filepath.Join(forgeDir, name+".log")
+	logPath := filepath.Join(dir, name+".log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return 0, fmt.Errorf("opening log file: %w", err)
@@ -73,9 +69,8 @@ func Exec(name, repoRoot string) (pid int, err error) {
 
 // Cleanup removes the PID file for name. It should be deferred by the
 // detached child process on exit.
-func Cleanup(name, repoRoot string) {
-	pidPath := filepath.Join(repoRoot, ".jj", "forge", name+".pid")
-	os.Remove(pidPath)
+func Cleanup(name, dir string) {
+	os.Remove(filepath.Join(dir, name+".pid"))
 }
 
 // rewriteArgs copies args, replacing --detach with --_detached.

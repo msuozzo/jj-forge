@@ -12,7 +12,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
-const lockFileName = "forge-check.lock"
+const lockFileName = "check.lock"
 
 type lockFile struct {
 	path string

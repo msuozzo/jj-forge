@@ -90,9 +90,7 @@ func TestReadLivePID_CurrentProcess(t *testing.T) {
 
 func TestCleanup_RemovesPIDFile(t *testing.T) {
 	dir := t.TempDir()
-	forgeDir := filepath.Join(dir, ".jj", "forge")
-	os.MkdirAll(forgeDir, 0755)
-	pidPath := filepath.Join(forgeDir, "check.pid")
+	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte("12345\n"), 0644)
 
 	Cleanup("check", dir)
@@ -103,17 +101,15 @@ func TestCleanup_RemovesPIDFile(t *testing.T) {
 }
 
 func TestCleanup_NoErrorOnMissing(t *testing.T) {
-	// Should not panic when PID file doesn't exist.
-	Cleanup("check", t.TempDir())
+	// Should not panic when PID file or directory doesn't exist.
+	Cleanup("check", filepath.Join(t.TempDir(), "nonexistent"))
 }
 
 func TestExec_SingleInstanceEnforcement(t *testing.T) {
 	dir := t.TempDir()
-	forgeDir := filepath.Join(dir, ".jj", "forge")
-	os.MkdirAll(forgeDir, 0755)
 
 	// Write PID file with our own PID (which is alive).
-	pidPath := filepath.Join(forgeDir, "check.pid")
+	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644)
 
 	_, err := Exec("check", dir)
@@ -127,11 +123,9 @@ func TestExec_SingleInstanceEnforcement(t *testing.T) {
 
 func TestExec_StaleInstanceAllowed(t *testing.T) {
 	dir := t.TempDir()
-	forgeDir := filepath.Join(dir, ".jj", "forge")
-	os.MkdirAll(forgeDir, 0755)
 
 	// Write PID file with a dead PID.
-	pidPath := filepath.Join(forgeDir, "check.pid")
+	pidPath := filepath.Join(dir, "check.pid")
 	os.WriteFile(pidPath, []byte("999999999\n"), 0644)
 
 	// The Exec call will fail later (bad executable), but the single-instance

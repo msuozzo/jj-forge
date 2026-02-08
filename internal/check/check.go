@@ -71,7 +71,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
 	}
-	lock, err := acquireLock(filepath.Join(repoPath, ".jj"))
+	forgeDir, err := forge.Dir(repoPath)
+	if err != nil {
+		return err
+	}
+	lock, err := acquireLock(forgeDir)
 	if err != nil {
 		return err
 	}
@@ -97,7 +101,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		if err != nil {
 			return fmt.Errorf("failed to get git dir: %w", err)
 		}
-		baseDir := filepath.Join(repoPath, ".jj", "forge-check-pool")
+		baseDir := filepath.Join(forgeDir, "check-pool")
 		pool, err = NewWorkPool(gitDir, baseDir, defaultPoolSize, runner)
 		if err != nil {
 			return fmt.Errorf("failed to create work pool: %w", err)

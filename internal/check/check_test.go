@@ -133,7 +133,7 @@ func TestRunNoConfig(t *testing.T) {
 
 func TestRunPass(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
@@ -177,7 +177,7 @@ func TestRunPass(t *testing.T) {
 
 func TestRunFail(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
@@ -241,7 +241,7 @@ func TestRunSkipCached(t *testing.T) {
 
 func TestRunForceIgnoresCache(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
@@ -290,7 +290,7 @@ func TestRunMultipleRevs(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	// Create .jj directory for pool base
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -390,7 +390,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -434,7 +434,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 func TestRunMultipleRevs_WorkingCopySpecialCase(t *testing.T) {
 	// When all revisions are the working copy (single rev = wc), no pool is needed.
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
@@ -476,7 +476,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -502,7 +502,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 
 func TestRunStaleCache(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "newcommit", IsMutable: true}}
@@ -563,7 +563,7 @@ func TestRunImmutableSkipped(t *testing.T) {
 
 func TestRunMixedMutability(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

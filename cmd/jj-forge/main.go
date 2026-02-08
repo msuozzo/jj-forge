@@ -129,8 +129,12 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to get repo root: %w", err)
 			}
+			forgeDir, err := forge.Dir(repoRoot)
+			if err != nil {
+				return err
+			}
 			if checkDetach {
-				pid, err := detach.Exec("check", repoRoot)
+				pid, err := detach.Exec("check", forgeDir)
 				if err != nil {
 					return err
 				}
@@ -139,7 +143,7 @@ func main() {
 				return nil
 			}
 			if detached {
-				defer detach.Cleanup("check", repoRoot)
+				defer detach.Cleanup("check", forgeDir)
 			}
 			var revset string
 			if len(args) > 0 {

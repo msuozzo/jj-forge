@@ -27,7 +27,7 @@ type WorkDir struct {
 type WorkPool struct {
 	gitDir  string
 	dirs    []*WorkDir
-	baseDir string // e.g., <jj-root>/.jj/forge-check-pool/
+	baseDir string // e.g., <jj-root>/.jj/forge/check-pool/
 	runner  cmd.Executor
 	ch      chan *WorkDir
 }
