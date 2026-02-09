@@ -41,7 +41,7 @@ func tryAcquire(path string, isRetry bool) (*lockFile, error) {
 	// Lock file exists — check if stale.
 	if isRetry {
 		return nil, &ui.UserError{
-			Msg:  "another jj-forge check is running",
+			Msg:  "another jj-forge change check is running",
 			Hint: fmt.Sprintf("if this is stale, remove %s", path),
 		}
 	}
@@ -72,7 +72,7 @@ func tryAcquire(path string, isRetry bool) (*lockFile, error) {
 	// Process alive — real contention.
 	age := time.Since(time.Unix(ts, 0)).Truncate(time.Second)
 	return nil, &ui.UserError{
-		Msg:  fmt.Sprintf("another jj-forge check is running (pid %d, started %s ago)", pid, age),
+		Msg:  fmt.Sprintf("another jj-forge change check is running (pid %d, started %s ago)", pid, age),
 		Hint: fmt.Sprintf("if this is stale, remove %s", path),
 	}
 }

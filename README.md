@@ -75,8 +75,8 @@ Configure a check command (any shell command) to run against your changes:
 
 Run checks manually:
 
-    jj forge check         # check the current change
-    jj forge check ::@-    # check a range of changes
+    jj forge change check         # check the current change
+    jj forge change check ::@-    # check a range of changes
 
 Checks run in parallel: Each change is materialized into a persistent pool
 of working directories (default: 3 workers) using the backing git store.
@@ -87,7 +87,7 @@ reuse the last result.
 
 Use `--detach` to run checks in the background:
 
-    jj forge check --detach
+    jj forge change check --detach
 
 ### Automatic checks
 
@@ -160,7 +160,7 @@ trailers, you can add a GitHub branch ruleset:
 
 | Command                   | Description                                                  |
 | ------------------------- | ------------------------------------------------------------ |
-| `check [REVSET]`          | Run the configured check command against changes             |
+| `change check [REVSET]`   | Run the configured check command against changes             |
 | `change upload [REVSET]`  | Synchronize content and dependency structure to the remote   |
 | `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
 | `review open [REVSET]`    | Create a pull request                                        |

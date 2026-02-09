@@ -14,7 +14,7 @@ import (
 
 // Run executes the configured check command against the given revset.
 //
-// When force is true, the command is always executed (used by standalone jj-forge check).
+// When force is true, the command is always executed (used by standalone jj-forge change check).
 // When force is false, execution is skipped if all changes already have passing
 // verdicts with matching commit IDs (used by upload/submit/merge).
 //

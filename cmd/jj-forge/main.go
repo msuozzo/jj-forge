@@ -123,6 +123,16 @@ func main() {
 		return ui.New(os.Stdout, mode)
 	})
 
+	// Change command group
+	changeCmd := &cobra.Command{
+		Use:   "change",
+		Short: "Manage change content and lifecycle",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
 	// Check command
 	var checkForce bool
 	var checkDetach bool
@@ -147,7 +157,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(os.Stderr, "jj-forge check running in background (pid %d), logging to %s\n", pid, proc.LogPath())
+				fmt.Fprintf(os.Stderr, "jj-forge change check running in background (pid %d), logging to %s\n", pid, proc.LogPath())
 				return nil
 			}
 			if detached {
@@ -179,17 +189,6 @@ func main() {
 	}
 	checkCmd.Flags().BoolVar(&checkForce, "force", false, "Re-run checks even if cached verdicts are passing")
 	checkCmd.Flags().BoolVar(&checkDetach, "detach", false, "Run in the background")
-	rootCmd.AddCommand(checkCmd)
-
-	// Change command group
-	changeCmd := &cobra.Command{
-		Use:   "change",
-		Short: "Manage change content and lifecycle",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmd.Help()
-		},
-	}
 
 	var uploadRemote string
 	var uploadSkipCheck bool
@@ -279,6 +278,7 @@ use 'review open' and 'review submit' instead.`,
 	submitCmd.Flags().StringVar(&submitBranch, "branch", "main", "Target branch to fast-forward")
 	submitCmd.Flags().BoolVar(&submitSkipCheck, "skip-check", false, "Skip the configured check command")
 
+	changeCmd.AddCommand(checkCmd)
 	changeCmd.AddCommand(uploadCmd)
 	changeCmd.AddCommand(submitCmd)
 	rootCmd.AddCommand(changeCmd)
