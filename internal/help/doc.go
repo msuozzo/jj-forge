@@ -11,11 +11,8 @@
 //   - Go type names in flag usage (e.g. "string") are replaced with
 //     UPPER_CASE placeholders (e.g. <REMOTE>). Bool flags omit the placeholder.
 //   - Default values are shown inline: [default: og]
-//   - Flags are rendered Clap-style with the description on a separate indented
-//     line beneath the flag names:
-//
-//     -r, --remote <REMOTE>
-//               Remote to push to [default: og]
+//   - Flags are rendered Clap-style with the description on the same line and
+//     aligned with the other flags.
 //
 // # Color scheme
 //
