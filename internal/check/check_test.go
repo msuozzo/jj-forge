@@ -20,21 +20,15 @@ type mockClient struct {
 	mu      sync.Mutex
 	config  map[string]string
 	revs    []*jj.Rev
-	wcRev   *jj.Rev // working copy revision returned by Rev(ctx, "@")
 	root    string
 	gitDir  string
 	callLog [][]string
 }
 
 func newMockClient(revs []*jj.Rev) *mockClient {
-	var wcRev *jj.Rev
-	if len(revs) > 0 {
-		wcRev = revs[0] // default: first rev is working copy
-	}
 	return &mockClient{
 		config: make(map[string]string),
 		revs:   revs,
-		wcRev:  wcRev,
 		root:   "/fake/repo",
 		gitDir: "/fake/git/dir",
 	}
@@ -82,9 +76,6 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
 }
 
 func (m *mockClient) Rev(ctx context.Context, rev string) (*jj.Rev, error) {
-	if rev == "@" && m.wcRev != nil {
-		return m.wcRev, nil
-	}
 	revs, err := m.Revs(ctx, rev)
 	if err != nil {
 		return nil, err
@@ -142,21 +133,23 @@ func TestRunPass(t *testing.T) {
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
-		// args: jj -R /fake/repo util exec -- sh -c "echo hello"
-		wantSuffix := []string{"util", "exec", "--", "sh", "-c", "echo hello"}
-		gotSuffix := args[len(args)-len(wantSuffix):]
-		for i, w := range wantSuffix {
-			if gotSuffix[i] != w {
-				t.Errorf("arg %d = %q, want %q", i, gotSuffix[i], w)
-			}
+	var ranCheck atomic.Bool
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "sh -c echo hello") {
+			ranCheck.Store(true)
+			return "", nil
 		}
-		return "", nil
+		// Materialization commands (git archive, tar)
+		return "fake-data", nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ranCheck.Load() {
+		t.Error("check command was not run")
 	}
 
 	// Verify verdict was stored
@@ -186,8 +179,13 @@ func TestRunFail(t *testing.T) {
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
-		return "", fmt.Errorf("exit status 1")
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "sh -c false") {
+			return "", fmt.Errorf("exit status 1")
+		}
+		// Materialization commands
+		return "fake-data", nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner)
@@ -284,7 +282,6 @@ func TestRunMultipleRevs(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
 	mock := newMockClient(revs)
-	mock.wcRev = revs[0] // c1 is working copy
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -294,19 +291,14 @@ func TestRunMultipleRevs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var runs sync.Map
+	var poolRuns atomic.Int32
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		// Identify which command this is
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "jj") && strings.Contains(cmdStr, "util exec") {
-			runs.Store("wc", true)
+		if strings.Contains(cmdStr, "sh -c echo hello") && opts.WorkDir != "" {
+			poolRuns.Add(1)
 			return "", nil
 		}
-		if strings.Contains(cmdStr, "sh -c echo hello") {
-			runs.Store("pool", true)
-			return "", nil
-		}
-		// Pool materialization commands (git archive, tar)
+		// Materialization commands (git archive, tar)
 		return "fake-data", nil
 	}
 
@@ -315,12 +307,8 @@ func TestRunMultipleRevs(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify both were checked
-	if _, ok := runs.Load("wc"); !ok {
-		t.Error("working copy check was not run")
-	}
-	if _, ok := runs.Load("pool"); !ok {
-		t.Error("pool check was not run")
+	if poolRuns.Load() != 2 {
+		t.Errorf("expected 2 pool runs, got %d", poolRuns.Load())
 	}
 
 	// Verify verdicts were stored for both
@@ -346,7 +334,6 @@ func TestRunMultipleRevs_CachedSkip(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
 	mock := newMockClient(revs)
-	mock.wcRev = revs[0]
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -385,7 +372,6 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
 	mock := newMockClient(revs)
-	mock.wcRev = revs[0]
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -394,15 +380,14 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var checkCount atomic.Int32
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		// Working copy (c1) passes
-		if strings.Contains(cmdStr, "jj") && strings.Contains(cmdStr, "util exec") {
-			return "", nil
-		}
-		// Pool check (c2) fails
 		if strings.Contains(cmdStr, "sh -c echo hello") {
-			return "", fmt.Errorf("check failed")
+			if checkCount.Add(1) == 1 {
+				return "", nil // first check passes
+			}
+			return "", fmt.Errorf("check failed") // second check fails
 		}
 		// Materialization commands
 		return "fake-data", nil
@@ -413,57 +398,29 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 		t.Fatal("expected error for mixed results, got nil")
 	}
 
-	// Verify c1 passed, c2 failed
-	v1, err := configMgr.GetCheckVerdictByChangeID("c1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v1 == nil || v1.Verdict != forge.CheckVerdictPass {
-		t.Errorf("expected c1 to pass, got %v", v1)
-	}
-
-	v2, err := configMgr.GetCheckVerdictByChangeID("c2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v2 == nil || v2.Verdict != forge.CheckVerdictFail {
-		t.Errorf("expected c2 to fail, got %v", v2)
-	}
-}
-
-func TestRunMultipleRevs_WorkingCopySpecialCase(t *testing.T) {
-	// When all revisions are the working copy (single rev = wc), no pool is needed.
-	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
-	mock.wcRev = revs[0]
-	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
-	configMgr := forge.NewConfigManager(mock)
-
-	var usedJJExec atomic.Bool
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "util exec") {
-			usedJJExec.Store(true)
+	// Verify one passed and one failed (order depends on pool scheduling).
+	var passCount, failCount int
+	for _, rev := range revs {
+		verdict, err := configMgr.GetCheckVerdictByChangeID(rev.ID)
+		if err != nil {
+			t.Fatalf("GetCheckVerdictByChangeID(%s) failed: %v", rev.ID, err)
 		}
-		return "", nil
+		if verdict == nil {
+			t.Fatalf("expected verdict for %s, got nil", rev.ID)
+		}
+		switch verdict.Verdict {
+		case forge.CheckVerdictPass:
+			passCount++
+		case forge.CheckVerdictFail:
+			failCount++
+		}
 	}
-
-	err := Run(context.Background(), mock, configMgr, "@", true, runner)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !usedJJExec.Load() {
-		t.Error("expected working copy to use jj util exec")
+	if passCount != 1 || failCount != 1 {
+		t.Errorf("expected 1 pass and 1 fail, got %d passes and %d fails", passCount, failCount)
 	}
 }
 
 func TestRunMultipleRevs_AllPool(t *testing.T) {
-	// When no revision matches working copy, all go through pool.
 	tmpDir := t.TempDir()
 
 	revs := []*jj.Rev{
@@ -471,7 +428,6 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
 	mock := newMockClient(revs)
-	mock.wcRev = &jj.Rev{ID: "wc", CommitID: "wc-commit"} // different from all revs
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -639,17 +595,17 @@ func TestRunMixedMutability(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: false}, // immutable — should be skipped
 	}
 	mock := newMockClient(revs)
-	mock.wcRev = revs[0] // c1 is working copy
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
-	var checkedIDs sync.Map
+	var ranCheck atomic.Bool
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "util exec") {
-			checkedIDs.Store("c1", true)
+		if strings.Contains(cmdStr, "sh -c echo hello") {
+			ranCheck.Store(true)
 		}
+		// Materialization commands
 		return "", nil
 	}
 
@@ -659,7 +615,7 @@ func TestRunMixedMutability(t *testing.T) {
 	}
 
 	// c1 (mutable) should have been checked.
-	if _, ok := checkedIDs.Load("c1"); !ok {
+	if !ranCheck.Load() {
 		t.Error("mutable revision c1 should have been checked")
 	}
 

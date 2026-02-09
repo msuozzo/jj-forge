@@ -12,7 +12,7 @@ import (
 
 const (
 	stateFileName   = ".jj-forge-check-state"
-	defaultPoolSize = 2
+	defaultPoolSize = 3
 )
 
 // WorkDir represents a single working directory in the pool.

@@ -18,9 +18,8 @@ import (
 // When force is false, execution is skipped if all changes already have passing
 // verdicts with matching commit IDs (used by upload/submit/merge).
 //
-// Multiple revisions are checked in parallel: the working copy revision (if
-// present) runs in-place via `jj util exec`, while other revisions are
-// materialized into persistent pool directories using the backing git store.
+// Multiple revisions are checked in parallel by materializing them into
+// persistent pool directories using the backing git store.
 func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner cmd.Executor) error {
 	// Read check command from config
 	checkCmd, err := configMgr.GetCheckCommand()
@@ -66,12 +65,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
-	// Get repo path for the runner
-	repoPath, err := client.Root(ctx)
+	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
 	}
-	forgeDir, err := forge.Dir(repoPath)
+	forgeDir, err := forge.Dir(repoRoot)
 	if err != nil {
 		return err
 	}
@@ -80,20 +78,6 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return err
 	}
 	defer lock.release()
-	// Partition: working copy vs others
-	wcRev, err := client.Rev(ctx, "@")
-	if err != nil {
-		return fmt.Errorf("failed to resolve working copy: %w", err)
-	}
-	var wcCheck *jj.Rev
-	var poolChecks []*jj.Rev
-	for _, rev := range toCheck {
-		if rev.CommitID == wcRev.CommitID {
-			wcCheck = rev
-		} else {
-			poolChecks = append(poolChecks, rev)
-		}
-	}
 	// Write "running" verdicts before starting execution.
 	var runningVerdicts []forge.CheckVerdict
 	for _, rev := range toCheck {
@@ -106,18 +90,15 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err := configMgr.SetCheckVerdicts(runningVerdicts); err != nil {
 		return fmt.Errorf("failed to set running verdicts: %w", err)
 	}
-	// Initialize pool only if needed
-	var pool *WorkPool
-	if len(poolChecks) > 0 {
-		gitDir, err := client.GitDir(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get git dir: %w", err)
-		}
-		baseDir := filepath.Join(forgeDir, "check-pool")
-		pool, err = NewWorkPool(gitDir, baseDir, defaultPoolSize, runner)
-		if err != nil {
-			return fmt.Errorf("failed to create work pool: %w", err)
-		}
+	// Initialize pool.
+	gitDir, err := client.GitDir(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get git dir: %w", err)
+	}
+	baseDir := filepath.Join(forgeDir, "check-pool")
+	pool, err := NewWorkPool(gitDir, baseDir, defaultPoolSize, runner)
+	if err != nil {
+		return fmt.Errorf("failed to create work pool: %w", err)
 	}
 	// Run checks in parallel, streaming verdicts as they complete.
 	type result struct {
@@ -127,11 +108,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	resultCh := make(chan result, len(toCheck))
 	for _, rev := range toCheck {
 		go func() {
-			if wcCheck != nil && rev.CommitID == wcCheck.CommitID {
-				resultCh <- result{rev: rev, err: runInWorkingCopy(ctx, runner, repoPath, checkCmd)}
-			} else {
-				resultCh <- result{rev: rev, err: runInPool(ctx, pool, runner, rev.CommitID, checkCmd)}
-			}
+			resultCh <- result{rev: rev, err: runInPool(ctx, pool, runner, rev.CommitID, checkCmd)}
 		}()
 	}
 	// Store verdicts as they arrive and collect errors.
@@ -157,16 +134,6 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return fmt.Errorf("check command failed for: %s", strings.Join(failures, ", "))
 	}
 	return nil
-}
-
-func runInWorkingCopy(ctx context.Context, runner cmd.Executor, repoPath, checkCmd string) error {
-	args := []string{"jj"}
-	if repoPath != "" {
-		args = append(args, "-R", repoPath)
-	}
-	args = append(args, "util", "exec", "--", "sh", "-c", checkCmd)
-	_, err := runner(ctx, cmd.Opts{}, args...)
-	return err
 }
 
 func runInPool(ctx context.Context, pool *WorkPool, runner cmd.Executor, commitID, checkCmd string) error {
