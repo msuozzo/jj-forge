@@ -203,7 +203,7 @@ func main() {
 				revset = args[0]
 			} else {
 				var err error
-				revset, err = resolveDefaultRev(ctx, client)
+				revset, err = resolveDefaultStackRevset(ctx, client)
 				if err != nil {
 					return err
 				}

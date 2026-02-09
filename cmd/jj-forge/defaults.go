@@ -26,3 +26,13 @@ func resolveDefaultRev(ctx context.Context, client jj.Client) (string, error) {
 	}
 	return "@-", nil
 }
+
+// resolveDefaultStackRevset returns a revset selecting the full mutable
+// ancestor stack of the default revision.
+func resolveDefaultStackRevset(ctx context.Context, client jj.Client) (string, error) {
+	rev, err := resolveDefaultRev(ctx, client)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("::%s & mutable()", rev), nil
+}
