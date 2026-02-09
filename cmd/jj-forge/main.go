@@ -239,19 +239,27 @@ func main() {
 	var submitRemote, submitBranch string
 	var submitSkipCheck bool
 	submitCmd := &cobra.Command{
-		Use:   "submit REVSET",
+		Use:   "submit [REVSET]",
 		Short: "Land changes directly to main without PR review",
 		Long: `Submit lands commits directly by fast-forwarding the target branch.
 
 This is suitable for solo projects or develop-on-main workflows where
 PR-based review is not required. For team workflows with code review,
 use 'review open' and 'review submit' instead.`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			revset := args[0]
-
 			client := jj.NewClientWithExecutor(repoPath, newJJExecutor())
+			var revset string
+			if len(args) > 0 {
+				revset = args[0]
+			} else {
+				var err error
+				revset, err = resolveDefaultStackRevset(ctx, client)
+				if err != nil {
+					return err
+				}
+			}
 			if !submitSkipCheck {
 				configMgr := forge.NewConfigManager(client)
 				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {

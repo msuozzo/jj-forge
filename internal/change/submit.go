@@ -90,56 +90,48 @@ func Submit(ctx context.Context, client jj.Client, revset, remote, branch string
 		// Next commit should have this one as parent
 		expectedParent = rev.ID
 	}
-	// PHASE 4: Process each revision (remove trailer, push, fetch, verify)
-	expectedParent = currentRemoteHead
-	for i, rev := range revs {
-		fmt.Fprintf(u, "\nProcessing commit %d/%d: %s\n", i+1, len(revs), u.Styled("change_id", rev.ID))
-		// Remove forge-parent trailer locally before pushing
+	// PHASE 4: Remove trailers, push chain tip, and verify
+	for _, rev := range revs {
 		newDescription := forge.RemoveParentTrailer(rev.Description)
 		if newDescription != rev.Description {
-			fmt.Fprintf(u, "  Removing forge-parent trailer from %s...\n", u.Styled("change_id", rev.ID))
+			fmt.Fprintf(u, "Removing forge-parent trailer from %s...\n", u.Styled("change_id", rev.ID))
 			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
 			if err != nil {
 				return nil, fmt.Errorf("removing trailer from %s: %w", rev.ID, err)
 			}
 		}
-		// Move the bookmark to point to this commit, then push it
-		fmt.Fprintf(u, "  Submitting %s to %s...\n", u.Styled("change_id", rev.ID), u.Styled("bookmark", remoteBookmark))
-		_, err := client.Run(ctx, "bookmark", "set", branch, "-r", rev.ID)
-		if err != nil {
-			return nil, fmt.Errorf("moving bookmark %s to %s: %w", branch, rev.ID, err)
-		}
-		// Push the bookmark to fast-forward the remote branch
-		_, err = client.Run(ctx, "git", "push", "--bookmark", branch, "--remote", remote)
-		if err != nil {
-			return nil, fmt.Errorf("pushing %s: %w", rev.ID, err)
-		}
-		result.Submitted++
-		// Fetch from remote to update local state
-		fmt.Fprintf(u, "  Fetching from %s...\n", u.Styled("remote", remote))
-		_, err = client.Run(ctx, "git", "fetch", "--remote", remote)
-		if err != nil {
-			return nil, fmt.Errorf("fetching after push %d: %w", i+1, err)
-		}
-		// Re-query remote bookmark to verify push succeeded
-		updatedHeadRevs, err := client.Revs(ctx, remoteBookmark)
-		if err != nil {
-			return nil, fmt.Errorf("re-querying remote bookmark after push: %w", err)
-		}
-		if len(updatedHeadRevs) != 1 {
-			return nil, fmt.Errorf("expected exactly one revision at %s after push, got %d",
-				remoteBookmark, len(updatedHeadRevs))
-		}
-		// Verify the push was successful (detect concurrent pushes)
-		newRemoteHead := updatedHeadRevs[0].ID
-		if newRemoteHead != rev.ID {
-			return nil, fmt.Errorf(
-				"remote head verification failed: expected %s at %s, but found %s.\n"+
-					"This might indicate a concurrent push by another developer.",
-				rev.ID, remoteBookmark, newRemoteHead)
-		}
-		fmt.Fprintf(u, "  Verified: %s is now at %s\n", u.Styled("change_id", rev.ID), u.Styled("bookmark", remoteBookmark))
-		expectedParent = rev.ID
 	}
+	// Move bookmark to the chain tip and push once (all ancestors are included)
+	chainTip := revs[len(revs)-1]
+	fmt.Fprintf(u, "Submitting %d change(s) to %s...\n", len(revs), u.Styled("bookmark", remoteBookmark))
+	_, err = client.Run(ctx, "bookmark", "set", branch, "-r", chainTip.ID)
+	if err != nil {
+		return nil, fmt.Errorf("moving bookmark %s to %s: %w", branch, chainTip.ID, err)
+	}
+	_, err = client.Run(ctx, "git", "push", "--bookmark", branch, "--remote", remote)
+	if err != nil {
+		return nil, fmt.Errorf("pushing %s: %w", chainTip.ID, err)
+	}
+	// Fetch and verify
+	_, err = client.Run(ctx, "git", "fetch", "--remote", remote)
+	if err != nil {
+		return nil, fmt.Errorf("fetching after push: %w", err)
+	}
+	updatedHeadRevs, err := client.Revs(ctx, remoteBookmark)
+	if err != nil {
+		return nil, fmt.Errorf("re-querying remote bookmark after push: %w", err)
+	}
+	if len(updatedHeadRevs) != 1 {
+		return nil, fmt.Errorf("expected exactly one revision at %s after push, got %d",
+			remoteBookmark, len(updatedHeadRevs))
+	}
+	if updatedHeadRevs[0].ID != chainTip.ID {
+		return nil, fmt.Errorf(
+			"remote head verification failed: expected %s at %s, but found %s.\n"+
+				"This might indicate a concurrent push by another developer.",
+			chainTip.ID, remoteBookmark, updatedHeadRevs[0].ID)
+	}
+	fmt.Fprintf(u, "Verified: %s is now at %s\n", u.Styled("bookmark", remoteBookmark), u.Styled("change_id", chainTip.ID))
+	result.Submitted = len(revs)
 	return result, nil
 }
