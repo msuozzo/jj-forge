@@ -398,7 +398,7 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "GitHub usernames to assign as reviewers")
+	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "Usernames to assign as reviewers")
 	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
 	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
 	openCmd.Flags().BoolVar(&openSkipCheck, "skip-check", false, "Skip the configured check command")
