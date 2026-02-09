@@ -46,7 +46,7 @@ func Open(
 		return nil, fmt.Errorf("change %s has empty description. Add a description with: jj describe %s", rev.ID, rev.ID)
 	}
 	if !isUploaded(rev, params.ForkRemote) {
-		return nil, fmt.Errorf("change %s has not been uploaded to %s. Run: jj-forge change upload %s", rev.ID, params.ForkRemote, rev.ID)
+		return nil, fmt.Errorf("change %s was not uploaded to %s; this is unexpected", rev.ID, params.ForkRemote)
 	}
 	// Check if a review already exists
 	existingRecord, err := configMgr.GetReviewByChangeID(rev.ID)

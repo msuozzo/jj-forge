@@ -302,8 +302,8 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 		r.printer.Success("Configured PR-based workflow")
 		r.printer.Info("")
 		r.printer.Info("Workflow: PR-based")
-		r.printer.Info("  Use 'jj-forge change upload' to sync to fork")
-		r.printer.Info("  Use 'jj-forge review open' to create PR to upstream")
+		r.printer.Info("  Use 'jj-forge review open' to create PR (auto-uploads)")
+		r.printer.Info("  Use 'jj-forge review update' to sync content and update PR descriptions")
 	}
 
 	return result, nil

@@ -320,7 +320,19 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			// Resolve revset to individual revisions
+			// Upload changes (push branches, update trailers)
+			uploadResult, err := change.Upload(ctx, jjClient, revset, openForkRemote, stdoutUI)
+			if err != nil {
+				return err
+			}
+			if uploadResult.Pushed > 0 || uploadResult.TrailersUpdated > 0 {
+				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", uploadResult.Pushed, uploadResult.TrailersUpdated)
+			}
+			if uploadResult.Skipped > 0 {
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
+					uploadResult.Skipped, uploadResult.SkippedEmpty, uploadResult.SkippedAnonymous, uploadResult.SkippedSynced)
+			}
+			// Resolve revset to individual revisions (re-resolve after trailer updates)
 			revs, err := jjClient.Revs(ctx, revset)
 			if err != nil {
 				return fmt.Errorf("failed to resolve revset: %w", err)
