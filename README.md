@@ -64,6 +64,7 @@ Workflow is detected based on ownership:
     jj describe -m "my change"
     jj forge change upload             # push to branch
     jj forge review open               # create pull request
+    jj forge review update             # push content and update PR descriptions
     # ... review happens ...
     jj forge review merge              # merge pull request
 
@@ -145,7 +146,7 @@ This adds:
 > [`hwatch`](https://github.com/blacknon/hwatch) which supports OSC 52
 > passthrough.
 
-## Stacked PRs
+## Stacked Reviews
 
 jj-forge tracks parent-child relationships between changes using a
 `forge-parent` trailer in commit descriptions. When you upload a stack of
@@ -156,6 +157,22 @@ trailers, you can add a GitHub branch ruleset:
 
     jj forge repo setup-ruleset
 
+### Dependent Review Links
+
+When working with stacked reviews, jj-forge will manage **Parents** and
+**Children** links in descriptions so reviewers can navigate between related
+reviews. For example, the middle PR in a three-PR stack would have:
+
+```
+---
+Parents: [#1](https://github.com/owner/repo/pull/1)
+Children: [#3](https://github.com/owner/repo/pull/3)
+```
+
+`review open` will initialize them, `review update` will keep them synchronized
+across modifications, and `review merge` will clean them up prior to
+finalization.
+
 ## Commands
 
 | Command                   | Description                                                  |
@@ -164,6 +181,7 @@ trailers, you can add a GitHub branch ruleset:
 | `change upload [REVSET]`  | Synchronize content and dependency structure to the remote   |
 | `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
 | `review open [REVSET]`    | Create a pull request                                        |
+| `review update [REVSET]`  | Upload content and update PR descriptions with links         |
 | `review merge [REV]`      | Merge a pull request                                         |
 | `review close [REV]`      | Close a pull request and abandon the change                  |
 | `review import [REV]`     | Find and import existing pull requests                       |

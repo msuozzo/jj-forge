@@ -220,5 +220,20 @@ func (f *FakeForge) GetReview(ctx context.Context, repoURI string, number int) (
 		Number: r.Number,
 		URL:    r.URL,
 		State:  forge.ReviewState(r.Status),
+		Title:  r.Title,
+		Body:   r.Body,
 	}, nil
+}
+
+// UpdateReview updates the body of a review.
+func (f *FakeForge) UpdateReview(ctx context.Context, repoURI string, reviewNumber int, body string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	r, exists := f.reviews[reviewNumber]
+	if !exists {
+		return fmt.Errorf("review #%d not found", reviewNumber)
+	}
+	r.Body = body
+	return nil
 }

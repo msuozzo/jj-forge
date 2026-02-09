@@ -1,0 +1,162 @@
+package review
+
+import (
+	"context"
+	"fmt"
+	"slices"
+
+	"github.com/msuozzo/jj-forge/internal/change"
+	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
+)
+
+// UpdateParams contains parameters for the update command.
+type UpdateParams struct {
+	Revset         string // Revset to update
+	ForkRemote     string // Remote where branches are pushed
+	UpstreamRemote string // Remote to update PRs on
+	UI             *ui.UI // UI for styled output
+}
+
+// UpdateResult contains the result of the update command.
+type UpdateResult struct {
+	UploadResult *change.UploadResult
+	PRsUpdated   int
+}
+
+// Update uploads content and updates PR descriptions with parent/child links.
+func Update(
+	ctx context.Context,
+	jjClient jj.Client,
+	forgeClient forge.Forge,
+	configMgr *forge.ConfigManager,
+	params UpdateParams,
+) (*UpdateResult, error) {
+	// Phase 1: Upload content
+	uploadResult, err := change.Upload(ctx, jjClient, params.Revset, params.ForkRemote, params.UI)
+	if err != nil {
+		return nil, fmt.Errorf("upload failed: %w", err)
+	}
+
+	// Phase 2: Update PR descriptions with links
+	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, params.Revset, params.UpstreamRemote)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UpdateResult{
+		UploadResult: uploadResult,
+		PRsUpdated:   prsUpdated,
+	}, nil
+}
+
+// UpdatePRLinks updates PR descriptions with parent/child links for the given revset.
+// The revset is expanded to include mutable parents so that parent PRs get child links
+// even when only a subset of the stack is passed.
+// Returns the number of PRs updated.
+func UpdatePRLinks(
+	ctx context.Context,
+	jjClient jj.Client,
+	forgeClient forge.Forge,
+	configMgr *forge.ConfigManager,
+	revset string,
+	upstreamRemote string,
+) (int, error) {
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	stack, err := jjClient.Revs(ctx, expandedRevset)
+	if err != nil {
+		return 0, fmt.Errorf("failed to resolve expanded revset: %w", err)
+	}
+	slices.Reverse(stack) // parent-first order
+	if len(stack) == 0 {
+		return 0, nil
+	}
+
+	// Get all review records
+	records, err := configMgr.GetReviewRecords()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get review records: %w", err)
+	}
+	reviewByChange := make(map[string]*forge.ReviewRecord)
+	for i := range records {
+		if records[i].Status == forge.ReviewStateOpen {
+			reviewByChange[records[i].ChangeID] = &records[i]
+		}
+	}
+
+	// Build parent/child map from forge-parent trailers
+	parentOf := make(map[string]string)     // changeID -> parent changeID
+	childrenOf := make(map[string][]string) // changeID -> child changeIDs
+
+	stackIDs := make(map[string]bool)
+	for _, rev := range stack {
+		stackIDs[rev.ID] = true
+	}
+
+	for _, rev := range stack {
+		trailers := jj.ParseDescriptionTrailers(rev.Description)
+		parentTrailer, found := jj.GetTrailer(trailers, forge.ParentTrailerKey)
+		if found {
+			parentID := parentTrailer.Value
+			parentOf[rev.ID] = parentID
+			childrenOf[parentID] = append(childrenOf[parentID], rev.ID)
+		}
+	}
+
+	upstreamURL, err := jjClient.RemoteURL(ctx, upstreamRemote)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
+	}
+
+	prsUpdated := 0
+	for _, rev := range stack {
+		rec, ok := reviewByChange[rev.ID]
+		if !ok {
+			continue // No open review for this change
+		}
+		reviewNumber, err := forgeClient.ParseID(rec.ForgeID)
+		if err != nil {
+			return 0, fmt.Errorf("invalid review ID %s: %w", rec.ForgeID, err)
+		}
+
+		// Get current PR details from forge
+		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewNumber)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get review #%d: %w", reviewNumber, err)
+		}
+
+		// Build parent links
+		var parentLinks []PRLink
+		if pID, ok := parentOf[rev.ID]; ok {
+			if pRec, ok := reviewByChange[pID]; ok {
+				pNum, err := forgeClient.ParseID(pRec.ForgeID)
+				if err == nil {
+					parentLinks = append(parentLinks, PRLink{Number: pNum, URL: pRec.URL})
+				}
+			}
+		}
+
+		// Build child links
+		var childLinks []PRLink
+		for _, cID := range childrenOf[rev.ID] {
+			if cRec, ok := reviewByChange[cID]; ok {
+				cNum, err := forgeClient.ParseID(cRec.ForgeID)
+				if err == nil {
+					childLinks = append(childLinks, PRLink{Number: cNum, URL: cRec.URL})
+				}
+			}
+		}
+
+		// Update body with links
+		newBody := SetPRLinks(details.Body, parentLinks, childLinks)
+		if newBody != details.Body {
+			if err := forgeClient.UpdateReview(ctx, upstreamURL, reviewNumber, newBody); err != nil {
+				return 0, fmt.Errorf("failed to update review #%d: %w", reviewNumber, err)
+			}
+			prsUpdated++
+		}
+	}
+
+	return prsUpdated, nil
+}

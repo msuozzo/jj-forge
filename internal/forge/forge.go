@@ -31,6 +31,8 @@ type ReviewDetails struct {
 	Number int
 	URL    string
 	State  ReviewState
+	Title  string
+	Body   string
 }
 
 // Forge defines the interface for interacting with code forges.
@@ -58,6 +60,9 @@ type Forge interface {
 
 	// DefaultBranch returns the default branch name of the repository.
 	DefaultBranch(ctx context.Context, repoURI string) (string, error)
+
+	// UpdateReview updates the body of an existing code review.
+	UpdateReview(ctx context.Context, repoURI string, reviewNumber int, body string) error
 
 	// SetupRuleset configures a ruleset on the forge to prevent merging commits with forge-parent.
 	SetupRuleset(ctx context.Context, repoURI string) error

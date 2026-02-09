@@ -239,7 +239,7 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 		"pr", "view",
 		fmt.Sprintf("%d", number),
 		"--repo", normalizedURI,
-		"--json", "number,url,state",
+		"--json", "number,url,state,title,body",
 	}
 	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
@@ -250,6 +250,8 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 		Number int    `json:"number"`
 		URL    string `json:"url"`
 		State  string `json:"state"`
+		Title  string `json:"title"`
+		Body   string `json:"body"`
 	}
 	if err := json.Unmarshal([]byte(output), &review); err != nil {
 		return nil, fmt.Errorf("failed to parse PR details: %w", err)
@@ -259,7 +261,28 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 		Number: review.Number,
 		URL:    review.URL,
 		State:  mapState(review.State),
+		Title:  review.Title,
+		Body:   review.Body,
 	}, nil
+}
+
+// UpdateReview updates the body of a pull request.
+func (c *Client) UpdateReview(ctx context.Context, repoURI string, reviewNumber int, body string) error {
+	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
+	if err != nil {
+		return fmt.Errorf("invalid repository URI: %w", err)
+	}
+	args := []string{
+		"pr", "edit",
+		fmt.Sprintf("%d", reviewNumber),
+		"--repo", normalizedURI,
+		"--body", body,
+	}
+	_, err = c.run(ctx, cmd.Opts{}, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update PR #%d: %w", reviewNumber, err)
+	}
+	return nil
 }
 
 func mapState(state string) forge.ReviewState {

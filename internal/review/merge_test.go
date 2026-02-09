@@ -74,6 +74,13 @@ func TestMerge_Success(t *testing.T) {
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
+		// cleanupLinksAfterMerge: GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -189,6 +196,13 @@ func TestMerge_NoCleanup(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
+		},
+		// cleanupLinksAfterMerge: GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
 		},
 	)
 
@@ -383,6 +397,219 @@ func TestMerge_ForgeError(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "failed to merge review") {
 		t.Errorf("expected 'failed to merge review' in error, got: %v", err)
+	}
+
+	scenario.Verify()
+}
+
+func TestMerge_LinkCleanup(t *testing.T) {
+	// Merge bottom of a 3-PR stack: A <- B <- C
+	// After merging A, B and C should have their links cleaned up.
+	// B previously had parent=A; after merge, B has no parent link.
+	// C still has parent=B; after merge, C keeps parent=B link.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{
+			ID:              "aaaaaaaaaaaa",
+			Parents:         []string{"root"},
+			Description:     "feat: first\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+		},
+		jjtest.Commit{
+			ID:              "bbbbbbbbbbbb",
+			Parents:         []string{"aaaaaaaaaaaa"},
+			Description:     "feat: middle\n\nforge-parent: aaaaaaaaaaaa\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-bbbbbbbbbbbb"},
+		},
+		jjtest.Commit{
+			ID:              "cccccccccccc",
+			Parents:         []string{"bbbbbbbbbbbb"},
+			Description:     "feat: last\n\nforge-parent: bbbbbbbbbbbb\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-cccccccccccc"},
+		},
+	)
+
+	fakeForge := github.NewFakeForge()
+
+	reviewsConfig := `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`
+	mergedConfig := `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`
+
+	scenario := jjtest.NewScenario(t, repo,
+		// Pre-create review records (3 calls: list, set, list, set, list, set)
+		jjtest.Call{
+			Args:   []string{"config", "list", "--repo", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
+			},
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		// Merge() call: Rev("aaaaaaaaaaaa")
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "aaaaaaaaaaaa"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// GetReviewByChangeID → GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return reviewsConfig
+			},
+		},
+		// RemoteURL
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "up git@github.com:owner/repo.git\n"
+			},
+		},
+		// Cleanup: bookmark delete + push + fetch
+		jjtest.Call{
+			Args:   []string{"bookmark", "delete", "push-aaaaaaaaaaaa"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--remote", testRemote, "--bookmark", "push-aaaaaaaaaaaa"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "fetch", "--remote", "up"},
+			Output: jjtest.EmptyOutput(),
+		},
+		// AddReviewRecord (mark merged): GetReviewRecords + set
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return reviewsConfig
+			},
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		// cleanupLinksAfterMerge: GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
+		},
+		// cleanupLinksAfterMerge: Rev("bbbbbbbbbbbb")
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "bbbbbbbbbbbb"},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+		},
+		// cleanupLinksAfterMerge: Rev("cccccccccccc")
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "cccccccccccc"},
+			Output: jjtest.LogOutput("cccccccccccc"),
+		},
+		// GetReview + UpdateReview for B and C happen via fakeForge
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	// Create reviews in forge
+	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: first",
+		Body:       "First body\n\n---\nChildren: [#2](https://github.com/owner/repo/pull/2)",
+		FromBranch: "push-aaaaaaaaaaaa",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review: %v", err)
+	}
+	_, err = fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: middle",
+		Body:       "Middle body\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3)",
+		FromBranch: "push-bbbbbbbbbbbb",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review: %v", err)
+	}
+	_, err = fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: last",
+		Body:       "Last body\n\n---\nParents: [#2](https://github.com/owner/repo/pull/2)",
+		FromBranch: "push-cccccccccccc",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review: %v", err)
+	}
+
+	// Add review records
+	for _, rec := range []forge.ReviewRecord{
+		{ChangeID: "aaaaaaaaaaaa", ForgeID: "pr/1", URL: "https://github.com/owner/repo/pull/1", Status: forge.ReviewStateOpen},
+		{ChangeID: "bbbbbbbbbbbb", ForgeID: "pr/2", URL: "https://github.com/owner/repo/pull/2", Status: forge.ReviewStateOpen},
+		{ChangeID: "cccccccccccc", ForgeID: "pr/3", URL: "https://github.com/owner/repo/pull/3", Status: forge.ReviewStateOpen},
+	} {
+		if err := configMgr.AddReviewRecord(rec); err != nil {
+			t.Fatalf("failed to add config record: %v", err)
+		}
+	}
+
+	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+		Rev:            "aaaaaaaaaaaa",
+		ForkRemote:     testRemote,
+		UpstreamRemote: "up",
+		NoCleanup:      false,
+		UI:             testUI,
+	})
+
+	if err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+
+	if result.Number != 1 {
+		t.Errorf("expected review number 1, got %d", result.Number)
+	}
+
+	// Verify A's links were stripped after merge
+	aReview, _ := fakeForge.GetTestReview(1)
+	if strings.Contains(aReview.Body, "---") || strings.Contains(aReview.Body, "Children:") {
+		t.Errorf("expected A's links stripped after merge, got body %q", aReview.Body)
+	}
+	if aReview.Body != "First body" {
+		t.Errorf("expected A's body to be %q, got %q", "First body", aReview.Body)
+	}
+
+	// Verify B's links: parent (A) was merged, so parent link removed. Child (C) still exists.
+	bReview, _ := fakeForge.GetTestReview(2)
+	if strings.Contains(bReview.Body, "Parents:") {
+		t.Errorf("expected B's parent link removed after merge, got body %q", bReview.Body)
+	}
+	if !strings.Contains(bReview.Body, "Children: [#3]") {
+		t.Errorf("expected B to still have child #3 link, got body %q", bReview.Body)
+	}
+
+	// Verify C's links: parent is B (still open), so parent link preserved.
+	cReview, _ := fakeForge.GetTestReview(3)
+	if !strings.Contains(cReview.Body, "Parents: [#2]") {
+		t.Errorf("expected C to still have parent #2 link, got body %q", cReview.Body)
 	}
 
 	scenario.Verify()

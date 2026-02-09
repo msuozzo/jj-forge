@@ -48,6 +48,7 @@ var ghConfirmOps = [][]string{
 	{"pr", "create"},
 	{"pr", "merge"},
 	{"pr", "close"},
+	{"pr", "edit"},
 	{"repo", "fork"},
 	{"repo", "create"},
 	{"api", "--method"},
@@ -372,6 +373,15 @@ use 'review open' and 'review submit' instead.`,
 				opened++
 			}
 			fmt.Fprintf(stdoutUI, "Opened %d review(s), skipped %d\n", opened, skipped)
+			// Update PR descriptions with parent/child links
+			if opened > 0 {
+				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, githubClient, configMgr, revset, openUpstreamRemote)
+				if err != nil {
+					stdoutUI.PrintWarning("failed to update PR links: %v", err)
+				} else if prsUpdated > 0 {
+					fmt.Fprintf(stdoutUI, "Updated %d PR description(s) with links\n", prsUpdated)
+				}
+			}
 			return nil
 		},
 	}
@@ -526,8 +536,68 @@ use 'review open' and 'review submit' instead.`,
 	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "up", "Remote to search for PRs")
 	importCmd.Flags().BoolVar(&importAll, "all", false, "Check all mutable revisions")
 
+	var updateUpstreamRemote, updateForkRemote string
+	var updateSkipCheck bool
+	updateCmd := &cobra.Command{
+		Use:               "update [REVSET]",
+		Short:             "Upload content and update PR descriptions with parent/child links",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
+			var revset string
+			if len(args) > 0 {
+				revset = args[0]
+			} else {
+				var err error
+				revset, err = resolveDefaultStackRevset(ctx, jjClient)
+				if err != nil {
+					return err
+				}
+			}
+			configMgr := forge.NewConfigManager(jjClient)
+			if !updateSkipCheck {
+				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor()); err != nil {
+					return err
+				}
+			}
+			// Create GitHub client
+			gitDir, err := jjClient.GitDir(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get git directory: %w", err)
+			}
+			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
+			result, err := review.Update(ctx, jjClient, githubClient, configMgr, review.UpdateParams{
+				Revset:         revset,
+				ForkRemote:     updateForkRemote,
+				UpstreamRemote: updateUpstreamRemote,
+				UI:             stdoutUI,
+			})
+			if err != nil {
+				return err
+			}
+			// Print summary
+			ur := result.UploadResult
+			if ur.Pushed > 0 || ur.TrailersUpdated > 0 {
+				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", ur.Pushed, ur.TrailersUpdated)
+			}
+			if ur.Skipped > 0 {
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
+					ur.Skipped, ur.SkippedEmpty, ur.SkippedAnonymous, ur.SkippedSynced)
+			}
+			if result.PRsUpdated > 0 {
+				fmt.Fprintf(stdoutUI, "Updated %d PR description(s)\n", result.PRsUpdated)
+			}
+			return nil
+		},
+	}
+	updateCmd.Flags().StringVar(&updateForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
+	updateCmd.Flags().StringVar(&updateUpstreamRemote, "upstream-remote", "up", "Remote to update PRs on")
+	updateCmd.Flags().BoolVar(&updateSkipCheck, "skip-check", false, "Skip the configured check command")
+
 	reviewCmd.AddCommand(importCmd)
 	reviewCmd.AddCommand(openCmd)
+	reviewCmd.AddCommand(updateCmd)
 	reviewCmd.AddCommand(mergeCmd)
 	reviewCmd.AddCommand(closeCmd)
 	rootCmd.AddCommand(reviewCmd)
