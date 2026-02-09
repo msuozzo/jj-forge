@@ -21,14 +21,27 @@ type UploadResult struct {
 	TrailersUpdated  int
 }
 
-// Upload orchestrates the trailer updates and pushing of a stack of revisions.
-func Upload(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*UploadResult, error) {
+// UpdateTrailersResult contains statistics about the trailer update phase.
+type UpdateTrailersResult struct {
+	TrailersUpdated  int
+	SkippedEmpty     int
+	SkippedAnonymous int
+}
+
+// PushResult contains statistics about the push phase.
+type PushResult struct {
+	Pushed        int
+	SkippedSynced int
+}
+
+// UpdateTrailers updates forge-parent trailers for a stack of revisions.
+func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.UI) (*UpdateTrailersResult, error) {
 	stack, err := client.Revs(ctx, revset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stack: %w", err)
 	}
 	slices.Reverse(stack) // order updates from parents to children
-	result := &UploadResult{}
+	result := &UpdateTrailersResult{}
 	if len(stack) == 0 {
 		return result, nil
 	}
@@ -46,14 +59,12 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 		if rev.IsEmpty {
 			fmt.Fprintf(u, "Skipping empty change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedEmpty++
-			result.Skipped++
 			continue
 		}
 		// Skip anonymous commits (empty description)
 		if strings.TrimSpace(rev.Description) == "" {
 			fmt.Fprintf(u, "Skipping anonymous change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedAnonymous++
-			result.Skipped++
 			continue
 		}
 		// Determine the parent mutable change ID if it exists.
@@ -80,11 +91,29 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 				return nil, fmt.Errorf("failed to update trailers for %s: %w", rev.ID, err)
 			}
 			result.TrailersUpdated++
-			// After describe, the commit has changed, so we need to push
-		} else if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
+		}
+	}
+	return result, nil
+}
+
+// Push pushes a stack of revisions to the given remote, skipping those already synced.
+func Push(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*PushResult, error) {
+	// Re-resolve revset since commits may have changed due to trailer updates
+	stack, err := client.Revs(ctx, revset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stack: %w", err)
+	}
+	slices.Reverse(stack) // order from parents to children
+	result := &PushResult{}
+	for _, rev := range stack {
+		// Silently skip empty/anonymous
+		if rev.IsEmpty || strings.TrimSpace(rev.Description) == "" {
+			continue
+		}
+		// Check if already synced
+		if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
 			fmt.Fprintf(u, "Skipping synced change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedSynced++
-			result.Skipped++
 			continue
 		}
 		// Push the revision
@@ -96,4 +125,25 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 		result.Pushed++
 	}
 	return result, nil
+}
+
+// Upload orchestrates the trailer updates and pushing of a stack of revisions.
+func Upload(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*UploadResult, error) {
+	trailerResult, err := UpdateTrailers(ctx, client, revset, u)
+	if err != nil {
+		return nil, err
+	}
+	pushResult, err := Push(ctx, client, revset, remote, u)
+	if err != nil {
+		return nil, err
+	}
+	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+	return &UploadResult{
+		Pushed:           pushResult.Pushed,
+		Skipped:          skipped,
+		SkippedEmpty:     trailerResult.SkippedEmpty,
+		SkippedAnonymous: trailerResult.SkippedAnonymous,
+		SkippedSynced:    pushResult.SkippedSynced,
+		TrailersUpdated:  trailerResult.TrailersUpdated,
+	}, nil
 }

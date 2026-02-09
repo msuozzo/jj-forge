@@ -13,10 +13,11 @@ import (
 
 // UpdateParams contains parameters for the update command.
 type UpdateParams struct {
-	Revset         string // Revset to update
-	ForkRemote     string // Remote where branches are pushed
-	UpstreamRemote string // Remote to update PRs on
-	UI             *ui.UI // UI for styled output
+	Revset         string       // Revset to update
+	ForkRemote     string       // Remote where branches are pushed
+	UpstreamRemote string       // Remote to update PRs on
+	UI             *ui.UI       // UI for styled output
+	CheckFn        func() error // Optional: runs between trailer updates and push
 }
 
 // UpdateResult contains the result of the update command.
@@ -33,18 +34,36 @@ func Update(
 	configMgr *forge.ConfigManager,
 	params UpdateParams,
 ) (*UpdateResult, error) {
-	// Phase 1: Upload content
-	uploadResult, err := change.Upload(ctx, jjClient, params.Revset, params.ForkRemote, params.UI)
+	// Phase 1: Update trailers
+	trailerResult, err := change.UpdateTrailers(ctx, jjClient, params.Revset, params.UI)
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}
-
-	// Phase 2: Update PR descriptions with links
+	// Phase 2: Run checks (if configured)
+	if params.CheckFn != nil {
+		if err := params.CheckFn(); err != nil {
+			return nil, err
+		}
+	}
+	// Phase 3: Push
+	pushResult, err := change.Push(ctx, jjClient, params.Revset, params.ForkRemote, params.UI)
+	if err != nil {
+		return nil, fmt.Errorf("upload failed: %w", err)
+	}
+	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+	uploadResult := &change.UploadResult{
+		Pushed:           pushResult.Pushed,
+		Skipped:          skipped,
+		SkippedEmpty:     trailerResult.SkippedEmpty,
+		SkippedAnonymous: trailerResult.SkippedAnonymous,
+		SkippedSynced:    pushResult.SkippedSynced,
+		TrailersUpdated:  trailerResult.TrailersUpdated,
+	}
+	// Phase 4: Update PR descriptions with links
 	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, params.Revset, params.UpstreamRemote)
 	if err != nil {
 		return nil, err
 	}
-
 	return &UpdateResult{
 		UploadResult: uploadResult,
 		PRsUpdated:   prsUpdated,

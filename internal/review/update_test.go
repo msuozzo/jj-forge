@@ -28,20 +28,24 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload phase: Revs(revset)
+		// UpdateTrailers phase: Revs(revset)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// Upload phase: Revs(parents(revset)~(revset))
+		// UpdateTrailers phase: Revs(parents(revset)~(revset))
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", fmt.Sprintf("parents(%s)~(%s)", revset, revset)},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Upload: skip synced
-		// (already has remote bookmark, so it will be skipped)
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// Push: skip synced (already has remote bookmark)
 
-		// Update phase: Revs(expandedRevset) for links
+		// UpdatePRLinks phase: Revs(expandedRevset) for links
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -126,19 +130,24 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload phase: Revs(revset) — returns child first (log order), then reversed
+		// UpdateTrailers phase: Revs(revset)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
-		// Upload phase: Revs(parents)
+		// UpdateTrailers phase: Revs(parents)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Upload: both already synced → skipped
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// Push: both already synced → skipped
 
-		// Update phase: Revs(expandedRevset)
+		// UpdatePRLinks phase: Revs(expandedRevset)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -245,7 +254,7 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload phase
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -254,9 +263,14 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Upload: all synced
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// Push: all synced
 
-		// Update phase
+		// UpdatePRLinks phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -344,7 +358,7 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -353,7 +367,12 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Update phase
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -420,19 +439,24 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload phase: Revs(revset) — only B
+		// UpdateTrailers phase: Revs(revset) — only B
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
 		},
-		// Upload phase: Revs(parents) — A is parent of B, outside revset
+		// UpdateTrailers phase: Revs(parents) — A is parent of B, outside revset
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// Upload: both already synced → skipped
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+		},
+		// Push: already synced → skipped
 
-		// Update phase: Revs(expandedRevset) — includes both A and B
+		// UpdatePRLinks phase: Revs(expandedRevset) — includes both A and B
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -517,7 +541,7 @@ func TestUpdate_UploadError(t *testing.T) {
 	fakeForge := github.NewFakeForge()
 
 	scenario := jjtest.NewScenario(t, repo,
-		// Upload phase fails on Revs call
+		// UpdateTrailers phase fails on Revs call
 		jjtest.Call{
 			Args: []string{"log", "--no-graph", "--template", templateMatcher, "-r", "::@ & mutable()"},
 			Err:  fmt.Errorf("jj error: no such revset"),
@@ -539,6 +563,55 @@ func TestUpdate_UploadError(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "upload failed") {
 		t.Errorf("expected 'upload failed' in error, got: %v", err)
+	}
+
+	scenario.Verify()
+}
+
+func TestUpdate_CheckFnError_AbortsPush(t *testing.T) {
+	// CheckFn error should abort before pushing.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(jjtest.Commit{
+		ID:          "aaaaaaaaaaaa",
+		Parents:     []string{"root"},
+		Description: "feat: test\n",
+		IsMutable:   true,
+	})
+
+	fakeForge := github.NewFakeForge()
+
+	revset := "::@ & mutable()"
+
+	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase: Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// UpdateTrailers phase: Revs(parents)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", fmt.Sprintf("parents(%s)~(%s)", revset, revset)},
+			Output: jjtest.LogOutput("root"),
+		},
+		// CheckFn runs here and returns error — no push or link update calls
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+	checkErr := fmt.Errorf("check failed: lint errors")
+
+	_, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+		Revset:         revset,
+		ForkRemote:     testRemote,
+		UpstreamRemote: "up",
+		UI:             testUI,
+		CheckFn:        func() error { return checkErr },
+	})
+
+	if err == nil {
+		t.Fatal("expected error from CheckFn, got nil")
+	}
+	if err != checkErr {
+		t.Errorf("expected CheckFn error, got: %v", err)
 	}
 
 	scenario.Verify()

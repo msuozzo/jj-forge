@@ -26,6 +26,7 @@ func TestUpload_SingleMutableCommit(t *testing.T) {
 	})
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase: Revs(revset)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -33,6 +34,11 @@ func TestUpload_SingleMutableCommit(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
@@ -62,6 +68,7 @@ func TestUpload_TwoCommitStack(t *testing.T) {
 
 	// jj returns children first (B, A), we reverse to (A, B)
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -70,14 +77,21 @@ func TestUpload_TwoCommitStack(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// A: no trailer change (parent is immutable)
+		// B: needs forge-parent trailer
 		jjtest.Call{
 			Args:       []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "feat: B\n\nforge-parent: aaaaaaaaaaaa\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("bbbbbbbbbbbb", "feat: B\n\nforge-parent: aaaaaaaaaaaa\n"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
@@ -109,6 +123,7 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 
 	// jj returns children first (C, B, A), we reverse to (A, B, C)
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -117,23 +132,31 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// A: no trailer change (parent is immutable)
+		// B: needs forge-parent trailer
 		jjtest.Call{
 			Args:       []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("bbbbbbbbbbbb", "B\n\nforge-parent: aaaaaaaaaaaa\n"),
 		},
-		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// C: needs forge-parent trailer
 		jjtest.Call{
 			Args:       []string{"describe", "cccccccccccc", "--no-edit", "-m", "C\n\nforge-parent: bbbbbbbbbbbb\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("cccccccccccc", "C\n\nforge-parent: bbbbbbbbbbbb\n"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote, "--allow-new"},
@@ -162,6 +185,7 @@ func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 
 	// jj returns children first (B, A), we reverse to (A, B)
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -170,11 +194,16 @@ func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
+		// No describe call - trailer already correct
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// No describe call - trailer already correct
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
@@ -205,6 +234,7 @@ func TestUpload_TrailerRemoval(t *testing.T) {
 	)
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -217,6 +247,11 @@ func TestUpload_TrailerRemoval(t *testing.T) {
 			Args:       []string{"describe", "aaaaaaaaaaaa", "--no-edit", "-m", "A\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("aaaaaaaaaaaa", "A\n"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
@@ -243,6 +278,7 @@ func TestUpload_PushFailure(t *testing.T) {
 
 	pushErr := errors.New("push failed: remote rejected")
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -250,6 +286,11 @@ func TestUpload_PushFailure(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
 			Args: []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
@@ -272,6 +313,12 @@ func TestUpload_EmptyRevset(t *testing.T) {
 	repo := jjtest.NewFakeRepo()
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase: empty result
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "none()"},
+			Output: jjtest.EmptyOutput(),
+		},
+		// Push phase: re-resolve Revs(revset), also empty
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "none()"},
 			Output: jjtest.EmptyOutput(),
@@ -296,6 +343,7 @@ func TestUpload_SkipEmptyCommit(t *testing.T) {
 	)
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -304,7 +352,13 @@ func TestUpload_SkipEmptyCommit(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		// No push - skipped
+		// No describe - skipped (empty)
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// No push - silently skipped (empty)
 	)
 
 	client := scenario.Client()
@@ -328,6 +382,7 @@ func TestUpload_SkipAnonymousCommit(t *testing.T) {
 	)
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -336,6 +391,12 @@ func TestUpload_SkipAnonymousCommit(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// No push - silently skipped (anonymous)
 	)
 
 	client := scenario.Client()
@@ -363,6 +424,7 @@ func TestUpload_SkipSyncedCommit(t *testing.T) {
 	)
 
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -370,6 +432,11 @@ func TestUpload_SkipSyncedCommit(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		// No push - already synced
 	)
@@ -404,6 +471,7 @@ func TestUpload_PushWhenTrailerChangedEvenIfSynced(t *testing.T) {
 
 	// jj returns children first (B, A), we reverse to (A, B)
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -412,15 +480,24 @@ func TestUpload_PushWhenTrailerChangedEvenIfSynced(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
+		// Trailer update for B - describe changes the commit, clearing remote bookmark
+		jjtest.Call{
+			Args:   []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
+			Output: jjtest.EmptyOutput(),
+			SideEffect: func(r *jjtest.FakeRepo) {
+				jjtest.UpdateDescription("bbbbbbbbbbbb", "B\n\nforge-parent: aaaaaaaaaaaa\n")(r)
+				// Describe changes the commit, so the remote bookmark no longer points to it
+				r.Commits["bbbbbbbbbbbb"].RemoteBookmarks = nil
+			},
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
-		},
-		// Trailer update needed - forces push even though it had remote bookmark
-		jjtest.Call{
-			Args:       []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
-			Output:     jjtest.EmptyOutput(),
-			SideEffect: jjtest.UpdateDescription("bbbbbbbbbbbb", "B\n\nforge-parent: aaaaaaaaaaaa\n"),
 		},
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
@@ -457,6 +534,7 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 	// jj returns: synced00, needspsh, emptyyyy, anon0000 (reverse topo)
 	// After reverse: anon0000, emptyyyy, needspsh, synced00
 	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
 			Output: jjtest.LogOutput("synced00", "needspsh", "emptyyyy", "anon0000"),
@@ -465,10 +543,20 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
+		// No trailer changes needed (all have immutable parent root)
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("synced00", "needspsh", "emptyyyy", "anon0000"),
+		},
+		// anon0000: silently skipped (anonymous)
+		// emptyyyy: silently skipped (empty)
+		// needspsh: pushed
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "needspsh", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
 		},
+		// synced00: skipped (synced)
 	)
 
 	client := scenario.Client()

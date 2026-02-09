@@ -316,22 +316,30 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
+			// Phase 1: Update trailers
+			trailerResult, err := change.UpdateTrailers(ctx, jjClient, revset, stdoutUI)
+			if err != nil {
+				return err
+			}
+			// Phase 2: Run checks (after trailers updated, before push)
 			if !openSkipCheck {
 				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor()); err != nil {
 					return err
 				}
 			}
-			// Upload changes (push branches, update trailers)
-			uploadResult, err := change.Upload(ctx, jjClient, revset, openForkRemote, stdoutUI)
+			// Phase 3: Push
+			pushResult, err := change.Push(ctx, jjClient, revset, openForkRemote, stdoutUI)
 			if err != nil {
 				return err
 			}
-			if uploadResult.Pushed > 0 || uploadResult.TrailersUpdated > 0 {
-				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", uploadResult.Pushed, uploadResult.TrailersUpdated)
+			// Print upload summary
+			skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+			if pushResult.Pushed > 0 || trailerResult.TrailersUpdated > 0 {
+				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", pushResult.Pushed, trailerResult.TrailersUpdated)
 			}
-			if uploadResult.Skipped > 0 {
+			if skipped > 0 {
 				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
-					uploadResult.Skipped, uploadResult.SkippedEmpty, uploadResult.SkippedAnonymous, uploadResult.SkippedSynced)
+					skipped, trailerResult.SkippedEmpty, trailerResult.SkippedAnonymous, pushResult.SkippedSynced)
 			}
 			// Resolve revset to individual revisions (re-resolve after trailer updates)
 			revs, err := jjClient.Revs(ctx, revset)
@@ -569,9 +577,10 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
+			var checkFn func() error
 			if !updateSkipCheck {
-				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor()); err != nil {
-					return err
+				checkFn = func() error {
+					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor())
 				}
 			}
 			// Create GitHub client
@@ -585,6 +594,7 @@ use 'review open' and 'review submit' instead.`,
 				ForkRemote:     updateForkRemote,
 				UpstreamRemote: updateUpstreamRemote,
 				UI:             stdoutUI,
+				CheckFn:        checkFn,
 			})
 			if err != nil {
 				return err
