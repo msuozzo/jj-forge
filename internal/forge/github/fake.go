@@ -222,4 +222,3 @@ func (f *FakeForge) GetReview(ctx context.Context, repoURI string, number int) (
 		State:  forge.ReviewState(r.Status),
 	}, nil
 }
-

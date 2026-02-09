@@ -70,7 +70,7 @@ func ParseGitHubURL(url string) (*RepoRef, error) {
 
 // GetAuthenticatedUser returns the current GitHub user.
 func (c *GitHubClient) GetAuthenticatedUser(ctx context.Context) (string, error) {
-	output, err := c.run(ctx,"api", "user", "--jq", ".login")
+	output, err := c.run(ctx, "api", "user", "--jq", ".login")
 	if err != nil {
 		return "", fmt.Errorf("failed to get authenticated user: %w", err)
 	}
@@ -93,7 +93,7 @@ func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*
 
 	// Query GitHub API for repo info
 	apiPath := fmt.Sprintf("repos/%s/%s", ref.Owner, ref.Name)
-	output, err := c.run(ctx,"api", apiPath, "--jq", `{
+	output, err := c.run(ctx, "api", apiPath, "--jq", `{
 		fork: .fork,
 		parent_owner: .parent.owner.login,
 		parent_name: .parent.name,
@@ -157,7 +157,7 @@ func (c *GitHubClient) FindMyFork(ctx context.Context, upstreamOwner, upstreamNa
 
 	// Check if user's fork exists by querying their repo directly
 	apiPath := fmt.Sprintf("repos/%s/%s", authUser, upstreamName)
-	output, err := c.run(ctx,"api", apiPath, "--jq", `{
+	output, err := c.run(ctx, "api", apiPath, "--jq", `{
 		fork: .fork,
 		parent_owner: .parent.owner.login,
 		parent_name: .parent.name,
@@ -218,14 +218,14 @@ func (c *GitHubClient) CreateFork(ctx context.Context, upstreamOwner, upstreamNa
 
 	// Create the fork using gh repo fork
 	repoPath := fmt.Sprintf("%s/%s", upstreamOwner, upstreamName)
-	_, err = c.run(ctx,"repo", "fork", repoPath, "--clone=false", "--default-branch-only")
+	_, err = c.run(ctx, "repo", "fork", repoPath, "--clone=false", "--default-branch-only")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create fork: %w", err)
 	}
 
 	// Get the fork info
 	apiPath := fmt.Sprintf("repos/%s/%s", authUser, upstreamName)
-	output, err := c.run(ctx,"api", apiPath, "--jq", `{
+	output, err := c.run(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
 		clone_url: .clone_url,
 		default_branch: .default_branch
@@ -274,14 +274,14 @@ func (c *GitHubClient) CreateRepo(ctx context.Context, name string, private bool
 	} else {
 		args = append(args, "--public")
 	}
-	_, err = c.run(ctx,args...)
+	_, err = c.run(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create repository: %w", err)
 	}
 
 	// Get the repo info
 	apiPath := fmt.Sprintf("repos/%s/%s", authUser, name)
-	output, err := c.run(ctx,"api", apiPath, "--jq", `{
+	output, err := c.run(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
 		clone_url: .clone_url,
 		default_branch: .default_branch
@@ -314,7 +314,7 @@ func (c *GitHubClient) CreateRepo(ctx context.Context, name string, private bool
 // GetUpstreamInfo gets the SSH and HTTPS URLs and default branch for an upstream repository.
 func (c *GitHubClient) GetUpstreamInfo(ctx context.Context, owner, name string) (sshURL, httpsURL, defaultBranch string, err error) {
 	apiPath := fmt.Sprintf("repos/%s/%s", owner, name)
-	output, err := c.run(ctx,"api", apiPath, "--jq", `{
+	output, err := c.run(ctx, "api", apiPath, "--jq", `{
 		ssh_url: .ssh_url,
 		clone_url: .clone_url,
 		default_branch: .default_branch

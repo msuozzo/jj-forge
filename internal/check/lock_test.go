@@ -145,4 +145,3 @@ func TestRelease_Nil(t *testing.T) {
 		t.Errorf("nil release should return nil, got %v", err)
 	}
 }
-

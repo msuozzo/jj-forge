@@ -13,11 +13,11 @@ import (
 
 // cmdRecord records a single command invocation for test assertions.
 type cmdRecord struct {
-	args    []string
-	opts    cmd.Opts
-	stdin   string
-	output  string
-	err     error
+	args   []string
+	opts   cmd.Opts
+	stdin  string
+	output string
+	err    error
 }
 
 // mockRunner builds a cmd.Executor that replays pre-configured command results

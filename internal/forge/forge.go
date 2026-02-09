@@ -32,6 +32,7 @@ type ReviewDetails struct {
 	URL    string
 	State  ReviewState
 }
+
 // Forge defines the interface for interacting with code forges.
 type Forge interface {
 	// CreateReview creates a new code review.
