@@ -2,11 +2,16 @@ package review
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+)
+
+var (
+	ErrReviewAlreadyExists = errors.New("review already exists")
 )
 
 // OpenParams contains parameters for the open command.
@@ -50,9 +55,9 @@ func Open(
 	}
 	if existingRecord != nil {
 		if existingRecord.Status == forge.ReviewStateOpen {
-			return nil, fmt.Errorf("review already exists for change %s: %s", rev.ID, existingRecord.URL)
+			return nil, fmt.Errorf("%w for change %s: %s", ErrReviewAlreadyExists, rev.ID, existingRecord.URL)
 		} else if existingRecord.Status == forge.ReviewStateMerged {
-			return nil, fmt.Errorf("change %s was already merged in review %s", rev.ID, existingRecord.ForgeID)
+			return nil, fmt.Errorf("%w: change %s was already merged in review %s", ErrReviewAlreadyExists, rev.ID, existingRecord.ForgeID)
 		}
 		// If status is closed, we can create a new review
 	}

@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"errors"
+	"slices"
+
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
 	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
@@ -284,24 +287,36 @@ use 'review open' and 'review submit' instead.`,
 
 	var openReviewers []string
 	var openUpstreamRemote, openForkRemote string
+	var openSkipCheck bool
 	openCmd := &cobra.Command{
-		Use:               "open [REV]",
+		Use:               "open [REVSET]",
 		Short:             "Create and assign a pull request",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			var rev string
+			var revset string
 			if len(args) > 0 {
-				rev = args[0]
+				revset = args[0]
 			} else {
 				var err error
-				rev, err = resolveDefaultRev(ctx, jjClient)
+				revset, err = resolveDefaultStackRevset(ctx, jjClient)
 				if err != nil {
 					return err
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
+			if !openSkipCheck {
+				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor()); err != nil {
+					return err
+				}
+			}
+			// Resolve revset to individual revisions
+			revs, err := jjClient.Revs(ctx, revset)
+			if err != nil {
+				return fmt.Errorf("failed to resolve revset: %w", err)
+			}
+			slices.Reverse(revs) // parent-first (topological) order
 			// Create GitHub client
 			// TODO: Detect and select another forge if not github hosted
 			gitDir, err := jjClient.GitDir(ctx)
@@ -320,26 +335,42 @@ use 'review open' and 'review submit' instead.`,
 					reviewers = []string{defaultReviewer}
 				}
 			}
-			// Execute open command
-			result, err := review.Open(ctx, jjClient, githubClient, configMgr, review.OpenParams{
-				Rev:            rev,
-				Reviewers:      reviewers,
-				UpstreamRemote: openUpstreamRemote,
-				ForkRemote:     openForkRemote,
-			})
-			if err != nil {
-				return err
+			// Open reviews for each revision
+			opened, skipped := 0, 0
+			for _, rev := range revs {
+				if rev.IsEmpty || strings.TrimSpace(rev.Description) == "" {
+					skipped++
+					continue
+				}
+				result, err := review.Open(ctx, jjClient, githubClient, configMgr, review.OpenParams{
+					Rev:            rev.ID,
+					Reviewers:      reviewers,
+					UpstreamRemote: openUpstreamRemote,
+					ForkRemote:     openForkRemote,
+				})
+				if err != nil {
+					if errors.Is(err, review.ErrReviewAlreadyExists) {
+						fmt.Fprintf(stdoutUI, "Skipping change %s: %s\n",
+							stdoutUI.Styled("change_id", rev.ID), err)
+						skipped++
+						continue
+					}
+					return err
+				}
+				fmt.Fprintf(stdoutUI, "Created review %s for change %s\n",
+					stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+					stdoutUI.Styled("change_id", result.ChangeID))
+				fmt.Fprintf(stdoutUI, "URL: %s\n", stdoutUI.Styled("url", result.URL))
+				opened++
 			}
-			fmt.Fprintf(stdoutUI, "Created review %s for change %s\n",
-				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
-				stdoutUI.Styled("change_id", result.ChangeID))
-			fmt.Fprintf(stdoutUI, "URL: %s\n", stdoutUI.Styled("url", result.URL))
+			fmt.Fprintf(stdoutUI, "Opened %d review(s), skipped %d\n", opened, skipped)
 			return nil
 		},
 	}
 	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "GitHub usernames to assign as reviewers")
 	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
 	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
+	openCmd.Flags().BoolVar(&openSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var mergeUpstreamRemote, mergeForkRemote string
 	var mergeNoCleanup, mergeSkipCheck bool
