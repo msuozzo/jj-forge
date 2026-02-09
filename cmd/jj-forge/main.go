@@ -77,6 +77,17 @@ func newGHExecutor(gitDir string) cmdpkg.Executor {
 	}
 }
 
+// getForge returns a forge client for the repository.
+// Currently always returns a GitHub client; future implementations
+// may detect the forge type from remote URLs.
+func getForge(ctx context.Context, jjClient jj.Client) (forge.Forge, error) {
+	gitDir, err := jjClient.GitDir(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get git directory: %w", err)
+	}
+	return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), nil
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -347,13 +358,10 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("failed to resolve revset: %w", err)
 			}
 			slices.Reverse(revs) // parent-first (topological) order
-			// Create GitHub client
-			// TODO: Detect and select another forge if not github hosted
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Get reviewers (flag or config default)
 			reviewers := openReviewers
 			if len(reviewers) == 0 {
@@ -372,7 +380,7 @@ use 'review open' and 'review submit' instead.`,
 					skipped++
 					continue
 				}
-				result, err := review.Open(ctx, jjClient, githubClient, configMgr, review.OpenParams{
+				result, err := review.Open(ctx, jjClient, forgeClient, configMgr, review.OpenParams{
 					Rev:            rev.ID,
 					Reviewers:      reviewers,
 					UpstreamRemote: openUpstreamRemote,
@@ -396,7 +404,7 @@ use 'review open' and 'review submit' instead.`,
 			fmt.Fprintf(stdoutUI, "Opened %d review(s), skipped %d\n", opened, skipped)
 			// Update PR descriptions with parent/child links
 			if opened > 0 {
-				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, githubClient, configMgr, revset, openUpstreamRemote)
+				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, revset, openUpstreamRemote)
 				if err != nil {
 					stdoutUI.PrintWarning("failed to update PR links: %v", err)
 				} else if prsUpdated > 0 {
@@ -436,14 +444,12 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			// Create GitHub client
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Execute merge command
-			result, err := review.Merge(ctx, jjClient, githubClient, configMgr, review.MergeParams{
+			result, err := review.Merge(ctx, jjClient, forgeClient, configMgr, review.MergeParams{
 				Rev:            rev,
 				ForkRemote:     mergeForkRemote,
 				UpstreamRemote: mergeUpstreamRemote,
@@ -484,14 +490,12 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			// Create GitHub client
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Execute close command
-			result, err := review.Close(ctx, jjClient, githubClient, configMgr, review.CloseParams{
+			result, err := review.Close(ctx, jjClient, forgeClient, configMgr, review.CloseParams{
 				Rev:            rev,
 				ForkRemote:     closeForkRemote,
 				UpstreamRemote: closeUpstreamRemote,
@@ -536,13 +540,11 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("revset and --all are mutually exclusive")
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			// Create GitHub client
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
-			result, err := review.Import(ctx, jjClient, githubClient, configMgr, review.ImportParams{
+			result, err := review.Import(ctx, jjClient, forgeClient, configMgr, review.ImportParams{
 				Revset:         revset,
 				UpstreamRemote: importUpstreamRemote,
 				All:            importAll,
@@ -583,13 +585,11 @@ use 'review open' and 'review submit' instead.`,
 					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor())
 				}
 			}
-			// Create GitHub client
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
-			result, err := review.Update(ctx, jjClient, githubClient, configMgr, review.UpdateParams{
+			result, err := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
 				Revset:         revset,
 				ForkRemote:     updateForkRemote,
 				UpstreamRemote: updateUpstreamRemote,
@@ -701,19 +701,17 @@ Examples:
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			// Create GitHub client
-			gitDir, err := jjClient.GitDir(ctx)
+			forgeClient, err := getForge(ctx, jjClient)
 			if err != nil {
-				return fmt.Errorf("failed to get git directory: %w", err)
+				return err
 			}
-			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			// Get upstream URL
 			upstreamURL, err := jjClient.RemoteURL(ctx, rulesetUpstreamRemote)
 			if err != nil {
 				return fmt.Errorf("failed to get upstream URL: %w", err)
 			}
 			// Execute setup-ruleset command
-			err = githubClient.SetupRuleset(ctx, upstreamURL)
+			err = forgeClient.SetupRuleset(ctx, upstreamURL)
 			if err != nil {
 				return err
 			}
