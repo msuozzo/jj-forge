@@ -296,8 +296,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 		r.printer.Success("Configured develop-on-main workflow")
 		r.printer.Info("")
 		r.printer.Info("Workflow: Develop on main")
-		r.printer.Info("  Use 'jj-forge change upload' to sync changes")
-		r.printer.Info("  Use 'jj-forge change submit' to land to main")
+		r.printer.Info("  Use 'jj' to create changes and 'jj-forge change submit' to land them")
 	} else {
 		r.printer.Success("Configured PR-based workflow")
 		r.printer.Info("")

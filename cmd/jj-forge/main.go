@@ -197,6 +197,7 @@ func main() {
 		Use:               "upload [REVSET]",
 		Short:             "Synchronize content and dependency structure to the remote",
 		Long:              `Analyzes the stack, updates forge-parent trailers, and pushes to the remote.`,
+		Deprecated:        "use 'review open', 'review update', or 'change submit' instead",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {

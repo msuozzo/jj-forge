@@ -62,7 +62,6 @@ Workflow is detected based on ownership:
 ### PR-based workflow
 
     jj describe -m "my change"
-    jj forge change upload             # push to branch
     jj forge review open               # upload and create pull request
     jj forge review update             # push content and update PR descriptions
     # ... review happens ...
@@ -92,8 +91,9 @@ Use `--detach` to run checks in the background:
 
 ### Automatic checks
 
-When a check command is configured, `change upload`, `change submit`, and
-`review merge` run checks before proceeding. Pass `--skip-check` to bypass.
+When a check command is configured, `review open`, `review update`,
+`change submit`, and `review merge` run checks before proceeding. Pass
+`--skip-check` to bypass.
 
 ## Templates
 
@@ -150,7 +150,8 @@ This adds:
 
 jj-forge tracks parent-child relationships between changes using a
 `forge-parent` trailer in commit descriptions. When you upload a stack of
-changes, `change upload` automatically adds or updates these trailers.
+changes, `review open` and `review update` automatically add or update these
+trailers.
 
 To prevent accidentally merging commits that still contain `forge-parent`
 trailers, you can add a GitHub branch ruleset:
@@ -178,7 +179,7 @@ finalization.
 | Command                   | Description                                                  |
 | ------------------------- | ------------------------------------------------------------ |
 | `change check [REVSET]`   | Run the configured check command against changes             |
-| `change upload [REVSET]`  | Synchronize content and dependency structure to the remote   |
+| `change upload [REVSET]`  | _(deprecated)_ Use `review open` or `review update` instead  |
 | `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
 | `review open [REVSET]`    | Create a pull request                                        |
 | `review update [REVSET]`  | Upload content and update PR descriptions with links         |
