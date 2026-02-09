@@ -102,6 +102,10 @@ func Close(
 		if err != nil {
 			return nil, fmt.Errorf("failed to abandon change: %w", err)
 		}
+		// Clean up check verdict for the closed change (non-fatal)
+		if err := configMgr.RemoveCheckVerdicts([]string{rev.ID}); err != nil {
+			params.UI.PrintWarning("failed to clean up check verdict: %v", err)
+		}
 	}
 	// Update config status to closed
 	reviewRecord.Status = forge.ReviewStateClosed

@@ -292,6 +292,29 @@ func (m *ConfigManager) SetCheckVerdicts(updates []CheckVerdict) error {
 	return m.saveVerdicts(verdicts)
 }
 
+// RemoveCheckVerdicts removes check verdicts for the given change IDs.
+// It is a no-op if none of the change IDs are found.
+func (m *ConfigManager) RemoveCheckVerdicts(changeIDs []string) error {
+	verdicts, err := m.GetCheckVerdicts()
+	if err != nil {
+		return err
+	}
+	removeSet := make(map[string]bool, len(changeIDs))
+	for _, id := range changeIDs {
+		removeSet[id] = true
+	}
+	var nextVerdicts []CheckVerdict
+	for _, v := range verdicts {
+		if !removeSet[v.ChangeID] {
+			nextVerdicts = append(nextVerdicts, v)
+		}
+	}
+	if len(nextVerdicts) == len(verdicts) {
+		return nil // Nothing to remove
+	}
+	return m.saveVerdicts(nextVerdicts)
+}
+
 // GetCheckVerdictByChangeID finds a check verdict by change ID.
 // Returns nil if no verdict is found.
 func (m *ConfigManager) GetCheckVerdictByChangeID(changeID string) (*CheckVerdict, error) {

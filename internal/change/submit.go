@@ -20,7 +20,7 @@ type SubmitResult struct {
 //   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
 //   - verifies the push succeeded
-func Submit(ctx context.Context, client jj.Client, revset, remote, branch string, u *ui.UI) (*SubmitResult, error) {
+func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset, remote, branch string, u *ui.UI) (*SubmitResult, error) {
 	result := &SubmitResult{}
 	// PHASE 1: Fetch and load remote bookmark
 	fmt.Fprintf(u, "Fetching from %s to get current state...\n", u.Styled("remote", remote))
@@ -132,6 +132,16 @@ func Submit(ctx context.Context, client jj.Client, revset, remote, branch string
 			chainTip.ID, remoteBookmark, updatedHeadRevs[0].ID)
 	}
 	fmt.Fprintf(u, "Verified: %s is now at %s\n", u.Styled("bookmark", remoteBookmark), u.Styled("change_id", chainTip.ID))
+	// Clean up check verdicts for submitted changes (non-fatal)
+	if configMgr != nil {
+		var changeIDs []string
+		for _, rev := range revs {
+			changeIDs = append(changeIDs, rev.ID)
+		}
+		if err := configMgr.RemoveCheckVerdicts(changeIDs); err != nil {
+			fmt.Fprintf(u, "Warning: failed to clean up check verdicts: %v\n", err)
+		}
+	}
 	result.Submitted = len(revs)
 	return result, nil
 }

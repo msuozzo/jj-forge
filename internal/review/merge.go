@@ -98,6 +98,10 @@ func Merge(
 	if err := configMgr.AddReviewRecord(*reviewRecord); err != nil {
 		return nil, fmt.Errorf("failed to update review status: %w", err)
 	}
+	// Clean up check verdict for the merged change (non-fatal)
+	if err := configMgr.RemoveCheckVerdicts([]string{rev.ID}); err != nil {
+		params.UI.PrintWarning("failed to clean up check verdict: %v", err)
+	}
 	// Clean up PR links on sibling reviews (non-fatal)
 	if err := cleanupLinksAfterMerge(ctx, jjClient, forgeClient, configMgr, rev.ID, upstreamRemoteURL); err != nil {
 		params.UI.PrintWarning("failed to clean up PR links: %v", err)

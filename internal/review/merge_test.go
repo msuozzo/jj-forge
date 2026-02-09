@@ -74,6 +74,13 @@ func TestMerge_Success(t *testing.T) {
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
+		// RemoveCheckVerdicts: GetCheckVerdicts (no checks stored, no-op)
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 		// cleanupLinksAfterMerge: GetReviewRecords
 		jjtest.Call{
 			Args: []string{"config", "list", "--repo", "forge"},
@@ -196,6 +203,13 @@ func TestMerge_NoCleanup(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
+		},
+		// RemoveCheckVerdicts: GetCheckVerdicts (no checks stored, no-op)
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
 		},
 		// cleanupLinksAfterMerge: GetReviewRecords
 		jjtest.Call{
@@ -509,6 +523,13 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`},
 			Output: jjtest.EmptyOutput(),
+		},
+		// RemoveCheckVerdicts: GetCheckVerdicts (no checks stored, no-op)
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
 		},
 		// cleanupLinksAfterMerge: GetReviewRecords
 		jjtest.Call{

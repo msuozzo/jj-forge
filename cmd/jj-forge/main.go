@@ -272,13 +272,13 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
+			configMgr := forge.NewConfigManager(client)
 			if !submitSkipCheck {
-				configMgr := forge.NewConfigManager(client)
 				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {
 					return err
 				}
 			}
-			result, err := change.Submit(ctx, client, revset, submitRemote, submitBranch, stdoutUI)
+			result, err := change.Submit(ctx, client, configMgr, revset, submitRemote, submitBranch, stdoutUI)
 			if err != nil {
 				return err
 			}

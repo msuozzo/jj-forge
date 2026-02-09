@@ -359,6 +359,108 @@ func TestParseCheckVerdict(t *testing.T) {
 	}
 }
 
+func TestRemoveCheckVerdicts(t *testing.T) {
+	t.Run("remove single from multiple", func(t *testing.T) {
+		mock := newMockClient()
+		mgr := NewConfigManager(mock)
+
+		// Add 3 verdicts
+		for _, v := range []CheckVerdict{
+			{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "aaa"},
+			{ChangeID: "c2", Verdict: CheckVerdictFail, CommitID: "bbb"},
+			{ChangeID: "c3", Verdict: CheckVerdictPass, CommitID: "ccc"},
+		} {
+			if err := mgr.SetCheckVerdict(v); err != nil {
+				t.Fatalf("SetCheckVerdict failed: %v", err)
+			}
+		}
+
+		// Remove c2
+		if err := mgr.RemoveCheckVerdicts([]string{"c2"}); err != nil {
+			t.Fatalf("RemoveCheckVerdicts failed: %v", err)
+		}
+
+		verdicts, err := mgr.GetCheckVerdicts()
+		if err != nil {
+			t.Fatalf("GetCheckVerdicts failed: %v", err)
+		}
+		if len(verdicts) != 2 {
+			t.Fatalf("expected 2 verdicts, got %d", len(verdicts))
+		}
+		for _, v := range verdicts {
+			if v.ChangeID == "c2" {
+				t.Error("c2 should have been removed")
+			}
+		}
+	})
+
+	t.Run("remove multiple at once", func(t *testing.T) {
+		mock := newMockClient()
+		mgr := NewConfigManager(mock)
+
+		for _, v := range []CheckVerdict{
+			{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "aaa"},
+			{ChangeID: "c2", Verdict: CheckVerdictFail, CommitID: "bbb"},
+			{ChangeID: "c3", Verdict: CheckVerdictPass, CommitID: "ccc"},
+		} {
+			if err := mgr.SetCheckVerdict(v); err != nil {
+				t.Fatalf("SetCheckVerdict failed: %v", err)
+			}
+		}
+
+		if err := mgr.RemoveCheckVerdicts([]string{"c1", "c3"}); err != nil {
+			t.Fatalf("RemoveCheckVerdicts failed: %v", err)
+		}
+
+		verdicts, err := mgr.GetCheckVerdicts()
+		if err != nil {
+			t.Fatalf("GetCheckVerdicts failed: %v", err)
+		}
+		if len(verdicts) != 1 {
+			t.Fatalf("expected 1 verdict, got %d", len(verdicts))
+		}
+		if verdicts[0].ChangeID != "c2" {
+			t.Errorf("expected c2 to remain, got %s", verdicts[0].ChangeID)
+		}
+	})
+
+	t.Run("no-op when not found", func(t *testing.T) {
+		mock := newMockClient()
+		mgr := NewConfigManager(mock)
+
+		if err := mgr.SetCheckVerdict(CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "aaa"}); err != nil {
+			t.Fatalf("SetCheckVerdict failed: %v", err)
+		}
+
+		// Remove nonexistent ID
+		if err := mgr.RemoveCheckVerdicts([]string{"nonexistent"}); err != nil {
+			t.Fatalf("RemoveCheckVerdicts failed: %v", err)
+		}
+
+		verdicts, err := mgr.GetCheckVerdicts()
+		if err != nil {
+			t.Fatalf("GetCheckVerdicts failed: %v", err)
+		}
+		if len(verdicts) != 1 {
+			t.Fatalf("expected 1 verdict unchanged, got %d", len(verdicts))
+		}
+
+		// Verify no config set call was made for the no-op removal
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		// Count set calls: 1 from SetCheckVerdict, 0 from RemoveCheckVerdicts (no-op)
+		var setCalls int
+		for _, call := range mock.callLog {
+			if len(call) >= 2 && call[0] == "config" && call[1] == "set" {
+				setCalls++
+			}
+		}
+		if setCalls != 1 {
+			t.Errorf("expected 1 config set call (no-op removal should not write), got %d", setCalls)
+		}
+	})
+}
+
 func TestSetCheckVerdictsBatch(t *testing.T) {
 	mock := newMockClient()
 	mgr := NewConfigManager(mock)

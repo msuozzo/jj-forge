@@ -64,6 +64,13 @@ func TestClose_Success(t *testing.T) {
 			Args:   []string{"abandon", "aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
+		// RemoveCheckVerdicts: GetCheckVerdicts (no checks stored, no-op)
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
 		jjtest.Call{
 			Args: []string{"config", "list", "--repo", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
