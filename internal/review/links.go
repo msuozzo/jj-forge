@@ -18,27 +18,26 @@ func FormatPRLinks(parents, children []PRLink) string {
 		return ""
 	}
 	var lines []string
-	lines = append(lines, "---")
 	if len(parents) > 0 {
 		var refs []string
 		for _, p := range parents {
 			refs = append(refs, fmt.Sprintf("[#%d](%s)", p.Number, p.URL))
 		}
-		lines = append(lines, "Parents: "+strings.Join(refs, ", "))
+		lines = append(lines, "> Parents: "+strings.Join(refs, ", "))
 	}
 	if len(children) > 0 {
 		var refs []string
 		for _, c := range children {
 			refs = append(refs, fmt.Sprintf("[#%d](%s)", c.Number, c.URL))
 		}
-		lines = append(lines, "Children: "+strings.Join(refs, ", "))
+		lines = append(lines, "> Children: "+strings.Join(refs, ", "))
 	}
 	return strings.Join(lines, "\n")
 }
 
 // StripPRLinks removes a managed links section from the end of a PR body.
-// A links section is identified by a trailing block that starts with "---"
-// and contains only "Parents:" and/or "Children:" lines after it.
+// A links section is identified by a trailing block of blockquote lines
+// containing only "> Parents:" and/or "> Children:" entries.
 func StripPRLinks(body string) string {
 	trimmed := strings.TrimRight(body, "\n\r\t ")
 	if trimmed == "" {
@@ -47,22 +46,20 @@ func StripPRLinks(body string) string {
 	lines := strings.Split(trimmed, "\n")
 
 	// Scan backwards looking for a links block.
-	// Valid links block: optional Children: line, optional Parents: line, then "---".
 	i := len(lines) - 1
+	foundLink := false
 	for i >= 0 {
 		line := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(line, "Parents: ") || strings.HasPrefix(line, "Children: ") {
+		if strings.HasPrefix(line, "> Parents: ") || strings.HasPrefix(line, "> Children: ") {
 			i--
+			foundLink = true
 			continue
 		}
-		if line == "---" {
-			// Found the separator — this is the start of a links block.
-			// Strip from the separator onwards, and also any trailing blank lines before it.
-			result := strings.TrimRight(strings.Join(lines[:i], "\n"), "\n\r\t ")
-			return result
-		}
-		// Not a links section line — stop scanning.
 		break
+	}
+	if foundLink {
+		result := strings.TrimRight(strings.Join(lines[:i+1], "\n"), "\n\r\t ")
+		return result
 	}
 	// No links section found, return original (trimmed).
 	return trimmed

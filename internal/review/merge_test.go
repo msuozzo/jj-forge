@@ -535,7 +535,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	// Create reviews in forge
 	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
 		Title:      "feat: first",
-		Body:       "First body\n\n---\nChildren: [#2](https://github.com/owner/repo/pull/2)",
+		Body:       "First body\n\n> Children: [#2](https://github.com/owner/repo/pull/2)",
 		FromBranch: "push-aaaaaaaaaaaa",
 		ToBranch:   "main",
 	})
@@ -544,7 +544,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	}
 	_, err = fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
 		Title:      "feat: middle",
-		Body:       "Middle body\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3)",
+		Body:       "Middle body\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)",
 		FromBranch: "push-bbbbbbbbbbbb",
 		ToBranch:   "main",
 	})
@@ -553,7 +553,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	}
 	_, err = fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
 		Title:      "feat: last",
-		Body:       "Last body\n\n---\nParents: [#2](https://github.com/owner/repo/pull/2)",
+		Body:       "Last body\n\n> Parents: [#2](https://github.com/owner/repo/pull/2)",
 		FromBranch: "push-cccccccccccc",
 		ToBranch:   "main",
 	})
@@ -590,7 +590,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 
 	// Verify A's links were stripped after merge
 	aReview, _ := fakeForge.GetTestReview(1)
-	if strings.Contains(aReview.Body, "---") || strings.Contains(aReview.Body, "Children:") {
+	if strings.Contains(aReview.Body, "> Children:") {
 		t.Errorf("expected A's links stripped after merge, got body %q", aReview.Body)
 	}
 	if aReview.Body != "First body" {
@@ -599,16 +599,16 @@ func TestMerge_LinkCleanup(t *testing.T) {
 
 	// Verify B's links: parent (A) was merged, so parent link removed. Child (C) still exists.
 	bReview, _ := fakeForge.GetTestReview(2)
-	if strings.Contains(bReview.Body, "Parents:") {
+	if strings.Contains(bReview.Body, "> Parents:") {
 		t.Errorf("expected B's parent link removed after merge, got body %q", bReview.Body)
 	}
-	if !strings.Contains(bReview.Body, "Children: [#3]") {
+	if !strings.Contains(bReview.Body, "> Children: [#3]") {
 		t.Errorf("expected B to still have child #3 link, got body %q", bReview.Body)
 	}
 
 	// Verify C's links: parent is B (still open), so parent link preserved.
 	cReview, _ := fakeForge.GetTestReview(3)
-	if !strings.Contains(cReview.Body, "Parents: [#2]") {
+	if !strings.Contains(cReview.Body, "> Parents: [#2]") {
 		t.Errorf("expected C to still have parent #2 link, got body %q", cReview.Body)
 	}
 

@@ -165,9 +165,8 @@ When working with stacked reviews, jj-forge will manage **Parents** and
 reviews. For example, the middle PR in a three-PR stack would have:
 
 ```
----
-Parents: [#1](https://github.com/owner/repo/pull/1)
-Children: [#3](https://github.com/owner/repo/pull/3)
+> Parents: [#1](https://github.com/owner/repo/pull/1)
+> Children: [#3](https://github.com/owner/repo/pull/3)
 ```
 
 `review open` will initialize them, `review update` will keep them synchronized

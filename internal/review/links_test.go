@@ -9,7 +9,7 @@ func TestFormatPRLinks_ParentsOnly(t *testing.T) {
 		[]PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
 		nil,
 	)
-	want := "---\nParents: [#1](https://github.com/owner/repo/pull/1)"
+	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -20,7 +20,7 @@ func TestFormatPRLinks_ChildrenOnly(t *testing.T) {
 		nil,
 		[]PRLink{{Number: 2, URL: "https://github.com/owner/repo/pull/2"}},
 	)
-	want := "---\nChildren: [#2](https://github.com/owner/repo/pull/2)"
+	want := "> Children: [#2](https://github.com/owner/repo/pull/2)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -34,7 +34,7 @@ func TestFormatPRLinks_Both(t *testing.T) {
 			{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
 		},
 	)
-	want := "---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
+	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -48,7 +48,7 @@ func TestFormatPRLinks_Empty(t *testing.T) {
 }
 
 func TestStripPRLinks_WithSection(t *testing.T) {
-	body := "Some PR description\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)"
+	body := "Some PR description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)"
 	got := StripPRLinks(body)
 	want := "Some PR description"
 	if got != want {
@@ -57,7 +57,7 @@ func TestStripPRLinks_WithSection(t *testing.T) {
 }
 
 func TestStripPRLinks_WithBothParentsAndChildren(t *testing.T) {
-	body := "Description\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3)"
+	body := "Description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)"
 	got := StripPRLinks(body)
 	want := "Description"
 	if got != want {
@@ -92,7 +92,7 @@ func TestStripPRLinks_EmptyBody(t *testing.T) {
 }
 
 func TestStripPRLinks_OnlyLinksSection(t *testing.T) {
-	body := "---\nParents: [#1](https://github.com/owner/repo/pull/1)"
+	body := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
 	got := StripPRLinks(body)
 	if got != "" {
 		t.Errorf("StripPRLinks() = %q, want empty string", got)
@@ -106,7 +106,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 
 	// Set links
 	withLinks := SetPRLinks(original, parents, children)
-	want := "My PR description\n\nSome details\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3)"
+	want := "My PR description\n\nSome details\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)"
 	if withLinks != want {
 		t.Errorf("SetPRLinks() =\n%q\nwant:\n%q", withLinks, want)
 	}
@@ -117,7 +117,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 		{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
 	}
 	updated := SetPRLinks(withLinks, parents, newChildren)
-	want2 := "My PR description\n\nSome details\n\n---\nParents: [#1](https://github.com/owner/repo/pull/1)\nChildren: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
+	want2 := "My PR description\n\nSome details\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
 	if updated != want2 {
 		t.Errorf("SetPRLinks() round-trip =\n%q\nwant:\n%q", updated, want2)
 	}
@@ -131,7 +131,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 
 func TestSetPRLinks_EmptyBody(t *testing.T) {
 	got := SetPRLinks("", []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}}, nil)
-	want := "---\nParents: [#1](https://github.com/owner/repo/pull/1)"
+	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
 	if got != want {
 		t.Errorf("SetPRLinks() = %q, want %q", got, want)
 	}
