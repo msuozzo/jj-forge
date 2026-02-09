@@ -66,14 +66,20 @@ func StripPRLinks(body string) string {
 }
 
 // SetPRLinks strips any existing links section and appends new links.
+// Returns the original body unchanged if no links added or removed.
 func SetPRLinks(body string, parents, children []PRLink) string {
 	stripped := StripPRLinks(body)
 	linksSection := FormatPRLinks(parents, children)
+	var result string
 	if linksSection == "" {
-		return stripped
+		result = stripped
+	} else if stripped == "" {
+		result = linksSection
+	} else {
+		result = stripped + "\n\n" + linksSection
 	}
-	if stripped == "" {
-		return linksSection
+	if strings.TrimRight(result, "\n\r\t ") == strings.TrimRight(body, "\n\r\t ") {
+		return body
 	}
-	return stripped + "\n\n" + linksSection
+	return result
 }
