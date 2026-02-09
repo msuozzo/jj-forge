@@ -477,24 +477,24 @@ use 'review open' and 'review submit' instead.`,
 	var importUpstreamRemote string
 	var importAll bool
 	importCmd := &cobra.Command{
-		Use:               "import [REV]",
+		Use:               "import [REVSET]",
 		Short:             "Find and import pull requests for revisions",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			var rev string
+			var revset string
 			if len(args) > 0 {
-				rev = args[0]
+				revset = args[0]
 			} else if !importAll {
 				var err error
-				rev, err = resolveDefaultRev(ctx, jjClient)
+				revset, err = resolveDefaultRev(ctx, jjClient)
 				if err != nil {
 					return err
 				}
 			}
-			if rev != "" && importAll {
-				return fmt.Errorf("rev and --all are mutually exclusive")
+			if revset != "" && importAll {
+				return fmt.Errorf("revset and --all are mutually exclusive")
 			}
 			configMgr := forge.NewConfigManager(jjClient)
 			// Create GitHub client
@@ -504,7 +504,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			githubClient := github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir))
 			result, err := review.Import(ctx, jjClient, githubClient, configMgr, review.ImportParams{
-				Rev:            rev,
+				Revset:         revset,
 				UpstreamRemote: importUpstreamRemote,
 				All:            importAll,
 			})

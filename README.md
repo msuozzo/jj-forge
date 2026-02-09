@@ -163,7 +163,7 @@ trailers, you can add a GitHub branch ruleset:
 | `check [REVSET]`          | Run the configured check command against changes             |
 | `change upload [REVSET]`  | Synchronize content and dependency structure to the remote   |
 | `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
-| `review open [REV]`       | Create a pull request                                        |
+| `review open [REVSET]`    | Create a pull request                                        |
 | `review merge [REV]`      | Merge a pull request                                         |
 | `review close [REV]`      | Close a pull request and abandon the change                  |
 | `review import [REV]`     | Find and import existing pull requests                       |

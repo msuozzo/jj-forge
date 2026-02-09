@@ -13,7 +13,7 @@ import (
 
 // ImportParams contains parameters for the import command.
 type ImportParams struct {
-	Rev            string
+	Revset         string
 	UpstreamRemote string
 	All            bool
 }
@@ -41,14 +41,14 @@ func Import(ctx context.Context, jjClient jj.Client, forgeClient forge.Forge, co
 		recordMap[r.ChangeID] = r
 	}
 
-	if params.Rev == "" && !params.All {
-		return nil, fmt.Errorf("rev is required when --all is not set")
+	if params.Revset == "" && !params.All {
+		return nil, fmt.Errorf("revset is required when --all is not set")
 	}
 	var revsToCheck []*jj.Rev
 	if params.All {
 		revsToCheck, err = jjClient.Revs(ctx, "mutable()")
 	} else {
-		revsToCheck, err = jjClient.Revs(ctx, params.Rev)
+		revsToCheck, err = jjClient.Revs(ctx, params.Revset)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get revisions: %w", err)

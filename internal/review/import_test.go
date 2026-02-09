@@ -97,7 +97,7 @@ func TestImport_UpdateExisting(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 	res, err := Import(context.Background(), scenario.Client(), fakeForge, configMgr, ImportParams{
-		Rev:            "@",
+		Revset:         "@",
 		UpstreamRemote: "up",
 	})
 	if err != nil {
@@ -163,7 +163,7 @@ func TestImport_DiscoverNew(t *testing.T) {
 
 			configMgr := forge.NewConfigManager(scenario.Client())
 			res, err := Import(context.Background(), scenario.Client(), fakeForge, configMgr, ImportParams{
-				Rev:            "@",
+				Revset:         "@",
 				UpstreamRemote: "up",
 			})
 			if err != nil {
@@ -206,7 +206,7 @@ func TestImport_NoChange(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 	res, err := Import(context.Background(), scenario.Client(), fakeForge, configMgr, ImportParams{
-		Rev:            "@",
+		Revset:         "@",
 		UpstreamRemote: "up",
 	})
 	if err != nil {
