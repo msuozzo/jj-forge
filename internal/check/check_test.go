@@ -62,11 +62,12 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
 	if args[0] == "config" && args[1] == "set" && args[2] == "--repo" {
 		key := args[3]
 		value := args[4]
-		if key == "forge.checks" {
+		switch key {
+		case "forge.checks":
 			m.config["checks"] = value
-		} else if key == "forge.check-command" {
+		case "forge.check-command":
 			m.config["check-command"] = value
-		} else {
+		default:
 			m.config[key] = value
 		}
 		return "", nil

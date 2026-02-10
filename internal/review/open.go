@@ -54,9 +54,10 @@ func Open(
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 	if existingRecord != nil {
-		if existingRecord.Status == forge.ReviewStateOpen {
+		switch existingRecord.Status {
+		case forge.ReviewStateOpen:
 			return nil, fmt.Errorf("%w for change %s: %s", ErrReviewAlreadyExists, rev.ID, existingRecord.URL)
-		} else if existingRecord.Status == forge.ReviewStateMerged {
+		case forge.ReviewStateMerged:
 			return nil, fmt.Errorf("%w: change %s was already merged in review %s", ErrReviewAlreadyExists, rev.ID, existingRecord.ForgeID)
 		}
 		// If status is closed, we can create a new review
