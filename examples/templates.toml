@@ -2,16 +2,17 @@
 # Utils
 "second_line(s)" = '''s.remove_prefix(s.first_line() ++ "\n").first_line()'''
 "third_line(s)" = '''s.remove_prefix(s.first_line() ++ "\n" ++ second_line(s) ++ "\n").first_line()'''
+"fourth_line(s)" = '''s.remove_prefix(s.first_line() ++ "\n" ++ second_line(s) ++ "\n" ++ third_line(s) ++ "\n").first_line()'''
 
 # Forge Change
 "forge_change_exists(change_id)" = '''
-config("forge.reviews") && config("forge.reviews").as_string_list().any(|s| s.starts_with(change_id.short()))
+config("forge.reviews") && config("forge.reviews").as_string_list().any(|s| s.starts_with(change_id.short()) && fourth_line(s) == "open")
 '''
 "forge_change_uri(change_id)" = '''
-if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short())).map(|s| third_line(s)).join(""))
+if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short()) && fourth_line(s) == "open").map(|s| third_line(s)).join(""))
 '''
 "forge_change_name(change_id)" = '''
-if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short())).map(|s| second_line(s)).join(""))
+if(config("forge.reviews"), config("forge.reviews").as_string_list().filter(|s| s.starts_with(change_id.short()) && fourth_line(s) == "open").map(|s| second_line(s)).join(""))
 '''
 
 # Forge Check
