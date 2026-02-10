@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -235,20 +236,20 @@ func TestGetCheckCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCheckCommand failed: %v", err)
 	}
-	if cmd != "" {
+	if cmd != nil {
 		t.Errorf("expected empty command, got %q", cmd)
 	}
 
 	// Test: config with check-command
 	mock2 := newMockClient()
-	mock2.config["check-command"] = "\"echo hello\""
+	mock2.config["check-command"] = "['echo', 'hello']"
 	mgr2 := NewConfigManager(mock2)
 	cmd, err = mgr2.GetCheckCommand()
 	if err != nil {
 		t.Fatalf("GetCheckCommand failed: %v", err)
 	}
-	if cmd != "echo hello" {
-		t.Errorf("expected command 'echo hello', got %q", cmd)
+	if !slices.Equal(cmd, []string{"echo", "hello"}) {
+		t.Errorf("expected command [\"echo\" \"hello\"], got %q", cmd)
 	}
 }
 

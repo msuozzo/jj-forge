@@ -46,7 +46,7 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 type ForgeConfig struct {
 	DefaultReviewer string   `toml:"default-reviewer,omitempty"`
 	Reviews         []string `toml:"reviews,omitempty"`
-	CheckCommand    string   `toml:"check-command,omitempty"`
+	CheckCommand    []string `toml:"check-command,omitempty"`
 	Checks          []string `toml:"checks,omitempty"`
 }
 
@@ -225,10 +225,10 @@ func (m *ConfigManager) GetDefaultReviewer() (string, error) {
 
 // GetCheckCommand retrieves the configured check command.
 // Returns an empty string if no check command is configured.
-func (m *ConfigManager) GetCheckCommand() (string, error) {
+func (m *ConfigManager) GetCheckCommand() ([]string, error) {
 	cfg, err := m.getForgeConfig()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	return cfg.CheckCommand, nil
 }
