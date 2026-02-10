@@ -74,6 +74,13 @@ func Merge(
 	if !params.NoCleanup {
 		bookmarkName := fmt.Sprintf("push-%s", rev.ID)
 		u := params.UI
+		// Fetch from fork remote to update tracking info (the merge may have
+		// changed the remote ref, causing push to fail with "stale info").
+		fmt.Fprintf(u, "Fetching from %s...\n", u.Styled("remote", params.ForkRemote))
+		_, err = jjClient.Run(ctx, "git", "fetch", "--remote", params.ForkRemote)
+		if err != nil {
+			u.PrintWarning("failed to fetch from %s: %v", params.ForkRemote, err)
+		}
 		// Delete bookmark
 		fmt.Fprintf(u, "Deleting bookmark %s...\n", u.Styled("bookmark", bookmarkName))
 		_, err = jjClient.Run(ctx, "bookmark", "delete", bookmarkName)

@@ -53,6 +53,10 @@ func TestClose_Success(t *testing.T) {
 			},
 		},
 		jjtest.Call{
+			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
 			Args:   []string{"bookmark", "delete", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
@@ -343,6 +347,10 @@ func TestClose_AbandonFailure(t *testing.T) {
 			Output: func(r *jjtest.FakeRepo) string {
 				return "up git@github.com:owner/repo.git\n"
 			},
+		},
+		jjtest.Call{
+			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
 			Args:   []string{"bookmark", "delete", "push-aaaaaaaaaaaa"},

@@ -53,6 +53,10 @@ func TestMerge_Success(t *testing.T) {
 			},
 		},
 		jjtest.Call{
+			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
 			Args:   []string{"bookmark", "delete", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
@@ -500,7 +504,11 @@ func TestMerge_LinkCleanup(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
-		// Cleanup: bookmark delete + push + fetch
+		// Cleanup: fetch fork + bookmark delete + push + fetch upstream
+		jjtest.Call{
+			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"bookmark", "delete", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
