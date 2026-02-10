@@ -235,9 +235,13 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 
 	// Rename origin to fork-remote name
 	if params.ForkRemote != "origin" {
-		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "rename", "origin", params.ForkRemote)...)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "git", "remote", "rename", "origin", params.ForkRemote)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rename origin remote: %w", err)
+		}
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "git.push", params.ForkRemote)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set push remote: %w", err)
 		}
 	}
 	r.printer.Success(fmt.Sprintf("Added remote '%s' → %s", params.ForkRemote, cloneURL))
@@ -263,12 +267,21 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 			upstreamURL = upstreamHTTPS
 		}
 
-		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "add", params.UpstreamRemote, upstreamURL)...)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "git", "remote", "add", params.UpstreamRemote, upstreamURL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add upstream remote: %w", err)
 		}
 		r.printer.Success(fmt.Sprintf("Added remote '%s' → %s (upstream)", params.UpstreamRemote, upstreamURL))
 		result.UpstreamName = params.UpstreamRemote
+	}
+
+	if result.UpstreamName != "" {
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "git.fetch", fmt.Sprintf("['%s', '%s']", result.UpstreamName, result.ForkRemote))
+	} else {
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "git.fetch", result.ForkRemote)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to set fetch remote(s): %w", err)
 	}
 
 	// Configure trunk() revset alias to point to the correct remote
@@ -284,7 +297,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	}
 
 	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, trunkRemote)
-	_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)...)
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure trunk() alias: %w", err)
 	}
