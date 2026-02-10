@@ -775,11 +775,10 @@ func printUnknownCommandError(u *ui.UI, err error) bool {
 
 	// Extract the command path between the second pair of quotes.
 	rest := msg[start+end+len("\" for \""):]
-	cmdEnd := strings.Index(rest, "\"")
-	if cmdEnd < 0 {
+	before, _, ok := strings.Cut(rest, "\"")
+	if !ok {
 		return false
 	}
-	cmdPath := rest[:cmdEnd]
 
 	heading := u.Styled("error_heading", "Error: ")
 	errMsg := u.Styled("error", fmt.Sprintf("unrecognized subcommand '%s'", sub))
@@ -790,7 +789,7 @@ func printUnknownCommandError(u *ui.UI, err error) bool {
 	}
 	fmt.Fprintf(u, "\n%s %s %s %s\n\nFor more information, try '%s'.\n",
 		u.Styled("help_header", "Usage:"),
-		u.Styled("help_command", cmdPath),
+		u.Styled("help_command", before),
 		u.Styled("help_placeholder", "[OPTIONS]"),
 		u.Styled("help_placeholder", "<COMMAND>"),
 		u.Styled("help_command", "--help"))

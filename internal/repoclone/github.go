@@ -59,7 +59,7 @@ type RepoAnalysis struct {
 // ParseGitHubURL extracts owner and name from a GitHub URL.
 func ParseGitHubURL(url string) (*RepoRef, error) {
 	matches := githubURLRegex.FindStringSubmatch(url)
-	if matches == nil || len(matches) < 3 {
+	if len(matches) < 3 {
 		return nil, fmt.Errorf("could not parse GitHub URL: %s", url)
 	}
 	return &RepoRef{

@@ -40,35 +40,6 @@ func (e *TrailerParseError) Error() string {
 // Keys must be alphanumeric with hyphens only (matching jj and git conventions).
 var trailerRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+) *: *(.*)$`)
 
-func isTrailer(line string) bool {
-	// Simple heuristic: "Key: Value"
-	parts := strings.SplitN(line, ":", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	key := strings.TrimSpace(parts[0])
-	// Keys don't usually have spaces
-	return key != "" && !strings.Contains(key, " ")
-}
-
-// isGitTrailer returns true if the line is a recognized git trailer.
-// Git trailers bypass the requirement for a blank line before trailers.
-func isGitTrailer(line string) bool {
-	// Check for cherry-pick line first (not a standard trailer format)
-	if strings.HasPrefix(line, "(cherry picked from commit ") {
-		return true
-	}
-
-	// Check for Signed-off-by (case-insensitive)
-	matches := trailerRegex.FindStringSubmatch(line)
-	if len(matches) > 0 {
-		key := strings.ToLower(matches[1])
-		return key == "signed-off-by"
-	}
-
-	return false
-}
-
 // parseTrailersImpl is the core parsing implementation that parses trailers in reverse.
 // It returns:
 //   - trailers: parsed trailer list (in original order)
