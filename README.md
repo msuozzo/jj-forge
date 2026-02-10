@@ -142,7 +142,7 @@ This adds:
 - **`format_forge_change`** -- a clickable hyperlink to the PR (e.g., `pr/42`)
 - **`format_forge_check`** -- check status indicator: `ci/√` (pass), `ci/~` (running), `ci/X` (fail)
 
-> **Note:** `jj log --watch` does not support clicking links. Consider using
+> **Note:** `watch` does not support hyperlinking in output. Consider using
 > [`hwatch`](https://github.com/blacknon/hwatch) which supports OSC 52
 > passthrough.
 
