@@ -178,7 +178,6 @@ finalization.
 | Command                   | Description                                                  |
 | ------------------------- | ------------------------------------------------------------ |
 | `change check [REVSET]`   | Run the configured check command against changes             |
-| `change upload [REVSET]`  | _(deprecated)_ Use `review open` or `review update` instead  |
 | `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
 | `review open [REVSET]`    | Create a pull request                                        |
 | `review update [REVSET]`  | Upload content and update PR descriptions with links         |
