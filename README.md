@@ -57,7 +57,7 @@ Workflow is detected based on ownership:
 ### Develop-on-main workflow
 
     jj describe -m "my change"
-    jj forge change submit -@           # fast-forward main
+    jj forge change submit             # fast-forward main
 
 ### PR-based workflow
 
