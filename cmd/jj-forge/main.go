@@ -449,13 +449,33 @@ use 'review open' and 'review submit' instead.`,
 				return err
 			}
 			// Execute merge command
-			result, err := review.Merge(ctx, jjClient, forgeClient, configMgr, review.MergeParams{
+			mergeParams := review.MergeParams{
 				Rev:            rev,
 				ForkRemote:     mergeForkRemote,
 				UpstreamRemote: mergeUpstreamRemote,
 				NoCleanup:      mergeNoCleanup,
 				UI:             stdoutUI,
-			})
+			}
+			result, err := review.Merge(ctx, jjClient, forgeClient, configMgr, mergeParams)
+			if errors.Is(err, review.ErrNotUploaded) {
+				prompter := &cmdpkg.DefaultPrompter{}
+				confirmed, promptErr := prompter.Confirm("Change has unpushed modifications. Run update before merging?", true)
+				if promptErr != nil {
+					return promptErr
+				}
+				if !confirmed {
+					return err
+				}
+				if _, updateErr := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
+					Revset:         rev,
+					ForkRemote:     mergeForkRemote,
+					UpstreamRemote: mergeUpstreamRemote,
+					UI:             stdoutUI,
+				}); updateErr != nil {
+					return updateErr
+				}
+				result, err = review.Merge(ctx, jjClient, forgeClient, configMgr, mergeParams)
+			}
 			if err != nil {
 				return err
 			}

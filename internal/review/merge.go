@@ -2,12 +2,17 @@ package review
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
+
+// ErrNotUploaded is returned when a merge is attempted on a change that
+// has not been pushed to the fork remote.
+var ErrNotUploaded = errors.New("change not uploaded")
 
 // MergeParams contains parameters for the merge command.
 type MergeParams struct {
@@ -49,6 +54,9 @@ func Merge(
 	}
 	if reviewRecord.Status == forge.ReviewStateClosed {
 		return nil, fmt.Errorf("review #%s for change %s is closed. Reopen it or create a new review", reviewRecord.ForgeID, rev.ID)
+	}
+	if !isUploaded(rev, params.ForkRemote) {
+		return nil, fmt.Errorf("change %s has local modifications not yet pushed to %s: %w", rev.ID, params.ForkRemote, ErrNotUploaded)
 	}
 	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {
