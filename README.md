@@ -63,8 +63,9 @@ Workflow is detected based on ownership:
 
     jj describe -m "my change"
     jj forge review open               # upload and create pull request
+    # ... edits happen ...
     jj forge review update             # push content and update PR descriptions
-    # ... review happens ...
+    # ... review completed ...
     jj forge review merge              # merge pull request
 
 ## Checks
