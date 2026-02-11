@@ -9,6 +9,7 @@ import (
 	"errors"
 	"slices"
 
+	jjforge "github.com/msuozzo/jj-forge"
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
 	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
@@ -19,6 +20,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/repoclone"
 	"github.com/msuozzo/jj-forge/internal/review"
+	"github.com/msuozzo/jj-forge/internal/templates"
 	"github.com/msuozzo/jj-forge/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -741,8 +743,33 @@ Examples:
 	}
 	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "up", "Remote to target")
 
+	var setupTemplatesUser bool
+	setupTemplatesCmd := &cobra.Command{
+		Use:               "setup-templates",
+		Short:             "Set template-aliases in jj config for forge visualization",
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			aliases, err := templates.ParseTemplateAliases(jjforge.TemplatesTOML)
+			if err != nil {
+				return err
+			}
+			scope := "--repo"
+			if setupTemplatesUser {
+				scope = "--user"
+			}
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
+			if err := templates.Apply(ctx, jjClient, scope, aliases); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdoutUI, "Set %d template-alias(es) in %s config\n", len(aliases), scope[2:])
+			return nil
+		},
+	}
+	setupTemplatesCmd.Flags().BoolVar(&setupTemplatesUser, "user", false, "Set in user config instead of repo config")
+
 	repoCmd.AddCommand(cloneCmd)
 	repoCmd.AddCommand(setupRulesetCmd)
+	repoCmd.AddCommand(setupTemplatesCmd)
 	rootCmd.AddCommand(repoCmd)
 
 	if err := rootCmd.Execute(); err != nil {

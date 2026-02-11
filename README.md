@@ -101,8 +101,13 @@ When a check command is configured, `review open`, `review update`,
 jj-forge stores review and check data in the jj repo config. You can display
 this data in `jj log` using template-aliases.
 
-Copy [`examples/templates.toml`](examples/templates.toml) into your jj config
-(`jj config edit --user`). The key formatters are:
+Set all template-aliases automatically:
+
+    jj forge repo setup-templates        # set in repo config
+    jj forge repo setup-templates --user # set in user config
+
+Or, copy [`examples/templates.toml`](examples/templates.toml) into your jj
+config manually (`jj config edit --user`). The key formatters are:
 
 ```toml
 "format_forge_check(commit)" = '''
@@ -187,6 +192,7 @@ finalization.
 | `review import [REV]`     | Find and import existing pull requests                       |
 | `repo clone <url> [path]` | Clone repository with automatic workflow detection           |
 | `repo setup-ruleset`      | Add a GitHub ruleset to prevent merging forge-parent commits |
+| `repo setup-templates`    | Set template-aliases in jj config for forge visualization    |
 
 Run `jj forge <command> --help` for flags and details.
 
