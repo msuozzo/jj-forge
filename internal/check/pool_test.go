@@ -228,8 +228,8 @@ func TestMaterialize_IncrementalUpdate(t *testing.T) {
 			},
 			// git apply
 			func(_ context.Context, opts cmd.Opts, args ...string) (string, error) {
-				if !contains(args, "apply") {
-					t.Errorf("expected 'apply' in args, got %v", args)
+				if !contains(args, "patch") {
+					t.Errorf("expected 'patch' in args, got %v", args)
 				}
 				if opts.WorkDir == "" {
 					t.Error("expected WorkDir to be set for apply")

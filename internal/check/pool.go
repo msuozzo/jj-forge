@@ -114,9 +114,9 @@ func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID 
 	_, err = p.runner(ctx, cmd.Opts{
 		WorkDir: wd.Path,
 		Stdin:   strings.NewReader(diff),
-	}, "git", "apply", "--whitespace=nowarn", "-")
+	}, "patch", "-p1")
 	if err != nil {
-		return fmt.Errorf("git apply failed: %w", err)
+		return fmt.Errorf("patch failed: %w", err)
 	}
 	return nil
 }
