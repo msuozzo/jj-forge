@@ -1,6 +1,10 @@
 package forge
 
-import "context"
+import (
+	"context"
+
+	"github.com/msuozzo/jj-forge/internal/jj"
+)
 
 // ReviewCreateParams contains parameters for creating a code review.
 type ReviewCreateParams struct {
@@ -66,4 +70,15 @@ type Forge interface {
 
 	// SetupRuleset configures a ruleset on the forge to prevent merging commits with forge-parent.
 	SetupRuleset(ctx context.Context, repoURI string) error
+
+	// FormatHeadBranch returns the head/source branch reference for creating a review.
+	// GitHub: "owner:push-{changeID}" (cross-repo PR)
+	// SSM: "push-{changeID}" (same-repo PR)
+	FormatHeadBranch(ctx context.Context, jjClient jj.Client, forkRemote, changeID string) (string, error)
+
+	// NormalizeRepoURL converts a remote URL to this forge's canonical format.
+	NormalizeRepoURL(url string) (string, error)
+
+	// SupportsForks returns whether the forge uses a fork-based workflow.
+	SupportsForks() bool
 }

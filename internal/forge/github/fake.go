@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
 // Review represents a pull request in the fake implementation.
@@ -236,4 +237,23 @@ func (f *FakeForge) UpdateReview(ctx context.Context, repoURI string, reviewNumb
 	}
 	r.Body = body
 	return nil
+}
+
+// FormatHeadBranch returns the head branch reference for a cross-repo GitHub PR.
+func (f *FakeForge) FormatHeadBranch(ctx context.Context, jjClient jj.Client, forkRemote, changeID string) (string, error) {
+	repoInfo, err := forge.GetRepoInfo(ctx, jjClient, forkRemote)
+	if err != nil {
+		return "", fmt.Errorf("failed to get repo info for %s: %w", forkRemote, err)
+	}
+	return fmt.Sprintf("%s:push-%s", repoInfo.Owner, changeID), nil
+}
+
+// NormalizeRepoURL converts a remote URL to GitHub's canonical HTTPS format.
+func (f *FakeForge) NormalizeRepoURL(url string) (string, error) {
+	return forge.NormalizeRepoURL(url)
+}
+
+// SupportsForks returns true because GitHub uses a fork-based workflow.
+func (f *FakeForge) SupportsForks() bool {
+	return true
 }

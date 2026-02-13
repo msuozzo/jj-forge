@@ -72,11 +72,10 @@ func Open(
 		return nil, fmt.Errorf("failed to get default branch: %w", err)
 	}
 	// Determine fork branch
-	forkRepoInfo, err := forge.GetRepoInfo(ctx, jjClient, params.ForkRemote)
+	forkBranch, err := forgeClient.FormatHeadBranch(ctx, jjClient, params.ForkRemote, rev.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get head remote info: %w", err)
+		return nil, fmt.Errorf("failed to get head branch: %w", err)
 	}
-	forkBranch := fmt.Sprintf("%s:push-%s", forkRepoInfo.Owner, rev.ID)
 	// Exclude forge-parent trailer from PR description
 	description := forge.RemoveParentTrailer(rev.Description)
 	// Create review

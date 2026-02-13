@@ -12,6 +12,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
 // Client implements the forge.Forge interface for GitHub using the gh CLI.
@@ -371,4 +372,24 @@ func (c *Client) SetupRuleset(ctx context.Context, repoURI string) error {
 		return fmt.Errorf("failed to setup ruleset: %w", err)
 	}
 	return nil
+}
+
+// FormatHeadBranch returns the head branch reference for a cross-repo GitHub PR.
+// Format: "owner:push-{changeID}"
+func (c *Client) FormatHeadBranch(ctx context.Context, jjClient jj.Client, forkRemote, changeID string) (string, error) {
+	repoInfo, err := forge.GetRepoInfo(ctx, jjClient, forkRemote)
+	if err != nil {
+		return "", fmt.Errorf("failed to get repo info for %s: %w", forkRemote, err)
+	}
+	return fmt.Sprintf("%s:push-%s", repoInfo.Owner, changeID), nil
+}
+
+// NormalizeRepoURL converts a remote URL to GitHub's canonical HTTPS format.
+func (c *Client) NormalizeRepoURL(url string) (string, error) {
+	return forge.NormalizeRepoURL(url)
+}
+
+// SupportsForks returns true because GitHub uses a fork-based workflow.
+func (c *Client) SupportsForks() bool {
+	return true
 }

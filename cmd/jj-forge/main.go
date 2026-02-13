@@ -16,6 +16,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/detach"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
+	"github.com/msuozzo/jj-forge/internal/forge/ssm"
 	"github.com/msuozzo/jj-forge/internal/help"
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/repoclone"
@@ -79,10 +80,17 @@ func newGHExecutor(gitDir string) cmdpkg.Executor {
 	}
 }
 
-// getForge returns a forge client for the repository.
-// Currently always returns a GitHub client; future implementations
-// may detect the forge type from remote URLs.
-func getForge(ctx context.Context, jjClient jj.Client) (forge.Forge, error) {
+// getForge returns a forge client for the repository, auto-detecting the forge
+// type from the upstream remote URL.
+func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (forge.Forge, error) {
+	url, err := jjClient.RemoteURL(ctx, upstreamRemote)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
+	}
+	if ssm.IsSSMURL(url) {
+		return ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
+	}
+	// Default: GitHub
 	gitDir, err := jjClient.GitDir(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git directory: %w", err)
@@ -360,9 +368,13 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("failed to resolve revset: %w", err)
 			}
 			slices.Reverse(revs) // parent-first (topological) order
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, openUpstreamRemote)
 			if err != nil {
 				return err
+			}
+			// For forges without fork support, use upstream as fork remote
+			if !forgeClient.SupportsForks() {
+				openForkRemote = openUpstreamRemote
 			}
 			// Get reviewers (flag or config default)
 			reviewers := openReviewers
@@ -446,9 +458,12 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, mergeUpstreamRemote)
 			if err != nil {
 				return err
+			}
+			if !forgeClient.SupportsForks() {
+				mergeForkRemote = mergeUpstreamRemote
 			}
 			// Execute merge command
 			mergeParams := review.MergeParams{
@@ -512,9 +527,12 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, closeUpstreamRemote)
 			if err != nil {
 				return err
+			}
+			if !forgeClient.SupportsForks() {
+				closeForkRemote = closeUpstreamRemote
 			}
 			// Execute close command
 			result, err := review.Close(ctx, jjClient, forgeClient, configMgr, review.CloseParams{
@@ -562,7 +580,7 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("revset and --all are mutually exclusive")
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, importUpstreamRemote)
 			if err != nil {
 				return err
 			}
@@ -607,9 +625,12 @@ use 'review open' and 'review submit' instead.`,
 					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor(), stdoutUI)
 				}
 			}
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, updateUpstreamRemote)
 			if err != nil {
 				return err
+			}
+			if !forgeClient.SupportsForks() {
+				updateForkRemote = updateUpstreamRemote
 			}
 			result, err := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
 				Revset:         revset,
@@ -700,6 +721,17 @@ Examples:
 				UseHTTPS:       cloneUseHTTPS,
 				NoFork:         cloneNoFork,
 			}
+			// Dispatch to SSM clone flow for SSM URLs
+			if ssm.IsSSMURL(url) {
+				var ssmRunner *repoclone.SSMRunner
+				if debugPrompt != "none" {
+					ssmRunner = repoclone.NewSSMRunnerWithDeps(newJJExecutor(), &repoclone.DefaultPrinter{})
+				} else {
+					ssmRunner = repoclone.NewSSMRunner()
+				}
+				_, err := ssmRunner.Run(ctx, params)
+				return err
+			}
 			var runner *repoclone.Runner
 			if debugPrompt != "none" {
 				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor(""))
@@ -723,7 +755,7 @@ Examples:
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			forgeClient, err := getForge(ctx, jjClient)
+			forgeClient, err := getForge(ctx, jjClient, rulesetUpstreamRemote)
 			if err != nil {
 				return err
 			}
