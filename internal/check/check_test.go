@@ -3,6 +3,7 @@ package check
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,10 @@ import (
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
+
+var testUI = ui.New(io.Discard, ui.ColorNever)
 
 // mockClient implements jj.Client for testing.
 type mockClient struct {
@@ -114,7 +118,7 @@ func TestRunNoConfig(t *testing.T) {
 		return "", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +149,7 @@ func TestRunPass(t *testing.T) {
 		return "fake-data", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -189,7 +193,7 @@ func TestRunFail(t *testing.T) {
 		return "fake-data", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -229,7 +233,7 @@ func TestRunSkipCached(t *testing.T) {
 	}
 
 	// force=false should skip execution
-	err := Run(context.Background(), mock, configMgr, "@", false, runner)
+	err := Run(context.Background(), mock, configMgr, "@", false, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -265,7 +269,7 @@ func TestRunForceIgnoresCache(t *testing.T) {
 	}
 
 	// force=true should run regardless
-	err := Run(context.Background(), mock, configMgr, "@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -303,7 +307,7 @@ func TestRunMultipleRevs(t *testing.T) {
 		return "fake-data", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -356,7 +360,7 @@ func TestRunMultipleRevs_CachedSkip(t *testing.T) {
 		return "", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", false, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", false, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -394,7 +398,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 		return "fake-data", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
 	if err == nil {
 		t.Fatal("expected error for mixed results, got nil")
 	}
@@ -448,7 +452,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 		return "fake-data", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -484,7 +488,7 @@ func TestRunStaleCache(t *testing.T) {
 	}
 
 	// force=false, but commit ID changed — should re-run
-	err := Run(context.Background(), mock, configMgr, "@", false, runner)
+	err := Run(context.Background(), mock, configMgr, "@", false, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -509,7 +513,7 @@ func TestRunImmutableSkipped(t *testing.T) {
 		return "", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -545,7 +549,7 @@ func TestRunSetsRunningBeforeExecution(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Run(context.Background(), mock, configMgr, "@", true, runner)
+		errCh <- Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
 	}()
 
 	// Wait for runner to signal it has started.
@@ -610,7 +614,7 @@ func TestRunMixedMutability(t *testing.T) {
 		return "", nil
 	}
 
-	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner)
+	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

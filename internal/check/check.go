@@ -10,6 +10,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // Run executes the configured check command against the given revset.
@@ -20,7 +21,7 @@ import (
 //
 // Multiple revisions are checked in parallel by materializing them into
 // persistent pool directories using the backing git store.
-func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner cmd.Executor) error {
+func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner cmd.Executor, u *ui.UI) error {
 	// Read check command from config
 	checkCmd, err := configMgr.GetCheckCommand()
 	if err != nil {
@@ -65,6 +66,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
+	fmt.Fprintf(u, "Running checks on %d change(s)...\n", len(toCheck))
 	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)

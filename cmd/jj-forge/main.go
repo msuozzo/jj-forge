@@ -198,7 +198,7 @@ func main() {
 					Hint: "Run 'jj config set --repo forge.check-command \"<command>\"' to configure one.",
 				}
 			}
-			return check.Run(ctx, client, configMgr, revset, checkForce, newJJExecutor())
+			return check.Run(ctx, client, configMgr, revset, checkForce, newJJExecutor(), stdoutUI)
 		},
 	}
 	checkCmd.Flags().BoolVar(&checkForce, "force", false, "Re-run checks even if cached verdicts are passing")
@@ -227,7 +227,7 @@ func main() {
 			}
 			if !uploadSkipCheck {
 				configMgr := forge.NewConfigManager(client)
-				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor(), stdoutUI); err != nil {
 					return err
 				}
 			}
@@ -276,7 +276,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			configMgr := forge.NewConfigManager(client)
 			if !submitSkipCheck {
-				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor()); err != nil {
+				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor(), stdoutUI); err != nil {
 					return err
 				}
 			}
@@ -336,7 +336,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			// Phase 2: Run checks (after trailers updated, before push)
 			if !openSkipCheck {
-				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor()); err != nil {
+				if err := check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor(), stdoutUI); err != nil {
 					return err
 				}
 			}
@@ -442,7 +442,7 @@ use 'review open' and 'review submit' instead.`,
 			}
 			configMgr := forge.NewConfigManager(jjClient)
 			if !mergeSkipCheck {
-				if err := check.Run(ctx, jjClient, configMgr, rev, false, newJJExecutor()); err != nil {
+				if err := check.Run(ctx, jjClient, configMgr, rev, false, newJJExecutor(), stdoutUI); err != nil {
 					return err
 				}
 			}
@@ -604,7 +604,7 @@ use 'review open' and 'review submit' instead.`,
 			var checkFn func() error
 			if !updateSkipCheck {
 				checkFn = func() error {
-					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor())
+					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor(), stdoutUI)
 				}
 			}
 			forgeClient, err := getForge(ctx, jjClient)
