@@ -337,6 +337,8 @@ func TestRunner(t *testing.T) {
 			wantJJ: [][]string{
 				{"jj", "git", "clone"},
 				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "og"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "og"},
 				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@og"},
 			},
 		},
@@ -358,7 +360,9 @@ func TestRunner(t *testing.T) {
 			wantJJ: [][]string{
 				{"jj", "git", "clone"},
 				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "og"},
 				{"jj", "-R", "/tmp/test-clone", "git", "remote", "add"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "['up', 'og']"},
 				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
@@ -380,7 +384,9 @@ func TestRunner(t *testing.T) {
 			wantJJ: [][]string{
 				{"jj", "git", "clone"},
 				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "og"},
 				{"jj", "-R", "/tmp/test-clone", "git", "remote", "add"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "['up', 'og']"},
 				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
 			},
 		},
