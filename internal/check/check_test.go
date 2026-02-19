@@ -131,13 +131,13 @@ func TestRunPass(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	var ranCheck atomic.Bool
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c echo hello") {
+		if strings.Contains(cmdStr, "echo hello") {
 			ranCheck.Store(true)
 			return "", nil
 		}
@@ -177,12 +177,12 @@ func TestRunFail(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"false\""
+	mock.config["check-command"] = "['false']"
 	configMgr := forge.NewConfigManager(mock)
 
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c false") {
+		if strings.Contains(cmdStr, "false") {
 			return "", fmt.Errorf("exit status 1")
 		}
 		// Materialization commands
@@ -210,7 +210,7 @@ func TestRunFail(t *testing.T) {
 func TestRunSkipCached(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Pre-populate a passing verdict with matching commit ID
@@ -246,7 +246,7 @@ func TestRunForceIgnoresCache(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Pre-populate a passing verdict with matching commit ID
@@ -284,7 +284,7 @@ func TestRunMultipleRevs(t *testing.T) {
 	}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Create .jj directory for pool base
@@ -295,7 +295,7 @@ func TestRunMultipleRevs(t *testing.T) {
 	var poolRuns atomic.Int32
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c echo hello") && opts.WorkDir != "" {
+		if strings.Contains(cmdStr, "echo hello") && opts.WorkDir != "" {
 			poolRuns.Add(1)
 			return "", nil
 		}
@@ -336,7 +336,7 @@ func TestRunMultipleRevs_CachedSkip(t *testing.T) {
 	}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Pre-populate passing verdicts for both
@@ -374,7 +374,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 	}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
@@ -384,7 +384,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 	var checkCount atomic.Int32
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c echo hello") {
+		if strings.Contains(cmdStr, "echo hello") {
 			if checkCount.Add(1) == 1 {
 				return "", nil // first check passes
 			}
@@ -430,7 +430,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 	}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
@@ -440,7 +440,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 	var poolRuns atomic.Int32
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c echo hello") && opts.WorkDir != "" {
+		if strings.Contains(cmdStr, "echo hello") && opts.WorkDir != "" {
 			poolRuns.Add(1)
 			return "", nil
 		}
@@ -465,7 +465,7 @@ func TestRunStaleCache(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "newcommit", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Pre-populate a passing verdict with OLD commit ID
@@ -500,7 +500,7 @@ func TestRunImmutableSkipped(t *testing.T) {
 		{ID: "c2", CommitID: "def", IsMutable: false},
 	}
 	mock := newMockClient(revs)
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	ran := false
@@ -526,7 +526,7 @@ func TestRunSetsRunningBeforeExecution(t *testing.T) {
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	// Two-phase channel sync: runner signals it has started, test reads
@@ -597,13 +597,13 @@ func TestRunMixedMutability(t *testing.T) {
 	}
 	mock := newMockClient(revs)
 	mock.root = tmpDir
-	mock.config["check-command"] = "\"echo hello\""
+	mock.config["check-command"] = "['echo', 'hello']"
 	configMgr := forge.NewConfigManager(mock)
 
 	var ranCheck atomic.Bool
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 		cmdStr := strings.Join(args, " ")
-		if strings.Contains(cmdStr, "sh -c echo hello") {
+		if strings.Contains(cmdStr, "echo hello") {
 			ranCheck.Store(true)
 		}
 		// Materialization commands

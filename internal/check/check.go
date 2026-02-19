@@ -26,7 +26,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return fmt.Errorf("failed to get check command: %w", err)
 	}
-	if checkCmd == "" {
+	if checkCmd == nil {
 		return nil // No check command configured, nothing to do
 	}
 	// Resolve revisions from revset
@@ -136,7 +136,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	return nil
 }
 
-func runInPool(ctx context.Context, pool *WorkPool, runner cmd.Executor, commitID, checkCmd string) error {
+func runInPool(ctx context.Context, pool *WorkPool, runner cmd.Executor, commitID string, checkCmd []string) error {
 	wd, err := pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to acquire pool directory: %w", err)
@@ -147,6 +147,6 @@ func runInPool(ctx context.Context, pool *WorkPool, runner cmd.Executor, commitI
 		return fmt.Errorf("failed to materialize %s: %w", commitID, err)
 	}
 
-	_, runErr := runner(ctx, cmd.Opts{WorkDir: wd.Path}, "sh", "-c", checkCmd)
+	_, runErr := runner(ctx, cmd.Opts{WorkDir: wd.Path}, checkCmd...)
 	return runErr
 }
