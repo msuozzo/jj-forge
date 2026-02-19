@@ -9,7 +9,7 @@ func TestFormatPRLinks_ParentsOnly(t *testing.T) {
 		[]PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
 		nil,
 	)
-	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
+	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -20,7 +20,7 @@ func TestFormatPRLinks_ChildrenOnly(t *testing.T) {
 		nil,
 		[]PRLink{{Number: 2, URL: "https://github.com/owner/repo/pull/2"}},
 	)
-	want := "> Children: [#2](https://github.com/owner/repo/pull/2)"
+	want := "> Children: [#2](https://redirect.github.com/owner/repo/pull/2)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -34,7 +34,7 @@ func TestFormatPRLinks_Both(t *testing.T) {
 			{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
 		},
 	)
-	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
+	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)"
 	if got != want {
 		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
 	}
@@ -44,6 +44,47 @@ func TestFormatPRLinks_Empty(t *testing.T) {
 	got := FormatPRLinks(nil, nil)
 	if got != "" {
 		t.Errorf("FormatPRLinks() = %q, want empty string", got)
+	}
+}
+
+func TestLinkDisplayURL(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "github URL",
+			url:  "https://github.com/owner/repo/pull/1",
+			want: "https://redirect.github.com/owner/repo/pull/1",
+		},
+		{
+			name: "non-github URL unchanged",
+			url:  "https://gitlab.com/owner/repo/merge_requests/1",
+			want: "https://gitlab.com/owner/repo/merge_requests/1",
+		},
+		{
+			name: "already redirect URL unchanged",
+			url:  "https://redirect.github.com/owner/repo/pull/1",
+			want: "https://redirect.github.com/owner/repo/pull/1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := linkDisplayURL(tt.url)
+			if got != tt.want {
+				t.Errorf("linkDisplayURL(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStripPRLinks_WithRedirectURL(t *testing.T) {
+	body := "Description\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
+	got := StripPRLinks(body)
+	want := "Description"
+	if got != want {
+		t.Errorf("StripPRLinks() = %q, want %q", got, want)
 	}
 }
 
@@ -106,7 +147,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 
 	// Set links
 	withLinks := SetPRLinks(original, parents, children)
-	want := "My PR description\n\nSome details\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)"
+	want := "My PR description\n\nSome details\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3)"
 	if withLinks != want {
 		t.Errorf("SetPRLinks() =\n%q\nwant:\n%q", withLinks, want)
 	}
@@ -117,7 +158,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 		{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
 	}
 	updated := SetPRLinks(withLinks, parents, newChildren)
-	want2 := "My PR description\n\nSome details\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3), [#4](https://github.com/owner/repo/pull/4)"
+	want2 := "My PR description\n\nSome details\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)"
 	if updated != want2 {
 		t.Errorf("SetPRLinks() round-trip =\n%q\nwant:\n%q", updated, want2)
 	}
@@ -131,7 +172,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 
 func TestSetPRLinks_EmptyBody(t *testing.T) {
 	got := SetPRLinks("", []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}}, nil)
-	want := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
+	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
 	if got != want {
 		t.Errorf("SetPRLinks() = %q, want %q", got, want)
 	}

@@ -11,6 +11,14 @@ type PRLink struct {
 	URL    string
 }
 
+// linkDisplayURL rewrites GitHub PR URLs to use redirect.github.com so that
+// links in PR descriptions don't create "mention" notifications on the linked
+// PRs. GitHub treats redirect.github.com links as valid redirects to the real
+// PR but does not generate cross-reference events for them.
+func linkDisplayURL(url string) string {
+	return strings.Replace(url, "https://github.com/", "https://redirect.github.com/", 1)
+}
+
 // FormatPRLinks renders a links section for PR descriptions.
 // Returns "" if both parents and children are empty.
 func FormatPRLinks(parents, children []PRLink) string {
@@ -21,14 +29,14 @@ func FormatPRLinks(parents, children []PRLink) string {
 	if len(parents) > 0 {
 		var refs []string
 		for _, p := range parents {
-			refs = append(refs, fmt.Sprintf("[#%d](%s)", p.Number, p.URL))
+			refs = append(refs, fmt.Sprintf("[#%d](%s)", p.Number, linkDisplayURL(p.URL)))
 		}
 		lines = append(lines, "> Parents: "+strings.Join(refs, ", "))
 	}
 	if len(children) > 0 {
 		var refs []string
 		for _, c := range children {
-			refs = append(refs, fmt.Sprintf("[#%d](%s)", c.Number, c.URL))
+			refs = append(refs, fmt.Sprintf("[#%d](%s)", c.Number, linkDisplayURL(c.URL)))
 		}
 		lines = append(lines, "> Children: "+strings.Join(refs, ", "))
 	}
