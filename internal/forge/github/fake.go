@@ -126,8 +126,8 @@ func (f *FakeForge) FormatID(number int) string {
 
 // ParseID parses a string ID (e.g. "pr/123") into a review number.
 func (f *FakeForge) ParseID(id string) (int, error) {
-	if strings.HasPrefix(id, "pr/") {
-		id = strings.TrimPrefix(id, "pr/")
+	if after, ok := strings.CutPrefix(id, "pr/"); ok {
+		id = after
 	}
 	return strconv.Atoi(id)
 }

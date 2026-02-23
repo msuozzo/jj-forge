@@ -67,7 +67,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 		if len(rev.Parents) > 1 {
 			return nil, fmt.Errorf(
 				"validation failed: revision %s (position %d in stack) is a merge commit (parents: %v).\n"+
-					"Submit only supports linear stacks.",
+					"Submit only supports linear stacks",
 				rev.ID, i+1, rev.Parents)
 		}
 		// Check parent relationship
@@ -80,7 +80,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 				"validation failed: revision %s (position %d in stack) is not a direct child of %s.\n"+
 					"Expected parent: %s\n"+
 					"Actual parent: %s\n"+
-					"Please rebase your stack onto %s before submitting.",
+					"Please rebase your stack onto %s before submitting",
 				rev.ID, i+1, remoteBookmark, expectedParent, actualParent, remoteBookmark)
 		}
 		// Validate parent exists in map
@@ -128,7 +128,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 	if updatedHeadRevs[0].ID != chainTip.ID {
 		return nil, fmt.Errorf(
 			"remote head verification failed: expected %s at %s, but found %s.\n"+
-				"This might indicate a concurrent push by another developer.",
+				"This might indicate a concurrent push by another developer",
 			chainTip.ID, remoteBookmark, updatedHeadRevs[0].ID)
 	}
 	fmt.Fprintf(u, "Verified: %s is now at %s\n", u.Styled("bookmark", remoteBookmark), u.Styled("change_id", chainTip.ID))

@@ -28,7 +28,7 @@ type RepoInfo struct {
 // Returns: https://github.com/owner/repo
 func NormalizeRepoURL(url string) (string, error) {
 	// First try to match as a full GitHub URL (SSH or HTTPS)
-	if matches := githubURLRegex.FindStringSubmatch(url); matches != nil && len(matches) >= 3 {
+	if matches := githubURLRegex.FindStringSubmatch(url); len(matches) >= 3 {
 		owner := matches[1]
 		repo := strings.TrimSuffix(matches[2], ".git")
 		return fmt.Sprintf("https://github.com/%s/%s", owner, repo), nil
@@ -45,7 +45,7 @@ func GetRepoInfo(ctx context.Context, client jj.Client, remote string) (*RepoInf
 		return nil, err
 	}
 	matches := githubURLRegex.FindStringSubmatch(url)
-	if matches == nil || len(matches) < 3 {
+	if len(matches) < 3 {
 		return nil, fmt.Errorf("could not parse GitHub URL from remote %s: %s", remote, url)
 	}
 	return &RepoInfo{

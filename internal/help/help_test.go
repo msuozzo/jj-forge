@@ -123,7 +123,7 @@ func TestHelp_BoolFlagNoPlaceholder(t *testing.T) {
 	root.Execute()
 
 	got := buf.String()
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		if strings.Contains(line, "--verbose") && strings.Contains(line, "<") {
 			t.Errorf("bool flag should not have placeholder: %s", line)
 		}
