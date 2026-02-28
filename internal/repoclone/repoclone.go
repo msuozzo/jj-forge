@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 )
 
 // WorkflowType represents the workflow mode for the repository.
@@ -100,7 +101,7 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	r.printer.Info("Analyzing repository...")
 
 	// Parse and validate URL
-	ref, err := ParseGitHubURL(params.URL)
+	ref, err := forge.ParseGitURL(params.URL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid repository URL: %w", err)
 	}

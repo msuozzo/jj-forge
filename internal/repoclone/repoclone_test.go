@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 )
 
 // fakeGHExecutor builds a gh executor from a username and a map of
@@ -39,61 +40,6 @@ func recordingJJExecutor() (cmd.Executor, *[][]string) {
 		return "", nil
 	}
 	return exec, &cmds
-}
-
-func TestParseGitHubURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		url     string
-		want    *RepoRef
-		wantErr bool
-	}{
-		{
-			name: "SSH URL with .git",
-			url:  "git@github.com:owner/repo.git",
-			want: &RepoRef{Owner: "owner", Name: "repo"},
-		},
-		{
-			name: "SSH URL without .git",
-			url:  "git@github.com:owner/repo",
-			want: &RepoRef{Owner: "owner", Name: "repo"},
-		},
-		{
-			name: "HTTPS URL with .git",
-			url:  "https://github.com/owner/repo.git",
-			want: &RepoRef{Owner: "owner", Name: "repo"},
-		},
-		{
-			name: "HTTPS URL without .git",
-			url:  "https://github.com/owner/repo",
-			want: &RepoRef{Owner: "owner", Name: "repo"},
-		},
-		{
-			name:    "Invalid URL",
-			url:     "not-a-github-url",
-			wantErr: true,
-		},
-		{
-			name:    "Other git host",
-			url:     "git@gitlab.com:owner/repo.git",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseGitHubURL(tt.url)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseGitHubURL() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if err == nil {
-				if got.Owner != tt.want.Owner || got.Name != tt.want.Name {
-					t.Errorf("ParseGitHubURL() = %v, want %v", got, tt.want)
-				}
-			}
-		})
-	}
 }
 
 func TestDetermineWorkflow(t *testing.T) {
@@ -176,7 +122,7 @@ func TestAnalyzeRepository(t *testing.T) {
 				Exists: true, IsMine: true, IsFork: true,
 				SSHURL:   "git@github.com:testuser/forked-project.git",
 				HTTPSURL: "https://github.com/testuser/forked-project.git",
-				Parent:   &RepoRef{Owner: "upstream-owner", Name: "forked-project"},
+				Parent:   &forge.RepoInfo{Owner: "upstream-owner", Name: "forked-project"},
 			},
 		},
 		{
@@ -236,7 +182,7 @@ func TestFindMyFork(t *testing.T) {
 				Exists: true, IsMine: true, IsFork: true,
 				SSHURL:   "git@github.com:testuser/upstream-repo.git",
 				HTTPSURL: "https://github.com/testuser/upstream-repo.git",
-				Parent:   &RepoRef{Owner: "upstream-owner", Name: "upstream-repo"},
+				Parent:   &forge.RepoInfo{Owner: "upstream-owner", Name: "upstream-repo"},
 			},
 		},
 		{

@@ -4,14 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 )
-
-// githubURLRegex matches GitHub URLs in both SSH and HTTPS formats.
-var githubURLRegex = regexp.MustCompile(`github\.com[:/]([^/]+)/(.+?)(\.git)?$`)
 
 // GitHubClient handles GitHub API operations for repository analysis.
 type GitHubClient struct {
@@ -37,35 +34,17 @@ func NewGitHubClientWithExecutor(exec cmd.Executor) *GitHubClient {
 	}
 }
 
-// RepoRef holds owner and name for a repository reference.
-type RepoRef struct {
-	Owner string
-	Name  string
-}
-
 // RepoAnalysis contains detailed information about a repository.
 type RepoAnalysis struct {
-	Owner         string   // Repository owner
-	Name          string   // Repository name
-	Exists        bool     // Whether repo exists on GitHub
-	IsMine        bool     // Whether current user owns it
-	IsFork        bool     // Whether it's a fork
-	Parent        *RepoRef // Parent repo if fork (owner/name)
-	SSHURL        string   // SSH clone URL
-	HTTPSURL      string   // HTTPS clone URL
-	DefaultBranch string   // Default branch name (e.g. "main")
-}
-
-// ParseGitHubURL extracts owner and name from a GitHub URL.
-func ParseGitHubURL(url string) (*RepoRef, error) {
-	matches := githubURLRegex.FindStringSubmatch(url)
-	if matches == nil || len(matches) < 3 {
-		return nil, fmt.Errorf("could not parse GitHub URL: %s", url)
-	}
-	return &RepoRef{
-		Owner: matches[1],
-		Name:  strings.TrimSuffix(matches[2], ".git"),
-	}, nil
+	Owner         string          // Repository owner
+	Name          string          // Repository name
+	Exists        bool            // Whether repo exists on GitHub
+	IsMine        bool            // Whether current user owns it
+	IsFork        bool            // Whether it's a fork
+	Parent        *forge.RepoInfo // Parent repo if fork (owner/name)
+	SSHURL        string          // SSH clone URL
+	HTTPSURL      string          // HTTPS clone URL
+	DefaultBranch string          // Default branch name (e.g. "main")
 }
 
 // GetAuthenticatedUser returns the current GitHub user.
@@ -80,7 +59,7 @@ func (c *GitHubClient) GetAuthenticatedUser(ctx context.Context) (string, error)
 // AnalyzeRepository checks ownership and fork status of a repository.
 func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*RepoAnalysis, error) {
 	// Parse the URL to get owner/name
-	ref, err := ParseGitHubURL(repoURL)
+	ref, err := forge.ParseGitURL(repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +117,7 @@ func (c *GitHubClient) AnalyzeRepository(ctx context.Context, repoURL string) (*
 	analysis.DefaultBranch = repoInfo.DefaultBranch
 
 	if repoInfo.Fork && repoInfo.ParentOwner != "" {
-		analysis.Parent = &RepoRef{
+		analysis.Parent = &forge.RepoInfo{
 			Owner: repoInfo.ParentOwner,
 			Name:  repoInfo.ParentName,
 		}
@@ -201,7 +180,7 @@ func (c *GitHubClient) FindMyFork(ctx context.Context, upstreamOwner, upstreamNa
 		SSHURL:        repoInfo.SSHURL,
 		HTTPSURL:      repoInfo.CloneURL,
 		DefaultBranch: repoInfo.DefaultBranch,
-		Parent: &RepoRef{
+		Parent: &forge.RepoInfo{
 			Owner: upstreamOwner,
 			Name:  upstreamName,
 		},
@@ -252,7 +231,7 @@ func (c *GitHubClient) CreateFork(ctx context.Context, upstreamOwner, upstreamNa
 		SSHURL:        repoInfo.SSHURL,
 		HTTPSURL:      repoInfo.CloneURL,
 		DefaultBranch: repoInfo.DefaultBranch,
-		Parent: &RepoRef{
+		Parent: &forge.RepoInfo{
 			Owner: upstreamOwner,
 			Name:  upstreamName,
 		},

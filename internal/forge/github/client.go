@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -308,10 +309,12 @@ func (c *Client) SetupRuleset(ctx context.Context, repoURI string) error {
 	if err != nil {
 		return fmt.Errorf("invalid repository URI: %w", err)
 	}
-	// Extract owner/repo from normalizedURI
-	// https://github.com/owner/repo -> owner/repo
-	path := strings.TrimPrefix(normalizedURI, "https://github.com/")
-	apiPath := fmt.Sprintf("/repos/%s/rulesets", path)
+	// Extract path from normalizedURI generically (works for github.com and GHES)
+	u, err := url.Parse(normalizedURI)
+	if err != nil {
+		return fmt.Errorf("invalid repository URI: %w", err)
+	}
+	apiPath := fmt.Sprintf("/repos%s/rulesets", u.Path)
 	// Check for existing ruleset with the same name.
 	listArgs := []string{
 		"api",

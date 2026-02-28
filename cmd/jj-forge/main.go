@@ -87,15 +87,26 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 	if err != nil {
 		return nil, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
 	}
-	if ssm.IsSSMURL(url) {
-		return ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
-	}
-	// Default: GitHub
-	gitDir, err := jjClient.GitDir(ctx)
+	forgeType, err := forge.DetectForge(ctx, url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get git directory: %w", err)
+		return nil, &ui.UserError{
+			Msg: fmt.Sprintf("could not determine forge for remote %s: %s", upstreamRemote, url),
+		}
 	}
-	return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), nil
+	switch forgeType {
+	case forge.ForgeTypeSSM:
+		return ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
+	case forge.ForgeTypeGitHub:
+		gitDir, err := jjClient.GitDir(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get git directory: %w", err)
+		}
+		return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), nil
+	default:
+		return nil, &ui.UserError{
+			Msg: fmt.Sprintf("could not determine forge type for remote %s: %s", upstreamRemote, url),
+		}
+	}
 }
 
 func main() {
