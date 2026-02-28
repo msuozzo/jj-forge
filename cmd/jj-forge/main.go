@@ -87,7 +87,7 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 	if err != nil {
 		return nil, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
 	}
-	forgeType, err := forge.DetectForge(ctx, url)
+	forgeType, err := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
 	if err != nil {
 		return nil, &ui.UserError{
 			Msg: fmt.Sprintf("could not determine forge for remote %s: %s", upstreamRemote, url),
@@ -102,6 +102,10 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 			return nil, fmt.Errorf("failed to get git directory: %w", err)
 		}
 		return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), nil
+	case forge.ForgeTypeGitLab:
+		return nil, &ui.UserError{
+			Msg: "GitLab is not yet supported",
+		}
 	default:
 		return nil, &ui.UserError{
 			Msg: fmt.Sprintf("could not determine forge type for remote %s: %s", upstreamRemote, url),
