@@ -41,7 +41,10 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 	// Parse and validate URL
 	_, _, _, repo, err := ssm.ParseSSMURL(params.URL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid SSM repository URL: %w", err)
+		return nil, fmt.Errorf(
+			"this Source Manager URL is not in a git-compatible format;\n" +
+				"use a URL with a -git or -ssh subdomain, e.g.:\n" +
+				"  https://<location>-git.<location>.sourcemanager.dev/<project>/<repo>")
 	}
 
 	// Determine clone path

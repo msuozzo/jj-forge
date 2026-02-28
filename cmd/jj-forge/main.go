@@ -737,7 +737,8 @@ Examples:
 				NoFork:         cloneNoFork,
 			}
 			// Dispatch to SSM clone flow for SSM URLs
-			if ssm.IsSSMURL(url) {
+			forgeType, _ := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
+			if forgeType == forge.ForgeTypeSSM {
 				var ssmRunner *repoclone.SSMRunner
 				if debugPrompt != "none" {
 					ssmRunner = repoclone.NewSSMRunnerWithDeps(newJJExecutor(), &repoclone.DefaultPrinter{})

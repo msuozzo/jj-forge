@@ -101,6 +101,12 @@ func TestDetectForge(t *testing.T) {
 			wantType: ForgeTypeSSM,
 		},
 		{
+			name:     "SSM inst- URL (non-git subdomain)",
+			url:      "https://inst-897099121057.us-central1.sourcemanager.dev/ssci-demos/repo",
+			noHTTP:   true,
+			wantType: ForgeTypeSSM,
+		},
+		{
 			name:     "github.com SSH",
 			url:      "git@github.com:owner/repo.git",
 			noHTTP:   true,
