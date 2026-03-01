@@ -35,11 +35,7 @@ func TestUpload_SingleMutableCommit(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
@@ -195,11 +191,7 @@ func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 			Output: jjtest.LogOutput("root"),
 		},
 		// No describe call - trailer already correct
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
 			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
 			Output: jjtest.EmptyOutput(),
@@ -287,11 +279,7 @@ func TestUpload_PushFailure(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
 			Args: []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
 			Err:  pushErr,
@@ -318,11 +306,7 @@ func TestUpload_EmptyRevset(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "none()"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// Push phase: re-resolve Revs(revset), also empty
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "none()"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused — empty)
 	)
 
 	client := scenario.Client()
@@ -353,11 +337,7 @@ func TestUpload_SkipEmptyCommit(t *testing.T) {
 			Output: jjtest.LogOutput("root"),
 		},
 		// No describe - skipped (empty)
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		// No push - silently skipped (empty)
 	)
 
@@ -391,11 +371,7 @@ func TestUpload_SkipAnonymousCommit(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		// No push - silently skipped (anonymous)
 	)
 
@@ -433,11 +409,7 @@ func TestUpload_SkipSyncedCommit(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		// No push - already synced
 	)
 
@@ -544,11 +516,7 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 			Output: jjtest.LogOutput("root"),
 		},
 		// No trailer changes needed (all have immutable parent root)
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
-			Output: jjtest.LogOutput("synced00", "needspsh", "emptyyyy", "anon0000"),
-		},
+		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		// anon0000: silently skipped (anonymous)
 		// emptyyyy: silently skipped (empty)
 		// needspsh: pushed

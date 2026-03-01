@@ -38,13 +38,8 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", fmt.Sprintf("parents(%s)~(%s)", revset, revset)},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip synced (already has remote bookmark)
-
 		// UpdatePRLinks phase: Revs(expandedRevset) for links
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
@@ -140,13 +135,8 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
-			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
-		},
-		// Push: both already synced → skipped
-
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip sync (already synced)
 		// UpdatePRLinks phase: Revs(expandedRevset)
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
@@ -263,13 +253,8 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
-			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
-		},
-		// Push: all synced
-
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip sync (all synced)
 		// UpdatePRLinks phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
@@ -367,11 +352,7 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("root"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
-			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
-		},
+		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// UpdatePRLinks phase
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
@@ -449,13 +430,8 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// Push phase: re-resolve Revs(revset)
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
-			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
-		},
-		// Push: already synced → skipped
-
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip sync (already synced)
 		// UpdatePRLinks phase: Revs(expandedRevset) — includes both A and B
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},

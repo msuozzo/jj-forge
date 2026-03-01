@@ -26,6 +26,7 @@ type UpdateTrailersResult struct {
 	TrailersUpdated  int
 	SkippedEmpty     int
 	SkippedAnonymous int
+	Revs             []*jj.Rev // Resolved revisions (pre-trailer-update order, children first)
 }
 
 // PushResult contains statistics about the push phase.
@@ -40,8 +41,11 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stack: %w", err)
 	}
+	// Store original order (children first) for callers before reversing.
+	origStack := make([]*jj.Rev, len(stack))
+	copy(origStack, stack)
 	slices.Reverse(stack) // order updates from parents to children
-	result := &UpdateTrailersResult{}
+	result := &UpdateTrailersResult{Revs: origStack}
 	if len(stack) == 0 {
 		return result, nil
 	}
@@ -97,11 +101,20 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 }
 
 // Push pushes a stack of revisions to the given remote, skipping those already synced.
-func Push(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*PushResult, error) {
-	// Re-resolve revset since commits may have changed due to trailer updates
-	stack, err := client.Revs(ctx, revset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get stack: %w", err)
+// If preResolved is non-nil, it is used directly instead of re-resolving the revset.
+// The preResolved slice should be in jj log order (children first); it will be reversed internally.
+func Push(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI, preResolved ...[]*jj.Rev) (*PushResult, error) {
+	var stack []*jj.Rev
+	if len(preResolved) > 0 && preResolved[0] != nil {
+		stack = make([]*jj.Rev, len(preResolved[0]))
+		copy(stack, preResolved[0])
+	} else {
+		// Re-resolve revset since commits may have changed due to trailer updates
+		var err error
+		stack, err = client.Revs(ctx, revset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get stack: %w", err)
+		}
 	}
 	slices.Reverse(stack) // order from parents to children
 	result := &PushResult{}
@@ -118,8 +131,7 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 		}
 		// Push the revision
 		fmt.Fprintf(u, "Pushing %s to %s...\n", u.Styled("change_id", rev.ID), u.Styled("remote", remote))
-		_, err = client.Run(ctx, "git", "push", "--change", rev.ID, "--remote", remote, "--allow-new")
-		if err != nil {
+		if _, err := client.Run(ctx, "git", "push", "--change", rev.ID, "--remote", remote, "--allow-new"); err != nil {
 			return nil, fmt.Errorf("failed to push %s: %w", rev.ID, err)
 		}
 		result.Pushed++
@@ -133,7 +145,12 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 	if err != nil {
 		return nil, err
 	}
-	pushResult, err := Push(ctx, client, revset, remote, u)
+	// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
+	var preResolved []*jj.Rev
+	if trailerResult.TrailersUpdated == 0 {
+		preResolved = trailerResult.Revs
+	}
+	pushResult, err := Push(ctx, client, revset, remote, u, preResolved)
 	if err != nil {
 		return nil, err
 	}

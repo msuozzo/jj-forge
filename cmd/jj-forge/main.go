@@ -364,7 +364,12 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			// Phase 3: Push
-			pushResult, err := change.Push(ctx, jjClient, revset, openForkRemote, stdoutUI)
+			// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
+			var preResolved []*jj.Rev
+			if trailerResult.TrailersUpdated == 0 {
+				preResolved = trailerResult.Revs
+			}
+			pushResult, err := change.Push(ctx, jjClient, revset, openForkRemote, stdoutUI, preResolved)
 			if err != nil {
 				return err
 			}
@@ -377,12 +382,20 @@ use 'review open' and 'review submit' instead.`,
 				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
 					skipped, trailerResult.SkippedEmpty, trailerResult.SkippedAnonymous, pushResult.SkippedSynced)
 			}
-			// Resolve revset to individual revisions (re-resolve after trailer updates)
-			revs, err := jjClient.Revs(ctx, revset)
-			if err != nil {
-				return fmt.Errorf("failed to resolve revset: %w", err)
+			// Use resolved revs from trailer phase if trailers weren't updated;
+			// otherwise re-resolve since commit IDs changed.
+			var revs []*jj.Rev
+			if trailerResult.TrailersUpdated == 0 {
+				revs = make([]*jj.Rev, len(trailerResult.Revs))
+				copy(revs, trailerResult.Revs)
+				slices.Reverse(revs) // parent-first (topological) order
+			} else {
+				revs, err = jjClient.Revs(ctx, revset)
+				if err != nil {
+					return fmt.Errorf("failed to resolve revset: %w", err)
+				}
+				slices.Reverse(revs) // parent-first (topological) order
 			}
-			slices.Reverse(revs) // parent-first (topological) order
 			forgeClient, err := getForge(ctx, jjClient, openUpstreamRemote)
 			if err != nil {
 				return err

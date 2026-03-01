@@ -46,7 +46,12 @@ func Update(
 		}
 	}
 	// Phase 3: Push
-	pushResult, err := change.Push(ctx, jjClient, params.Revset, params.ForkRemote, params.UI)
+	// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
+	var preResolved []*jj.Rev
+	if trailerResult.TrailersUpdated == 0 {
+		preResolved = trailerResult.Revs
+	}
+	pushResult, err := change.Push(ctx, jjClient, params.Revset, params.ForkRemote, params.UI, preResolved)
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}
