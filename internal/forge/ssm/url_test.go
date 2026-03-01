@@ -2,6 +2,8 @@ package ssm
 
 import (
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestIsSSMURL(t *testing.T) {
@@ -53,38 +55,32 @@ func TestIsSSMURL(t *testing.T) {
 }
 
 func TestParseSSMURL(t *testing.T) {
+	type result struct {
+		Instance string
+		Location string
+		Project  string
+		Repo     string
+	}
 	tests := []struct {
-		name         string
-		url          string
-		wantInstance string
-		wantLocation string
-		wantProject  string
-		wantRepo     string
-		wantErr      bool
+		name    string
+		url     string
+		want    result
+		wantErr bool
 	}{
 		{
-			name:         "standard HTTPS URL",
-			url:          "https://us-central1-git.us-central1.sourcemanager.dev/my-project/my-repo",
-			wantInstance: "us-central1",
-			wantLocation: "us-central1",
-			wantProject:  "my-project",
-			wantRepo:     "my-repo",
+			name: "standard HTTPS URL",
+			url:  "https://us-central1-git.us-central1.sourcemanager.dev/my-project/my-repo",
+			want: result{"us-central1", "us-central1", "my-project", "my-repo"},
 		},
 		{
-			name:         "with .git suffix",
-			url:          "https://us-central1-git.us-central1.sourcemanager.dev/my-project/my-repo.git",
-			wantInstance: "us-central1",
-			wantLocation: "us-central1",
-			wantProject:  "my-project",
-			wantRepo:     "my-repo",
+			name: "with .git suffix",
+			url:  "https://us-central1-git.us-central1.sourcemanager.dev/my-project/my-repo.git",
+			want: result{"us-central1", "us-central1", "my-project", "my-repo"},
 		},
 		{
-			name:         "europe-west1 region",
-			url:          "https://europe-west1-git.europe-west1.sourcemanager.dev/proj123/repo456",
-			wantInstance: "europe-west1",
-			wantLocation: "europe-west1",
-			wantProject:  "proj123",
-			wantRepo:     "repo456",
+			name: "europe-west1 region",
+			url:  "https://europe-west1-git.europe-west1.sourcemanager.dev/proj123/repo456",
+			want: result{"europe-west1", "europe-west1", "proj123", "repo456"},
 		},
 		{
 			name:    "invalid URL",
@@ -107,17 +103,9 @@ func TestParseSSMURL(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if instance != tt.wantInstance {
-				t.Errorf("instance = %q, want %q", instance, tt.wantInstance)
-			}
-			if location != tt.wantLocation {
-				t.Errorf("location = %q, want %q", location, tt.wantLocation)
-			}
-			if project != tt.wantProject {
-				t.Errorf("project = %q, want %q", project, tt.wantProject)
-			}
-			if repo != tt.wantRepo {
-				t.Errorf("repo = %q, want %q", repo, tt.wantRepo)
+			got := result{instance, location, project, repo}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("ParseSSMURL(%q) mismatch (-want +got):\n%s", tt.url, diff)
 			}
 		})
 	}

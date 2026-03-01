@@ -4,46 +4,44 @@ import (
 	"testing"
 )
 
-func TestFormatPRLinks_ParentsOnly(t *testing.T) {
-	got := FormatPRLinks(
-		[]PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
-		nil,
-	)
-	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
-	if got != want {
-		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
-	}
-}
-
-func TestFormatPRLinks_ChildrenOnly(t *testing.T) {
-	got := FormatPRLinks(
-		nil,
-		[]PRLink{{Number: 2, URL: "https://github.com/owner/repo/pull/2"}},
-	)
-	want := "> Children: [#2](https://redirect.github.com/owner/repo/pull/2)"
-	if got != want {
-		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
-	}
-}
-
-func TestFormatPRLinks_Both(t *testing.T) {
-	got := FormatPRLinks(
-		[]PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
-		[]PRLink{
-			{Number: 3, URL: "https://github.com/owner/repo/pull/3"},
-			{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
+func TestFormatPRLinks(t *testing.T) {
+	tests := []struct {
+		name     string
+		parents  []PRLink
+		children []PRLink
+		want     string
+	}{
+		{
+			name:    "parents only",
+			parents: []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
+			want:    "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)",
 		},
-	)
-	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)"
-	if got != want {
-		t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, want)
+		{
+			name:     "children only",
+			children: []PRLink{{Number: 2, URL: "https://github.com/owner/repo/pull/2"}},
+			want:     "> Children: [#2](https://redirect.github.com/owner/repo/pull/2)",
+		},
+		{
+			name:    "both parents and children",
+			parents: []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
+			children: []PRLink{
+				{Number: 3, URL: "https://github.com/owner/repo/pull/3"},
+				{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
+			},
+			want: "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
 	}
-}
-
-func TestFormatPRLinks_Empty(t *testing.T) {
-	got := FormatPRLinks(nil, nil)
-	if got != "" {
-		t.Errorf("FormatPRLinks() = %q, want empty string", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatPRLinks(tt.parents, tt.children)
+			if got != tt.want {
+				t.Errorf("FormatPRLinks() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -79,64 +77,55 @@ func TestLinkDisplayURL(t *testing.T) {
 	}
 }
 
-func TestStripPRLinks_WithRedirectURL(t *testing.T) {
-	body := "Description\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
-	got := StripPRLinks(body)
-	want := "Description"
-	if got != want {
-		t.Errorf("StripPRLinks() = %q, want %q", got, want)
+func TestStripPRLinks(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "with redirect URL",
+			body: "Description\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)",
+			want: "Description",
+		},
+		{
+			name: "with section",
+			body: "Some PR description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)",
+			want: "Some PR description",
+		},
+		{
+			name: "with both parents and children",
+			body: "Description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)",
+			want: "Description",
+		},
+		{
+			name: "without section",
+			body: "Some PR description\n\nMore text here",
+			want: "Some PR description\n\nMore text here",
+		},
+		{
+			name: "user content with HR",
+			body: "Description\n\n---\nSome other section",
+			want: "Description\n\n---\nSome other section",
+		},
+		{
+			name: "empty body",
+			body: "",
+			want: "",
+		},
+		{
+			name: "only links section",
+			body: "> Parents: [#1](https://github.com/owner/repo/pull/1)",
+			want: "",
+		},
 	}
-}
-
-func TestStripPRLinks_WithSection(t *testing.T) {
-	body := "Some PR description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)"
-	got := StripPRLinks(body)
-	want := "Some PR description"
-	if got != want {
-		t.Errorf("StripPRLinks() = %q, want %q", got, want)
-	}
-}
-
-func TestStripPRLinks_WithBothParentsAndChildren(t *testing.T) {
-	body := "Description\n\n> Parents: [#1](https://github.com/owner/repo/pull/1)\n> Children: [#3](https://github.com/owner/repo/pull/3)"
-	got := StripPRLinks(body)
-	want := "Description"
-	if got != want {
-		t.Errorf("StripPRLinks() = %q, want %q", got, want)
-	}
-}
-
-func TestStripPRLinks_WithoutSection(t *testing.T) {
-	body := "Some PR description\n\nMore text here"
-	got := StripPRLinks(body)
-	want := "Some PR description\n\nMore text here"
-	if got != want {
-		t.Errorf("StripPRLinks() = %q, want %q", got, want)
-	}
-}
-
-func TestStripPRLinks_UserContentWithHR(t *testing.T) {
-	// User has "---" in their body followed by non-links content
-	body := "Description\n\n---\nSome other section"
-	got := StripPRLinks(body)
-	want := "Description\n\n---\nSome other section"
-	if got != want {
-		t.Errorf("StripPRLinks() = %q, want %q", got, want)
-	}
-}
-
-func TestStripPRLinks_EmptyBody(t *testing.T) {
-	got := StripPRLinks("")
-	if got != "" {
-		t.Errorf("StripPRLinks() = %q, want empty string", got)
-	}
-}
-
-func TestStripPRLinks_OnlyLinksSection(t *testing.T) {
-	body := "> Parents: [#1](https://github.com/owner/repo/pull/1)"
-	got := StripPRLinks(body)
-	if got != "" {
-		t.Errorf("StripPRLinks() = %q, want empty string", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripPRLinks(tt.body)
+			if got != tt.want {
+				t.Errorf("StripPRLinks() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

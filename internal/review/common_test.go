@@ -3,6 +3,7 @@ package review
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
@@ -62,64 +63,58 @@ func TestIsUploaded(t *testing.T) {
 }
 
 func TestSplitTitleBody(t *testing.T) {
+	type result struct {
+		Title string
+		Body  string
+	}
 	tests := []struct {
-		name          string
-		description   string
-		expectedTitle string
-		expectedBody  string
+		name        string
+		description string
+		want        result
 	}{
 		{
-			name:          "title only",
-			description:   "feat: add feature",
-			expectedTitle: "feat: add feature",
-			expectedBody:  "",
+			name:        "title only",
+			description: "feat: add feature",
+			want:        result{"feat: add feature", ""},
 		},
 		{
-			name:          "title and body",
-			description:   "feat: add feature\n\nThis is the body",
-			expectedTitle: "feat: add feature",
-			expectedBody:  "This is the body",
+			name:        "title and body",
+			description: "feat: add feature\n\nThis is the body",
+			want:        result{"feat: add feature", "This is the body"},
 		},
 		{
-			name:          "title and multiline body",
-			description:   "feat: add feature\n\nThis is line 1\nThis is line 2\nThis is line 3",
-			expectedTitle: "feat: add feature",
-			expectedBody:  "This is line 1\nThis is line 2\nThis is line 3",
+			name:        "title and multiline body",
+			description: "feat: add feature\n\nThis is line 1\nThis is line 2\nThis is line 3",
+			want:        result{"feat: add feature", "This is line 1\nThis is line 2\nThis is line 3"},
 		},
 		{
-			name:          "empty description",
-			description:   "",
-			expectedTitle: "",
-			expectedBody:  "",
+			name:        "empty description",
+			description: "",
+			want:        result{"", ""},
 		},
 		{
-			name:          "only newlines",
-			description:   "\n\n\n",
-			expectedTitle: "",
-			expectedBody:  "",
+			name:        "only newlines",
+			description: "\n\n\n",
+			want:        result{"", ""},
 		},
 		{
-			name:          "title with leading/trailing whitespace",
-			description:   "  feat: add feature  \n\n  body text  ",
-			expectedTitle: "feat: add feature",
-			expectedBody:  "body text",
+			name:        "title with leading/trailing whitespace",
+			description: "  feat: add feature  \n\n  body text  ",
+			want:        result{"feat: add feature", "body text"},
 		},
 		{
-			name:          "title with blank line then body",
-			description:   "feat: add feature\n\nBody paragraph 1\n\nBody paragraph 2",
-			expectedTitle: "feat: add feature",
-			expectedBody:  "Body paragraph 1\n\nBody paragraph 2",
+			name:        "title with blank line then body",
+			description: "feat: add feature\n\nBody paragraph 1\n\nBody paragraph 2",
+			want:        result{"feat: add feature", "Body paragraph 1\n\nBody paragraph 2"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotTitle, gotBody := splitTitleBody(tt.description)
-			if gotTitle != tt.expectedTitle {
-				t.Errorf("splitTitleBody() title = %q, want %q", gotTitle, tt.expectedTitle)
-			}
-			if gotBody != tt.expectedBody {
-				t.Errorf("splitTitleBody() body = %q, want %q", gotBody, tt.expectedBody)
+			got := result{gotTitle, gotBody}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("splitTitleBody() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

@@ -5,39 +5,43 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-func TestRewriteArgs_ReplacesDetach(t *testing.T) {
-	args := []string{"check", "--force", "--detach", "@-"}
-	got := rewriteArgs(args, "--detach", "--_detached")
-	want := []string{"check", "--force", "--_detached", "@-"}
-	if len(got) != len(want) {
-		t.Fatalf("len = %d, want %d", len(got), len(want))
+func TestRewriteArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "replaces detach flag",
+			args: []string{"check", "--force", "--detach", "@-"},
+			want: []string{"check", "--force", "--_detached", "@-"},
+		},
+		{
+			name: "appends if missing",
+			args: []string{"check", "@-"},
+			want: []string{"check", "@-", "--_detached"},
+		},
 	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("arg[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
-func TestRewriteArgs_AppendsIfMissing(t *testing.T) {
-	args := []string{"check", "@-"}
-	got := rewriteArgs(args, "--detach", "--_detached")
-	if got[len(got)-1] != "--_detached" {
-		t.Errorf("last arg = %q, want --_detached", got[len(got)-1])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := rewriteArgs(tt.args, "--detach", "--_detached")
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("rewriteArgs() mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
 func TestRewriteArgs_DoesNotMutateInput(t *testing.T) {
 	args := []string{"check", "--detach"}
-	orig := make([]string, len(args))
-	copy(orig, args)
+	orig := []string{"check", "--detach"}
 	_ = rewriteArgs(args, "--detach", "--_detached")
-	for i := range args {
-		if args[i] != orig[i] {
-			t.Errorf("input mutated: arg[%d] = %q, want %q", i, args[i], orig[i])
-		}
+	if diff := cmp.Diff(orig, args); diff != "" {
+		t.Errorf("input was mutated (-want +got):\n%s", diff)
 	}
 }
 
@@ -152,26 +156,16 @@ func TestFlagReplace(t *testing.T) {
 	transform := FlagReplace("--detach", "--_detached")
 	got := transform([]string{"check", "--force", "--detach", "@-"})
 	want := []string{"check", "--force", "--_detached", "@-"}
-	if len(got) != len(want) {
-		t.Fatalf("len = %d, want %d", len(got), len(want))
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("arg[%d] = %q, want %q", i, got[i], want[i])
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("FlagReplace() mismatch (-want +got):\n%s", diff)
 	}
 }
 
 func TestNoTransform(t *testing.T) {
 	transform := NoTransform()
-	args := []string{"check", "--force"}
-	got := transform(args)
-	if len(got) != len(args) {
-		t.Fatalf("len = %d, want %d", len(got), len(args))
-	}
-	for i := range got {
-		if got[i] != args[i] {
-			t.Errorf("arg[%d] = %q, want %q", i, got[i], args[i])
-		}
+	got := transform([]string{"check", "--force"})
+	want := []string{"check", "--force"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("NoTransform() mismatch (-want +got):\n%s", diff)
 	}
 }
