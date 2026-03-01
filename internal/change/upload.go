@@ -118,24 +118,44 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 	}
 	slices.Reverse(stack) // order from parents to children
 	result := &PushResult{}
+	// Identify pushable revisions (skip empty, anonymous, and already-synced).
+	type pushItem struct {
+		rev   *jj.Rev
+		index int // index into taskNames for TaskTracker
+	}
+	var toPush []pushItem
 	for _, rev := range stack {
-		// Silently skip empty/anonymous
 		if rev.IsEmpty || strings.TrimSpace(rev.Description) == "" {
 			continue
 		}
-		// Check if already synced
 		if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
 			fmt.Fprintf(u, "Skipping synced change: %s\n", u.Styled("change_id", rev.ID))
 			result.SkippedSynced++
 			continue
 		}
-		// Push the revision
-		fmt.Fprintf(u, "Pushing %s to %s...\n", u.Styled("change_id", rev.ID), u.Styled("remote", remote))
-		if _, err := client.Run(ctx, "git", "push", "--change", rev.ID, "--remote", remote, "--allow-new"); err != nil {
-			return nil, fmt.Errorf("failed to push %s: %w", rev.ID, err)
+		toPush = append(toPush, pushItem{rev: rev, index: len(toPush)})
+	}
+	if len(toPush) == 0 {
+		return result, nil
+	}
+	// Use TaskTracker for progress display when pushing multiple changes.
+	taskNames := make([]string, len(toPush))
+	for i, item := range toPush {
+		taskNames[i] = item.rev.ID
+	}
+	tracker := ui.NewTaskTracker(u, taskNames)
+	tracker.Start()
+	for _, item := range toPush {
+		tracker.SetStatus(item.index, ui.TaskRunning)
+		if _, err := client.Run(ctx, "git", "push", "--change", item.rev.ID, "--remote", remote, "--allow-new"); err != nil {
+			tracker.SetStatus(item.index, ui.TaskFailed)
+			tracker.Finish()
+			return nil, fmt.Errorf("failed to push %s: %w", item.rev.ID, err)
 		}
+		tracker.SetStatus(item.index, ui.TaskDone)
 		result.Pushed++
 	}
+	tracker.Finish()
 	return result, nil
 }
 
