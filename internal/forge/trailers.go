@@ -1,7 +1,6 @@
 package forge
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/jj"
@@ -9,11 +8,6 @@ import (
 
 // ParentTrailerKey is the trailer key for tracking parent changes in the forge workflow.
 const ParentTrailerKey = "forge-parent"
-
-// trailerRegex matches valid trailer lines: "Key: Value"
-// Keys must be alphanumeric with hyphens only (matching jj and git conventions).
-// This is a copy of the regex from jj package for internal use.
-var trailerRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+) *: *(.*)$`)
 
 // splitDescriptionAndTrailers splits a description into body and trailer parts.
 // Returns (body, trailers, hasTrailers). If no trailers found, returns (description trimmed, nil, false).
@@ -37,7 +31,7 @@ func splitDescriptionAndTrailers(description string) (string, []jj.Trailer, bool
 	inTrailer := false
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
-		if trailerRegex.MatchString(line) {
+		if jj.TrailerRegex.MatchString(line) {
 			inTrailer = true
 			trailerLineCount++
 		} else if inTrailer && strings.HasPrefix(line, " ") {

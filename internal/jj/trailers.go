@@ -36,38 +36,9 @@ func (e *TrailerParseError) Error() string {
 	return e.Message
 }
 
-// trailerRegex matches valid trailer lines: "Key: Value"
+// TrailerRegex matches valid trailer lines: "Key: Value"
 // Keys must be alphanumeric with hyphens only (matching jj and git conventions).
-var trailerRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+) *: *(.*)$`)
-
-func isTrailer(line string) bool {
-	// Simple heuristic: "Key: Value"
-	parts := strings.SplitN(line, ":", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	key := strings.TrimSpace(parts[0])
-	// Keys don't usually have spaces
-	return key != "" && !strings.Contains(key, " ")
-}
-
-// isGitTrailer returns true if the line is a recognized git trailer.
-// Git trailers bypass the requirement for a blank line before trailers.
-func isGitTrailer(line string) bool {
-	// Check for cherry-pick line first (not a standard trailer format)
-	if strings.HasPrefix(line, "(cherry picked from commit ") {
-		return true
-	}
-
-	// Check for Signed-off-by (case-insensitive)
-	matches := trailerRegex.FindStringSubmatch(line)
-	if len(matches) > 0 {
-		key := strings.ToLower(matches[1])
-		return key == "signed-off-by"
-	}
-
-	return false
-}
+var TrailerRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+) *: *(.*)$`)
 
 // parseTrailersImpl is the core parsing implementation that parses trailers in reverse.
 // It returns:
@@ -97,7 +68,7 @@ func parseTrailersImpl(body string) ([]Trailer, bool, bool, string) {
 		if strings.HasPrefix(line, " ") {
 			// Continuation line for multiline trailer value
 			multilineValue = append(multilineValue, line)
-		} else if matches := trailerRegex.FindStringSubmatch(line); matches != nil {
+		} else if matches := TrailerRegex.FindStringSubmatch(line); matches != nil {
 			// Valid trailer line
 			key := matches[1]
 			valueStart := matches[2]
