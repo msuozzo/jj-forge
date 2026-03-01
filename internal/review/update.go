@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
+	"sync/atomic"
 
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/forge"
@@ -142,7 +144,13 @@ func UpdatePRLinks(
 		}
 	}
 
-	prsUpdated := 0
+	// Pre-compute link data and identify PRs to update (serial, local-only).
+	type prUpdate struct {
+		reviewNumber int
+		parentLinks  []PRLink
+		childLinks   []PRLink
+	}
+	var updates []prUpdate
 	for _, rev := range stack {
 		rec, ok := reviewByChange[rev.ID]
 		if !ok {
@@ -152,13 +160,6 @@ func UpdatePRLinks(
 		if err != nil {
 			return 0, fmt.Errorf("invalid review ID %s: %w", rec.ForgeID, err)
 		}
-
-		// Get current PR details from forge
-		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewNumber)
-		if err != nil {
-			return 0, fmt.Errorf("failed to get review #%d: %w", reviewNumber, err)
-		}
-
 		// Build parent links
 		var parentLinks []PRLink
 		if pID, ok := parentOf[rev.ID]; ok {
@@ -169,7 +170,6 @@ func UpdatePRLinks(
 				}
 			}
 		}
-
 		// Build child links
 		var childLinks []PRLink
 		for _, cID := range childrenOf[rev.ID] {
@@ -180,16 +180,43 @@ func UpdatePRLinks(
 				}
 			}
 		}
-
-		// Update body with links
-		newBody := SetPRLinks(details.Body, parentLinks, childLinks)
-		if newBody != details.Body {
-			if err := forgeClient.UpdateReview(ctx, upstreamURL, reviewNumber, newBody); err != nil {
-				return 0, fmt.Errorf("failed to update review #%d: %w", reviewNumber, err)
-			}
-			prsUpdated++
-		}
+		updates = append(updates, prUpdate{
+			reviewNumber: reviewNumber,
+			parentLinks:  parentLinks,
+			childLinks:   childLinks,
+		})
 	}
-
-	return prsUpdated, nil
+	if len(updates) == 0 {
+		return 0, nil
+	}
+	// Parallel forge API calls: GetReview + UpdateReview per PR.
+	var prsUpdated atomic.Int32
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(updates))
+	for _, u := range updates {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewNumber)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to get review #%d: %w", u.reviewNumber, err)
+				return
+			}
+			newBody := SetPRLinks(details.Body, u.parentLinks, u.childLinks)
+			if newBody != details.Body {
+				if err := forgeClient.UpdateReview(ctx, upstreamURL, u.reviewNumber, newBody); err != nil {
+					errCh <- fmt.Errorf("failed to update review #%d: %w", u.reviewNumber, err)
+					return
+				}
+				prsUpdated.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	// Return first error if any.
+	for err := range errCh {
+		return 0, err
+	}
+	return int(prsUpdated.Load()), nil
 }
