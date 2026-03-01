@@ -45,6 +45,7 @@ func (m *mockRunner) run(ctx context.Context, opts cmd.Opts, args ...string) (st
 }
 
 func TestNewWorkPool_CreatesDirectories(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	mr := &mockRunner{}
 	pool, err := NewWorkPool("/fake/git", baseDir, 3, mr.run)
@@ -63,6 +64,7 @@ func TestNewWorkPool_CreatesDirectories(t *testing.T) {
 }
 
 func TestNewWorkPool_ReadsExistingState(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	// Pre-create a dir with a state file
 	dir0 := filepath.Join(baseDir, "0")
@@ -87,6 +89,7 @@ func TestNewWorkPool_ReadsExistingState(t *testing.T) {
 }
 
 func TestAcquireRelease(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	mr := &mockRunner{}
 	pool, err := NewWorkPool("/fake/git", baseDir, 2, mr.run)
@@ -126,6 +129,7 @@ func TestAcquireRelease(t *testing.T) {
 }
 
 func TestMaterialize_FullMaterialization(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	mr := &mockRunner{
 		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (string, error){
@@ -177,6 +181,7 @@ func TestMaterialize_FullMaterialization(t *testing.T) {
 }
 
 func TestMaterialize_SkipsWhenUpToDate(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	// Pre-create state
 	dir0 := filepath.Join(baseDir, "0")
@@ -205,6 +210,7 @@ func TestMaterialize_SkipsWhenUpToDate(t *testing.T) {
 }
 
 func TestMaterialize_IncrementalUpdate(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	dir0 := filepath.Join(baseDir, "0")
 	if err := os.MkdirAll(dir0, 0o755); err != nil {
@@ -260,6 +266,7 @@ func TestMaterialize_IncrementalUpdate(t *testing.T) {
 }
 
 func TestMaterialize_IncrementalFallback(t *testing.T) {
+	t.Parallel()
 	baseDir := t.TempDir()
 	dir0 := filepath.Join(baseDir, "0")
 	if err := os.MkdirAll(dir0, 0o755); err != nil {

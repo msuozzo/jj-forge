@@ -14,6 +14,7 @@ import (
 )
 
 func TestAcquireLock_Success(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lock, err := acquireLock(dir)
 	if err != nil {
@@ -48,6 +49,7 @@ func TestAcquireLock_Success(t *testing.T) {
 }
 
 func TestAcquireLock_AlreadyHeld(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lock, err := acquireLock(dir)
 	if err != nil {
@@ -70,6 +72,7 @@ func TestAcquireLock_AlreadyHeld(t *testing.T) {
 }
 
 func TestAcquireLock_StaleDeadProcess(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, lockFileName)
 
@@ -95,6 +98,7 @@ func TestAcquireLock_StaleDeadProcess(t *testing.T) {
 }
 
 func TestAcquireLock_CorruptFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, lockFileName)
 
@@ -119,6 +123,7 @@ func TestAcquireLock_CorruptFile(t *testing.T) {
 }
 
 func TestRelease(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lock, err := acquireLock(dir)
 	if err != nil {
@@ -140,6 +145,7 @@ func TestRelease(t *testing.T) {
 }
 
 func TestRelease_Nil(t *testing.T) {
+	t.Parallel()
 	var lock *lockFile
 	if err := lock.release(); err != nil {
 		t.Errorf("nil release should return nil, got %v", err)
