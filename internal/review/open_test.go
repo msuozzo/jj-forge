@@ -611,3 +611,80 @@ func TestOpen_CrossRepo(t *testing.T) {
 
 	scenario.Verify()
 }
+
+func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
+	// When UpstreamRemoteURL is provided, the upstream RemoteURL call should
+	// be skipped. Only the fork's RemoteURL (for FormatHeadBranch) is needed.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(jjtest.Commit{
+		ID:              "aaaaaaaaaaaa",
+		Parents:         []string{"root"},
+		Description:     "feat: test feature\n\nThis is the body",
+		IsMutable:       true,
+		RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+	})
+
+	fakeForge := github.NewFakeForge()
+
+	scenario := jjtest.NewScenario(t, repo,
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "@"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"config", "list", "--repo", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
+		// Only one "git remote list" call: for FormatHeadBranch (fork remote).
+		// The upstream RemoteURL call is skipped because UpstreamRemoteURL is set.
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "og git@github.com:owner/repo.git\n"
+			},
+		},
+		// AddReviewRecord
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+		Rev:               "@",
+		Reviewers:         []string{"reviewer1"},
+		UpstreamRemote:    testRemote,
+		UpstreamRemoteURL: "git@github.com:owner/repo.git",
+		ForkRemote:        testRemote,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	if result.ChangeID != "aaaaaaaaaaaa" {
+		t.Errorf("expected ChangeID aaaaaaaaaaaa, got %s", result.ChangeID)
+	}
+
+	wantReview := &github.Review{
+		Number:    1,
+		Title:     "feat: test feature",
+		Body:      "This is the body",
+		Head:      "owner:push-aaaaaaaaaaaa",
+		Base:      "main",
+		Reviewers: []string{"reviewer1"},
+		Status:    "open",
+		URL:       "https://github.com/owner/repo/pull/1",
+	}
+
+	review, exists := fakeForge.GetTestReview(1)
+	if !exists {
+		t.Fatal("review not created in forge")
+	}
+	if diff := cmp.Diff(wantReview, review); diff != "" {
+		t.Errorf("review mismatch (-want +got):\n%s", diff)
+	}
+
+	scenario.Verify()
+}

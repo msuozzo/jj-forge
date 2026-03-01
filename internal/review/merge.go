@@ -20,11 +20,12 @@ var ErrHasParentTrailer = errors.New("change has forge-parent annotation")
 
 // MergeParams contains parameters for the merge command.
 type MergeParams struct {
-	Rev            string // Revset to merge review for
-	ForkRemote     string // Remote where the branch is pushed
-	UpstreamRemote string // Remote to merge PR from
-	NoCleanup      bool   // Skip local cleanup if true
-	UI             *ui.UI // UI for styled output
+	Rev               string // Revset to merge review for
+	ForkRemote        string // Remote where the branch is pushed
+	UpstreamRemote    string // Remote to merge PR from
+	UpstreamRemoteURL string // Pre-resolved upstream remote URL (optional; resolved if empty)
+	NoCleanup         bool   // Skip local cleanup if true
+	UI                *ui.UI // UI for styled output
 }
 
 // MergeResult contains the result of the merge command.
@@ -62,9 +63,12 @@ func Merge(
 	if err != nil {
 		return nil, fmt.Errorf("invalid review number in config: %s", reviewRecord.ForgeID)
 	}
-	upstreamRemoteURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+	upstreamRemoteURL := params.UpstreamRemoteURL
+	if upstreamRemoteURL == "" {
+		upstreamRemoteURL, err = jjClient.RemoteURL(ctx, params.UpstreamRemote)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+		}
 	}
 	// Merge review via forge
 	if err := forgeClient.MergeReview(ctx, upstreamRemoteURL, reviewNumber); err != nil {

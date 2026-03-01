@@ -592,3 +592,111 @@ func TestUpdate_CheckFnError_AbortsPush(t *testing.T) {
 
 	scenario.Verify()
 }
+
+func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
+	// When UpstreamRemoteURL is provided, the RemoteURL call in UpdatePRLinks
+	// should be skipped.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{
+			ID:              "aaaaaaaaaaaa",
+			Parents:         []string{"root"},
+			Description:     "feat: parent\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+		},
+		jjtest.Commit{
+			ID:              "bbbbbbbbbbbb",
+			Parents:         []string{"aaaaaaaaaaaa"},
+			Description:     "feat: child\n\nforge-parent: aaaaaaaaaaaa\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-bbbbbbbbbbbb"},
+		},
+	)
+
+	fakeForge := github.NewFakeForge()
+
+	revset := "::@ & mutable()"
+	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+
+	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase: Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// UpdateTrailers phase: Revs(parents)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
+			Output: jjtest.LogOutput("root"),
+		},
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip sync (already synced)
+		// UpdatePRLinks phase: Revs(expandedRevset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
+			},
+		},
+		// No "git remote list" call: UpstreamRemoteURL is pre-resolved
+		// GetReview + UpdateReview for each PR are handled by fakeForge
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	// Create reviews in forge
+	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: parent",
+		Body:       "Parent body",
+		FromBranch: "push-aaaaaaaaaaaa",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review: %v", err)
+	}
+	_, err = fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: child",
+		Body:       "Child body",
+		FromBranch: "push-bbbbbbbbbbbb",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review: %v", err)
+	}
+
+	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+		Revset:            revset,
+		ForkRemote:        testRemote,
+		UpstreamRemote:    "up",
+		UpstreamRemoteURL: "git@github.com:owner/repo.git",
+		UI:                testUI,
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	if result.PRsUpdated != 2 {
+		t.Errorf("expected 2 PRs updated, got %d", result.PRsUpdated)
+	}
+
+	// Verify parent PR got children link
+	parentReview, _ := fakeForge.GetTestReview(1)
+	if !strings.Contains(parentReview.Body, "Children: [#2]") {
+		t.Errorf("expected parent PR to have children link, got body %q", parentReview.Body)
+	}
+
+	// Verify child PR got parent link
+	childReview, _ := fakeForge.GetTestReview(2)
+	if !strings.Contains(childReview.Body, "Parents: [#1]") {
+		t.Errorf("expected child PR to have parent link, got body %q", childReview.Body)
+	}
+
+	scenario.Verify()
+}

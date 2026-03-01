@@ -14,12 +14,13 @@ import (
 
 // CloseParams contains parameters for the close command.
 type CloseParams struct {
-	Rev            string // Revset to close review for
-	ForkRemote     string // Remote where the branch is pushed
-	UpstreamRemote string // Remote to close PR in
-	Force          bool   // Skip confirmation if true
-	NoCleanup      bool   // Skip local cleanup if true
-	UI             *ui.UI // UI for styled output
+	Rev               string // Revset to close review for
+	ForkRemote        string // Remote where the branch is pushed
+	UpstreamRemote    string // Remote to close PR in
+	UpstreamRemoteURL string // Pre-resolved upstream remote URL (optional; resolved if empty)
+	Force             bool   // Skip confirmation if true
+	NoCleanup         bool   // Skip local cleanup if true
+	UI                *ui.UI // UI for styled output
 }
 
 // CloseResult contains the result of the close command.
@@ -70,9 +71,12 @@ func Close(
 			return nil, fmt.Errorf("operation cancelled")
 		}
 	}
-	upstreamRemoteURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+	upstreamRemoteURL := params.UpstreamRemoteURL
+	if upstreamRemoteURL == "" {
+		upstreamRemoteURL, err = jjClient.RemoteURL(ctx, params.UpstreamRemote)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+		}
 	}
 	// Close review via forge
 	if err := forgeClient.CloseReview(ctx, upstreamRemoteURL, reviewNumber); err != nil {

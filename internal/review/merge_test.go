@@ -741,3 +741,108 @@ func TestMerge_LinkCleanup(t *testing.T) {
 
 	scenario.Verify()
 }
+
+func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
+	// When UpstreamRemoteURL is provided, the RemoteURL call should be skipped.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(jjtest.Commit{
+		ID:              "aaaaaaaaaaaa",
+		Parents:         []string{"root"},
+		Description:     "feat: test\n",
+		IsMutable:       true,
+		RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+	})
+
+	fakeForge := github.NewFakeForge()
+
+	scenario := jjtest.NewScenario(t, repo,
+		// Pre-create review record
+		jjtest.Call{
+			Args:   []string{"config", "list", "--repo", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		// Merge() call
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "@"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
+		// No "git remote list" call: UpstreamRemoteURL is pre-resolved
+		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
+		// cleanupLinksAfterMerge: getForgeConfig cached from RemoveCheckVerdicts (no write)
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	// Create the review in the forge (needed for FakeForge.MergeReview)
+	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
+		Title:      "feat: test",
+		FromBranch: "push-aaaaaaaaaaaa",
+		ToBranch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("failed to create review in forge: %v", err)
+	}
+
+	err = configMgr.AddReviewRecord(forge.ReviewRecord{
+		ChangeID: "aaaaaaaaaaaa",
+		ForgeID:  "pr/1",
+		URL:      "https://github.com/owner/repo/pull/1",
+		Status:   forge.ReviewStateOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to add config record: %v", err)
+	}
+
+	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+		Rev:               "@",
+		ForkRemote:        testRemote,
+		UpstreamRemote:    "up",
+		UpstreamRemoteURL: "git@github.com:owner/repo.git",
+		NoCleanup:         true,
+		UI:                testUI,
+	})
+
+	if err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+
+	wantReview := &github.Review{
+		Number: 1,
+		Title:  "feat: test",
+		Head:   "push-aaaaaaaaaaaa",
+		Base:   "main",
+		Status: "merged",
+		URL:    "https://github.com/owner/repo/pull/1",
+	}
+
+	review, exists := fakeForge.GetTestReview(result.Number)
+	if !exists {
+		t.Fatal("review not found in forge")
+	}
+	if diff := cmp.Diff(wantReview, review); diff != "" {
+		t.Errorf("review mismatch (-want +got):\n%s", diff)
+	}
+
+	scenario.Verify()
+}

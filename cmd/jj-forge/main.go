@@ -80,34 +80,35 @@ func newGHExecutor(gitDir string) cmdpkg.Executor {
 	}
 }
 
-// getForge returns a forge client for the repository, auto-detecting the forge
-// type from the upstream remote URL.
-func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (forge.Forge, error) {
+// getForge returns a forge client and the resolved remote URL for the
+// repository, auto-detecting the forge type from the upstream remote URL.
+func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (forge.Forge, string, error) {
 	url, err := jjClient.RemoteURL(ctx, upstreamRemote)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
+		return nil, "", fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
 	}
 	forgeType, err := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
 	if err != nil {
-		return nil, &ui.UserError{
+		return nil, "", &ui.UserError{
 			Msg: fmt.Sprintf("could not determine forge for remote %s: %s", upstreamRemote, url),
 		}
 	}
 	switch forgeType {
 	case forge.ForgeTypeSSM:
-		return ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
+		client, err := ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
+		return client, url, err
 	case forge.ForgeTypeGitHub:
 		gitDir, err := jjClient.GitDir(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get git directory: %w", err)
+			return nil, "", fmt.Errorf("failed to get git directory: %w", err)
 		}
-		return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), nil
+		return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), url, nil
 	case forge.ForgeTypeGitLab:
-		return nil, &ui.UserError{
+		return nil, "", &ui.UserError{
 			Msg: "GitLab is not yet supported",
 		}
 	default:
-		return nil, &ui.UserError{
+		return nil, "", &ui.UserError{
 			Msg: fmt.Sprintf("could not determine forge type for remote %s: %s", upstreamRemote, url),
 		}
 	}
@@ -396,7 +397,7 @@ use 'review open' and 'review submit' instead.`,
 				}
 				slices.Reverse(revs) // parent-first (topological) order
 			}
-			forgeClient, err := getForge(ctx, jjClient, openUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, openUpstreamRemote)
 			if err != nil {
 				return err
 			}
@@ -423,10 +424,11 @@ use 'review open' and 'review submit' instead.`,
 					continue
 				}
 				result, err := review.Open(ctx, jjClient, forgeClient, configMgr, review.OpenParams{
-					Rev:            rev.ID,
-					Reviewers:      reviewers,
-					UpstreamRemote: openUpstreamRemote,
-					ForkRemote:     openForkRemote,
+					Rev:               rev.ID,
+					Reviewers:         reviewers,
+					UpstreamRemote:    openUpstreamRemote,
+					UpstreamRemoteURL: upstreamRemoteURL,
+					ForkRemote:        openForkRemote,
 				})
 				if err != nil {
 					if errors.Is(err, review.ErrReviewAlreadyExists) {
@@ -446,7 +448,7 @@ use 'review open' and 'review submit' instead.`,
 			fmt.Fprintf(stdoutUI, "Opened %d review(s), skipped %d\n", opened, skipped)
 			// Update PR descriptions with parent/child links
 			if opened > 0 {
-				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, revset, openUpstreamRemote)
+				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, revset, openUpstreamRemote, upstreamRemoteURL)
 				if err != nil {
 					stdoutUI.PrintWarning("failed to update PR links: %v", err)
 				} else if prsUpdated > 0 {
@@ -486,7 +488,7 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			forgeClient, err := getForge(ctx, jjClient, mergeUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, mergeUpstreamRemote)
 			if err != nil {
 				return err
 			}
@@ -495,11 +497,12 @@ use 'review open' and 'review submit' instead.`,
 			}
 			// Execute merge command
 			mergeParams := review.MergeParams{
-				Rev:            rev,
-				ForkRemote:     mergeForkRemote,
-				UpstreamRemote: mergeUpstreamRemote,
-				NoCleanup:      mergeNoCleanup,
-				UI:             stdoutUI,
+				Rev:               rev,
+				ForkRemote:        mergeForkRemote,
+				UpstreamRemote:    mergeUpstreamRemote,
+				UpstreamRemoteURL: upstreamRemoteURL,
+				NoCleanup:         mergeNoCleanup,
+				UI:                stdoutUI,
 			}
 			result, err := review.Merge(ctx, jjClient, forgeClient, configMgr, mergeParams)
 			if errors.Is(err, review.ErrNotUploaded) {
@@ -512,10 +515,11 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 				if _, updateErr := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
-					Revset:         rev,
-					ForkRemote:     mergeForkRemote,
-					UpstreamRemote: mergeUpstreamRemote,
-					UI:             stdoutUI,
+					Revset:            rev,
+					ForkRemote:        mergeForkRemote,
+					UpstreamRemote:    mergeUpstreamRemote,
+					UpstreamRemoteURL: upstreamRemoteURL,
+					UI:                stdoutUI,
 				}); updateErr != nil {
 					return updateErr
 				}
@@ -555,7 +559,7 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, err := getForge(ctx, jjClient, closeUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, closeUpstreamRemote)
 			if err != nil {
 				return err
 			}
@@ -564,12 +568,13 @@ use 'review open' and 'review submit' instead.`,
 			}
 			// Execute close command
 			result, err := review.Close(ctx, jjClient, forgeClient, configMgr, review.CloseParams{
-				Rev:            rev,
-				ForkRemote:     closeForkRemote,
-				UpstreamRemote: closeUpstreamRemote,
-				Force:          closeForce,
-				NoCleanup:      closeNoCleanup,
-				UI:             stdoutUI,
+				Rev:               rev,
+				ForkRemote:        closeForkRemote,
+				UpstreamRemote:    closeUpstreamRemote,
+				UpstreamRemoteURL: upstreamRemoteURL,
+				Force:             closeForce,
+				NoCleanup:         closeNoCleanup,
+				UI:                stdoutUI,
 			})
 			if err != nil {
 				return err
@@ -608,14 +613,15 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("revset and --all are mutually exclusive")
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, err := getForge(ctx, jjClient, importUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, importUpstreamRemote)
 			if err != nil {
 				return err
 			}
 			result, err := review.Import(ctx, jjClient, forgeClient, configMgr, review.ImportParams{
-				Revset:         revset,
-				UpstreamRemote: importUpstreamRemote,
-				All:            importAll,
+				Revset:            revset,
+				UpstreamRemote:    importUpstreamRemote,
+				UpstreamRemoteURL: upstreamRemoteURL,
+				All:               importAll,
 			})
 			if err != nil {
 				return err
@@ -653,7 +659,7 @@ use 'review open' and 'review submit' instead.`,
 					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor(), stdoutUI)
 				}
 			}
-			forgeClient, err := getForge(ctx, jjClient, updateUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, updateUpstreamRemote)
 			if err != nil {
 				return err
 			}
@@ -661,11 +667,12 @@ use 'review open' and 'review submit' instead.`,
 				updateForkRemote = updateUpstreamRemote
 			}
 			result, err := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
-				Revset:         revset,
-				ForkRemote:     updateForkRemote,
-				UpstreamRemote: updateUpstreamRemote,
-				UI:             stdoutUI,
-				CheckFn:        checkFn,
+				Revset:            revset,
+				ForkRemote:        updateForkRemote,
+				UpstreamRemote:    updateUpstreamRemote,
+				UpstreamRemoteURL: upstreamRemoteURL,
+				UI:                stdoutUI,
+				CheckFn:           checkFn,
 			})
 			if err != nil {
 				return err
@@ -784,14 +791,9 @@ Examples:
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			forgeClient, err := getForge(ctx, jjClient, rulesetUpstreamRemote)
+			forgeClient, upstreamURL, err := getForge(ctx, jjClient, rulesetUpstreamRemote)
 			if err != nil {
 				return err
-			}
-			// Get upstream URL
-			upstreamURL, err := jjClient.RemoteURL(ctx, rulesetUpstreamRemote)
-			if err != nil {
-				return fmt.Errorf("failed to get upstream URL: %w", err)
 			}
 			// Execute setup-ruleset command
 			err = forgeClient.SetupRuleset(ctx, upstreamURL)

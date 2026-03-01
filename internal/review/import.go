@@ -13,9 +13,10 @@ import (
 
 // ImportParams contains parameters for the import command.
 type ImportParams struct {
-	Revset         string
-	UpstreamRemote string
-	All            bool
+	Revset            string
+	UpstreamRemote    string
+	UpstreamRemoteURL string // Pre-resolved upstream remote URL (optional; resolved if empty)
+	All               bool
 }
 
 // ImportResult contains the summary of the import operation.
@@ -26,9 +27,13 @@ type ImportResult struct {
 
 // Import finds and updates review records.
 func Import(ctx context.Context, jjClient jj.Client, forgeClient forge.Forge, configMgr *forge.ConfigManager, params ImportParams) (*ImportResult, error) {
-	upstreamURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get upstream remote URL: %w", err)
+	upstreamURL := params.UpstreamRemoteURL
+	if upstreamURL == "" {
+		var err error
+		upstreamURL, err = jjClient.RemoteURL(ctx, params.UpstreamRemote)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get upstream remote URL: %w", err)
+		}
 	}
 
 	records, err := configMgr.GetReviewRecords()

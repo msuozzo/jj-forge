@@ -15,10 +15,11 @@ var (
 
 // OpenParams contains parameters for the open command.
 type OpenParams struct {
-	Rev            string   // Revset to open review for
-	Reviewers      []string // Reviewer usernames
-	UpstreamRemote string   // Remote to create PR against
-	ForkRemote     string   // Remote where the branch is pushed
+	Rev               string   // Revset to open review for
+	Reviewers         []string // Reviewer usernames
+	UpstreamRemote    string   // Remote to create PR against
+	UpstreamRemoteURL string   // Pre-resolved upstream remote URL (optional; resolved if empty)
+	ForkRemote        string   // Remote where the branch is pushed
 }
 
 // OpenResult contains the result of the open command.
@@ -62,9 +63,12 @@ func Open(
 		// If status is closed, we can create a new review
 	}
 	// Determine base branch
-	upstreamRemoteURL, err := jjClient.RemoteURL(ctx, params.UpstreamRemote)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+	upstreamRemoteURL := params.UpstreamRemoteURL
+	if upstreamRemoteURL == "" {
+		upstreamRemoteURL, err = jjClient.RemoteURL(ctx, params.UpstreamRemote)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+		}
 	}
 	upstreamBranch, err := forgeClient.DefaultBranch(ctx, upstreamRemoteURL)
 	if err != nil {

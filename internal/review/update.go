@@ -13,11 +13,12 @@ import (
 
 // UpdateParams contains parameters for the update command.
 type UpdateParams struct {
-	Revset         string       // Revset to update
-	ForkRemote     string       // Remote where branches are pushed
-	UpstreamRemote string       // Remote to update PRs on
-	UI             *ui.UI       // UI for styled output
-	CheckFn        func() error // Optional: runs between trailer updates and push
+	Revset            string       // Revset to update
+	ForkRemote        string       // Remote where branches are pushed
+	UpstreamRemote    string       // Remote to update PRs on
+	UpstreamRemoteURL string       // Pre-resolved upstream remote URL (optional; resolved if empty)
+	UI                *ui.UI       // UI for styled output
+	CheckFn           func() error // Optional: runs between trailer updates and push
 }
 
 // UpdateResult contains the result of the update command.
@@ -65,7 +66,7 @@ func Update(
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}
 	// Phase 4: Update PR descriptions with links
-	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, params.Revset, params.UpstreamRemote)
+	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, params.Revset, params.UpstreamRemote, params.UpstreamRemoteURL)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +79,7 @@ func Update(
 // UpdatePRLinks updates PR descriptions with parent/child links for the given revset.
 // The revset is expanded to include mutable parents so that parent PRs get child links
 // even when only a subset of the stack is passed.
+// If upstreamRemoteURL is non-empty, it is used instead of resolving upstreamRemote.
 // Returns the number of PRs updated.
 func UpdatePRLinks(
 	ctx context.Context,
@@ -86,6 +88,7 @@ func UpdatePRLinks(
 	configMgr *forge.ConfigManager,
 	revset string,
 	upstreamRemote string,
+	upstreamRemoteURL ...string,
 ) (int, error) {
 	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
 	stack, err := jjClient.Revs(ctx, expandedRevset)
@@ -128,9 +131,15 @@ func UpdatePRLinks(
 		}
 	}
 
-	upstreamURL, err := jjClient.RemoteURL(ctx, upstreamRemote)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
+	var upstreamURL string
+	if len(upstreamRemoteURL) > 0 && upstreamRemoteURL[0] != "" {
+		upstreamURL = upstreamRemoteURL[0]
+	} else {
+		var err error
+		upstreamURL, err = jjClient.RemoteURL(ctx, upstreamRemote)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
+		}
 	}
 
 	prsUpdated := 0
