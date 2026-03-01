@@ -18,8 +18,9 @@ const (
 
 // UI provides styled text output for terminal display.
 type UI struct {
-	w     io.Writer
-	color bool
+	w           io.Writer
+	color       bool
+	interactive bool
 }
 
 // New creates a new UI that writes to w. ColorAuto is resolved by checking
@@ -34,7 +35,7 @@ func New(w io.Writer, mode ColorMode) *UI {
 	case ColorAuto:
 		color = isColorTerminal(w)
 	}
-	return &UI{w: w, color: color}
+	return &UI{w: w, color: color, interactive: isTerminal(w)}
 }
 
 // Write implements io.Writer as a plain pass-through.
@@ -66,13 +67,23 @@ func (u *UI) IsColor() bool {
 	return u.color
 }
 
+// IsInteractive reports whether the output is an interactive terminal.
+func (u *UI) IsInteractive() bool {
+	return u.interactive
+}
+
+// isTerminal reports whether w is a terminal.
+func isTerminal(w io.Writer) bool {
+	if f, ok := w.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+	return false
+}
+
 // isColorTerminal reports whether w is a terminal that supports color.
 func isColorTerminal(w io.Writer) bool {
 	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
-	if f, ok := w.(*os.File); ok {
-		return term.IsTerminal(int(f.Fd()))
-	}
-	return false
+	return isTerminal(w)
 }

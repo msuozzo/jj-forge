@@ -67,6 +67,15 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return nil // all cached
 	}
 	fmt.Fprintf(u, "Running checks on %d change(s)...\n", len(toCheck))
+	// Build task tracker for progress display.
+	taskNames := make([]string, len(toCheck))
+	revIndex := make(map[string]int, len(toCheck))
+	for i, rev := range toCheck {
+		taskNames[i] = rev.ID
+		revIndex[rev.ID] = i
+	}
+	tracker := ui.NewTaskTracker(u, taskNames)
+	tracker.Start()
 	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
@@ -110,7 +119,14 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	resultCh := make(chan result, len(toCheck))
 	for _, rev := range toCheck {
 		go func() {
-			resultCh <- result{rev: rev, err: runInPool(ctx, pool, runner, rev.CommitID, checkCmd)}
+			wd, err := pool.Acquire(ctx)
+			if err != nil {
+				resultCh <- result{rev: rev, err: fmt.Errorf("failed to acquire pool directory: %w", err)}
+				return
+			}
+			defer pool.Release(wd)
+			tracker.SetStatus(revIndex[rev.ID], ui.TaskRunning)
+			resultCh <- result{rev: rev, err: runInDir(ctx, pool, runner, wd, rev.CommitID, checkCmd)}
 		}()
 	}
 	// Store verdicts as they arrive and collect errors.
@@ -118,33 +134,32 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	for range len(toCheck) {
 		r := <-resultCh
 		verdictStr := forge.CheckVerdictPass
+		taskStatus := ui.TaskDone
 		if r.err != nil {
 			verdictStr = forge.CheckVerdictFail
+			taskStatus = ui.TaskFailed
 		}
+		tracker.SetStatus(revIndex[r.rev.ID], taskStatus)
 		if err := configMgr.SetCheckVerdict(forge.CheckVerdict{
 			ChangeID: r.rev.ID,
 			Verdict:  verdictStr,
 			CommitID: r.rev.CommitID,
 		}); err != nil {
+			tracker.Finish()
 			return fmt.Errorf("failed to store check verdict: %w", err)
 		}
 		if r.err != nil {
 			failures = append(failures, fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID))
 		}
 	}
+	tracker.Finish()
 	if len(failures) > 0 {
 		return fmt.Errorf("check command failed for: %s", strings.Join(failures, ", "))
 	}
 	return nil
 }
 
-func runInPool(ctx context.Context, pool *WorkPool, runner cmd.Executor, commitID, checkCmd string) error {
-	wd, err := pool.Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to acquire pool directory: %w", err)
-	}
-	defer pool.Release(wd)
-
+func runInDir(ctx context.Context, pool *WorkPool, runner cmd.Executor, wd *WorkDir, commitID, checkCmd string) error {
 	if err := pool.Materialize(ctx, wd, commitID); err != nil {
 		return fmt.Errorf("failed to materialize %s: %w", commitID, err)
 	}

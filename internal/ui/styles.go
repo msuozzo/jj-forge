@@ -26,4 +26,10 @@ var Styles = map[string]Style{
 	"help_header":      {Fg: Yellow, Bold: true},
 	"help_command":     {Fg: Green, Bold: true},
 	"help_placeholder": {Fg: Green},
+
+	// Task status indicators
+	"task_pass":    {Fg: Green},
+	"task_fail":    {Fg: Red},
+	"task_running": {Fg: Yellow},
+	"task_pending": {Dim: true},
 }
