@@ -50,20 +50,13 @@ func Merge(
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
-	if reviewRecord == nil {
-		return nil, fmt.Errorf("no review found for change %s. Create one with: jj-forge review open %s", rev.ID, rev.ID)
-	}
-	if reviewRecord.Status == forge.ReviewStateMerged {
-		return nil, fmt.Errorf("review #%s for change %s is already merged", reviewRecord.ForgeID, rev.ID)
-	}
-	if reviewRecord.Status == forge.ReviewStateClosed {
-		return nil, fmt.Errorf("review #%s for change %s is closed. Reopen it or create a new review", reviewRecord.ForgeID, rev.ID)
-	}
-	if !isUploaded(rev, params.ForkRemote) {
-		return nil, fmt.Errorf("change %s has local modifications not yet pushed to %s: %w", rev.ID, params.ForkRemote, ErrNotUploaded)
-	}
-	if parentTrailer, found := jj.GetTrailer(jj.ParseDescriptionTrailers(rev.Description), forge.ParentTrailerKey); found {
-		return nil, fmt.Errorf("change %s has a forge-parent annotation (parent: %s). Merge or close the parent review first, then run 'jj-forge review update' to refresh: %w", rev.ID, parentTrailer.Value, ErrHasParentTrailer)
+	if err := Validate(rev, reviewRecord,
+		RequireReviewExists,
+		RequireReviewOpen,
+		RequireUploaded(params.ForkRemote),
+		RequireNoParentTrailer,
+	); err != nil {
+		return nil, err
 	}
 	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {

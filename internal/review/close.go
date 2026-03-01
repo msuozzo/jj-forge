@@ -45,14 +45,12 @@ func Close(
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
-	if reviewRecord == nil {
-		return nil, fmt.Errorf("no review found for change %s", rev.ID)
-	}
-	if reviewRecord.Status == forge.ReviewStateClosed {
-		return nil, fmt.Errorf("review #%s for change %s is already closed", reviewRecord.ForgeID, rev.ID)
-	}
-	if reviewRecord.Status == forge.ReviewStateMerged {
-		return nil, fmt.Errorf("review #%s for change %s is already merged", reviewRecord.ForgeID, rev.ID)
+	if err := Validate(rev, reviewRecord,
+		RequireReviewExists,
+		RequireReviewNotClosed,
+		RequireReviewNotMerged,
+	); err != nil {
+		return nil, err
 	}
 	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {

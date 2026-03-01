@@ -335,8 +335,8 @@ func TestOpen_NotUploaded(t *testing.T) {
 		t.Fatal("expected error for not uploaded, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "was not uploaded") {
-		t.Errorf("expected 'was not uploaded' in error, got: %v", err)
+	if !errors.Is(err, ErrNotUploaded) {
+		t.Errorf("expected ErrNotUploaded, got: %v", err)
 	}
 
 	scenario.Verify()

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
@@ -42,11 +41,11 @@ func Open(
 		return nil, fmt.Errorf("failed to resolve revision %s: %w", params.Rev, err)
 	}
 	// Validate the change
-	if strings.TrimSpace(rev.Description) == "" {
-		return nil, fmt.Errorf("change %s has empty description. Add a description with: jj describe %s", rev.ID, rev.ID)
-	}
-	if !isUploaded(rev, params.ForkRemote) {
-		return nil, fmt.Errorf("change %s was not uploaded to %s; this is unexpected", rev.ID, params.ForkRemote)
+	if err := Validate(rev, nil,
+		RequireHasDescription,
+		RequireUploaded(params.ForkRemote),
+	); err != nil {
+		return nil, err
 	}
 	// Check if a review already exists
 	existingRecord, err := configMgr.GetReviewByChangeID(rev.ID)
