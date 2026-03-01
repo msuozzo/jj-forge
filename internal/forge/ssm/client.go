@@ -32,6 +32,8 @@ type Client struct {
 	tokenOnce sync.Once
 	token     string
 	tokenErr  error
+
+	pollDelay time.Duration // initial LRO poll delay; 0 uses default (500ms)
 }
 
 // NewClientFromURL creates a new SSM Client from a remote URL.
@@ -60,6 +62,7 @@ func newClientForTest(doer httpDoer, repoName, htmlURL string) *Client {
 		repoName:   repoName,
 		htmlURL:    htmlURL,
 		httpClient: doer,
+		pollDelay:  time.Nanosecond,
 		executor: func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 			return "fake-token", nil
 		},
@@ -171,7 +174,10 @@ func (c *Client) doLRO(ctx context.Context, method, path string, body io.Reader)
 
 // pollOperation polls an LRO by name until done, with exponential backoff.
 func (c *Client) pollOperation(ctx context.Context, opName string) (json.RawMessage, error) {
-	delay := 500 * time.Millisecond
+	delay := c.pollDelay
+	if delay == 0 {
+		delay = 500 * time.Millisecond
+	}
 	for {
 		select {
 		case <-ctx.Done():
