@@ -14,6 +14,10 @@ import (
 // has not been pushed to the fork remote.
 var ErrNotUploaded = errors.New("change not uploaded")
 
+// ErrHasParentTrailer is returned when a merge is attempted on a change that
+// still has a forge-parent annotation, indicating a parent should be merged first.
+var ErrHasParentTrailer = errors.New("change has forge-parent annotation")
+
 // MergeParams contains parameters for the merge command.
 type MergeParams struct {
 	Rev            string // Revset to merge review for
@@ -57,6 +61,9 @@ func Merge(
 	}
 	if !isUploaded(rev, params.ForkRemote) {
 		return nil, fmt.Errorf("change %s has local modifications not yet pushed to %s: %w", rev.ID, params.ForkRemote, ErrNotUploaded)
+	}
+	if parentTrailer, found := jj.GetTrailer(jj.ParseDescriptionTrailers(rev.Description), forge.ParentTrailerKey); found {
+		return nil, fmt.Errorf("change %s has a forge-parent annotation (parent: %s). Merge or close the parent review first, then run 'jj-forge review update' to refresh: %w", rev.ID, parentTrailer.Value, ErrHasParentTrailer)
 	}
 	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {

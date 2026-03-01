@@ -413,6 +413,73 @@ func TestMerge_NotUploaded(t *testing.T) {
 	scenario.Verify()
 }
 
+func TestMerge_HasParentTrailer(t *testing.T) {
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(jjtest.Commit{
+		ID:              "aaaaaaaaaaaa",
+		Parents:         []string{"root"},
+		Description:     "feat: test\n\nforge-parent: pppppppppppp\n",
+		IsMutable:       true,
+		RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+	})
+
+	fakeForge := github.NewFakeForge()
+
+	scenario := jjtest.NewScenario(t, repo,
+		// Pre-create review record
+		jjtest.Call{
+			Args:   []string{"config", "list", "--repo", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+		// Merge() call
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "@"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	err := configMgr.AddReviewRecord(forge.ReviewRecord{
+		ChangeID: "aaaaaaaaaaaa",
+		ForgeID:  "pr/1",
+		URL:      "https://github.com/owner/repo/pull/1",
+		Status:   forge.ReviewStateOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to add config record: %v", err)
+	}
+
+	_, err = Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+		Rev:            "@",
+		ForkRemote:     testRemote,
+		UpstreamRemote: "up",
+		UI:             testUI,
+	})
+
+	if err == nil {
+		t.Fatal("expected ErrHasParentTrailer, got nil")
+	}
+	if !errors.Is(err, ErrHasParentTrailer) {
+		t.Errorf("expected ErrHasParentTrailer, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "pppppppppppp") {
+		t.Errorf("expected parent ID in error message, got: %v", err)
+	}
+
+	scenario.Verify()
+}
+
 func TestMerge_ForgeError(t *testing.T) {
 	repo := jjtest.NewFakeRepo()
 	repo.AddCommits(jjtest.Commit{
