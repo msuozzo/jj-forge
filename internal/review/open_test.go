@@ -53,17 +53,13 @@ func TestOpen_Success(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
-		jjtest.Call{
-			// AddReviewRecord calls GetReviewRecords which calls getForgeConfig
-			Args:   []string{"config", "list", "--repo", "forge"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// AddReviewRecord: getForgeConfig is cached from above, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			// Verification: test calls GetReviewRecords to verify config was updated
+			// Verification: SaveRecords invalidated cache, so this re-reads
 			Args: []string{"config", "list", "--repo", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
@@ -166,10 +162,7 @@ func TestOpen_StripsTrailers(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
-		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -239,10 +232,7 @@ func TestOpen_StackedReview(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
-		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["bbbbbbbbbbbb\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -510,12 +500,7 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
-		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
-			Output: func(r *jjtest.FakeRepo) string {
-				return `forge.reviews = ["aaaaaaaaaaaa\npr/42\nhttps://github.com/owner/repo/pull/42\nclosed"]`
-			},
-		},
+		// AddReviewRecord: getForgeConfig is cached from GetReviewByChangeID above
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -591,10 +576,7 @@ func TestOpen_CrossRepo(t *testing.T) {
 				return "og git@github.com:fork-owner/repo.git\nup git@github.com:upstream-owner/repo.git\n"
 			},
 		},
-		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
-			Output: jjtest.EmptyOutput(),
-		},
+		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/upstream-owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),

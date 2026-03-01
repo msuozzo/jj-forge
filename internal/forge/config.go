@@ -87,7 +87,8 @@ func ParseCheckVerdict(s string) (CheckVerdict, error) {
 
 // ConfigManager handles reading and writing jj-forge configuration.
 type ConfigManager struct {
-	client jj.Client
+	client       jj.Client
+	cachedConfig *ForgeConfig
 }
 
 // NewConfigManager creates a new ConfigManager.
@@ -96,14 +97,21 @@ func NewConfigManager(client jj.Client) *ConfigManager {
 }
 
 // getForgeConfig retrieves the entire forge config section.
+// Results are cached for the lifetime of the ConfigManager instance;
+// any write operation invalidates the cache.
 func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
+	if m.cachedConfig != nil {
+		return m.cachedConfig, nil
+	}
 	output, err := m.client.Run(context.Background(), "config", "list", "--repo", "forge")
 	if err != nil {
 		return nil, err
 	}
 	output = strings.TrimSpace(output)
 	if output == "" {
-		return &ForgeConfig{}, nil
+		cfg := &ForgeConfig{}
+		m.cachedConfig = cfg
+		return cfg, nil
 	}
 	var wrapper struct {
 		ForgeConfig `toml:"forge,omitempty"`
@@ -111,7 +119,14 @@ func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
 	if err := toml.Unmarshal([]byte(output), &wrapper); err != nil {
 		return nil, fmt.Errorf("failed to parse forge config: %w", err)
 	}
-	return &wrapper.ForgeConfig, nil
+	m.cachedConfig = &wrapper.ForgeConfig
+	return m.cachedConfig, nil
+}
+
+// invalidateCache clears the cached config, forcing the next read to
+// fetch from the jj config store.
+func (m *ConfigManager) invalidateCache() {
+	m.cachedConfig = nil
 }
 
 // GetReviewRecords retrieves all forge review records from the config.
@@ -195,6 +210,7 @@ func (m *ConfigManager) SaveRecords(records []ReviewRecord) error {
 	arrayValue := strings.TrimSpace(tomlStr[startIdx:])
 	// Use jj config set to write the value
 	_, err = m.client.Run(context.Background(), "config", "set", "--repo", "forge.reviews", arrayValue)
+	m.invalidateCache()
 	return err
 }
 
@@ -350,5 +366,6 @@ func (m *ConfigManager) saveVerdicts(verdicts []CheckVerdict) error {
 	}
 	arrayValue := strings.TrimSpace(tomlStr[startIdx:])
 	_, err = m.client.Run(context.Background(), "config", "set", "--repo", "forge.checks", arrayValue)
+	m.invalidateCache()
 	return err
 }

@@ -530,3 +530,72 @@ func TestSetCheckVerdictsBatch(t *testing.T) {
 		t.Errorf("expected 2 config set calls, got %d", setCalls)
 	}
 }
+
+func TestConfigCaching(t *testing.T) {
+	t.Run("multiple reads use single subprocess call", func(t *testing.T) {
+		mock := newMockClient()
+		mock.config["default-reviewer"] = "\"alice\""
+		mock.config["check-command"] = "\"make test\""
+		mgr := NewConfigManager(mock)
+
+		// Multiple reads should result in a single config list call.
+		if _, err := mgr.GetDefaultReviewer(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := mgr.GetCheckCommand(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := mgr.GetReviewRecords(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := mgr.GetCheckVerdicts(); err != nil {
+			t.Fatal(err)
+		}
+
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		var listCalls int
+		for _, call := range mock.callLog {
+			if len(call) >= 2 && call[0] == "config" && call[1] == "list" {
+				listCalls++
+			}
+		}
+		if listCalls != 1 {
+			t.Errorf("expected 1 config list call (cached), got %d", listCalls)
+		}
+	})
+
+	t.Run("write invalidates cache", func(t *testing.T) {
+		mock := newMockClient()
+		mgr := NewConfigManager(mock)
+
+		// First read populates the cache.
+		if _, err := mgr.GetReviewRecords(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Write invalidates the cache.
+		if err := mgr.AddReviewRecord(ReviewRecord{ChangeID: "c1", ForgeID: "f1", URL: "u1", Status: "s1"}); err != nil {
+			t.Fatal(err)
+		}
+
+		// Next read should re-fetch from subprocess.
+		if _, err := mgr.GetReviewRecords(); err != nil {
+			t.Fatal(err)
+		}
+
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		var listCalls int
+		for _, call := range mock.callLog {
+			if len(call) >= 2 && call[0] == "config" && call[1] == "list" {
+				listCalls++
+			}
+		}
+		// 1 initial read + 1 read inside AddReviewRecord + 1 post-write read = 3
+		// But with caching: 1 initial + 0 (AddReviewRecord uses cache) + 1 (cache invalidated by write) = 2
+		if listCalls != 2 {
+			t.Errorf("expected 2 config list calls (cache invalidated by write), got %d", listCalls)
+		}
+	})
+}
