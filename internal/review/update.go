@@ -115,7 +115,7 @@ func UpdatePRLinks(
 	}
 
 	// Build parent/child map from forge-parent trailers
-	parentOf := make(map[string]string)     // changeID -> parent changeID
+	parentOf := make(map[string][]string)   // changeID -> parent changeIDs
 	childrenOf := make(map[string][]string) // changeID -> child changeIDs
 
 	stackIDs := make(map[string]bool)
@@ -125,10 +125,10 @@ func UpdatePRLinks(
 
 	for _, rev := range stack {
 		trailers := jj.ParseDescriptionTrailers(rev.Description)
-		parentTrailer, found := jj.GetTrailer(trailers, forge.ParentTrailerKey)
-		if found {
-			parentID := parentTrailer.Value
-			parentOf[rev.ID] = parentID
+		parentTrailers := jj.GetAllTrailers(trailers, forge.ParentTrailerKey)
+		for _, pt := range parentTrailers {
+			parentID := pt.Value
+			parentOf[rev.ID] = append(parentOf[rev.ID], parentID)
 			childrenOf[parentID] = append(childrenOf[parentID], rev.ID)
 		}
 	}
@@ -162,7 +162,7 @@ func UpdatePRLinks(
 		}
 		// Build parent links
 		var parentLinks []PRLink
-		if pID, ok := parentOf[rev.ID]; ok {
+		for _, pID := range parentOf[rev.ID] {
 			if pRec, ok := reviewByChange[pID]; ok {
 				pNum, err := forgeClient.ParseID(pRec.ForgeID)
 				if err == nil {

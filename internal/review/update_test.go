@@ -504,6 +504,160 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 	scenario.Verify()
 }
 
+func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
+	// Diamond: C has two parents (D, E) and two children (A, B).
+	//
+	//   A   B
+	//    \ /
+	//     C
+	//    / \
+	//   D   E
+	//
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{
+			ID:              "dddddddddddd",
+			Parents:         []string{"root"},
+			Description:     "feat: left root\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-dddddddddddd"},
+		},
+		jjtest.Commit{
+			ID:              "eeeeeeeeeeee",
+			Parents:         []string{"root"},
+			Description:     "feat: right root\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-eeeeeeeeeeee"},
+		},
+		jjtest.Commit{
+			ID:              "cccccccccccc",
+			Parents:         []string{"dddddddddddd", "eeeeeeeeeeee"},
+			Description:     "feat: merge\n\nforge-parent: dddddddddddd\nforge-parent: eeeeeeeeeeee\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-cccccccccccc"},
+		},
+		jjtest.Commit{
+			ID:              "aaaaaaaaaaaa",
+			Parents:         []string{"cccccccccccc"},
+			Description:     "feat: left leaf\n\nforge-parent: cccccccccccc\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+		},
+		jjtest.Commit{
+			ID:              "bbbbbbbbbbbb",
+			Parents:         []string{"cccccccccccc"},
+			Description:     "feat: right leaf\n\nforge-parent: cccccccccccc\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-bbbbbbbbbbbb"},
+		},
+	)
+
+	fakeForge := github.NewFakeForge()
+
+	revset := "::@ & mutable()"
+	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+
+	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa", "cccccccccccc", "eeeeeeeeeeee", "dddddddddddd"),
+		},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
+			Output: jjtest.LogOutput("root"),
+		},
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip sync (all synced)
+		// UpdatePRLinks phase
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa", "cccccccccccc", "eeeeeeeeeeee", "dddddddddddd"),
+		},
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["dddddddddddd\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "eeeeeeeeeeee\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen", "aaaaaaaaaaaa\npr/4\nhttps://github.com/owner/repo/pull/4\nopen", "bbbbbbbbbbbb\npr/5\nhttps://github.com/owner/repo/pull/5\nopen"]`
+			},
+		},
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "up git@github.com:owner/repo.git\n"
+			},
+		},
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	// Create reviews (numbered 1-5 in creation order: D, E, C, A, B)
+	for _, params := range []forge.ReviewCreateParams{
+		{Title: "feat: left root", Body: "Left root body", FromBranch: "push-dddddddddddd", ToBranch: "main"},
+		{Title: "feat: right root", Body: "Right root body", FromBranch: "push-eeeeeeeeeeee", ToBranch: "main"},
+		{Title: "feat: merge", Body: "Merge body", FromBranch: "push-cccccccccccc", ToBranch: "main"},
+		{Title: "feat: left leaf", Body: "Left leaf body", FromBranch: "push-aaaaaaaaaaaa", ToBranch: "main"},
+		{Title: "feat: right leaf", Body: "Right leaf body", FromBranch: "push-bbbbbbbbbbbb", ToBranch: "main"},
+	} {
+		if _, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", params); err != nil {
+			t.Fatalf("failed to create review: %v", err)
+		}
+	}
+
+	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+		Revset:         revset,
+		ForkRemote:     testRemote,
+		UpstreamRemote: "up",
+		UI:             testUI,
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	if result.PRsUpdated != 5 {
+		t.Errorf("expected 5 PRs updated, got %d", result.PRsUpdated)
+	}
+
+	rURL := "https://redirect.github.com/owner/repo/pull"
+
+	// D (#1): no parents, child C (#3)
+	dReview, _ := fakeForge.GetTestReview(1)
+	wantD := fmt.Sprintf("Left root body\n\n> Children: [#3](%s/3)", rURL)
+	if dReview.Body != wantD {
+		t.Errorf("PR #1 (D) body mismatch\n got: %q\nwant: %q", dReview.Body, wantD)
+	}
+
+	// E (#2): no parents, child C (#3)
+	eReview, _ := fakeForge.GetTestReview(2)
+	wantE := fmt.Sprintf("Right root body\n\n> Children: [#3](%s/3)", rURL)
+	if eReview.Body != wantE {
+		t.Errorf("PR #2 (E) body mismatch\n got: %q\nwant: %q", eReview.Body, wantE)
+	}
+
+	// C (#3): parents D (#1) and E (#2), children A (#4) and B (#5)
+	cReview, _ := fakeForge.GetTestReview(3)
+	wantC := fmt.Sprintf("Merge body\n\n> Parents: [#1](%s/1), [#2](%s/2)\n> Children: [#4](%s/4), [#5](%s/5)", rURL, rURL, rURL, rURL)
+	if cReview.Body != wantC {
+		t.Errorf("PR #3 (C) body mismatch\n got: %q\nwant: %q", cReview.Body, wantC)
+	}
+
+	// A (#4): parent C (#3), no children
+	aReview, _ := fakeForge.GetTestReview(4)
+	wantA := fmt.Sprintf("Left leaf body\n\n> Parents: [#3](%s/3)", rURL)
+	if aReview.Body != wantA {
+		t.Errorf("PR #4 (A) body mismatch\n got: %q\nwant: %q", aReview.Body, wantA)
+	}
+
+	// B (#5): parent C (#3), no children
+	bReview, _ := fakeForge.GetTestReview(5)
+	wantB := fmt.Sprintf("Right leaf body\n\n> Parents: [#3](%s/3)", rURL)
+	if bReview.Body != wantB {
+		t.Errorf("PR #5 (B) body mismatch\n got: %q\nwant: %q", bReview.Body, wantB)
+	}
+
+	scenario.Verify()
+}
+
 func TestUpdate_UploadError(t *testing.T) {
 	// Upload errors should propagate.
 	repo := jjtest.NewFakeRepo()

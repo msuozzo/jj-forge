@@ -71,20 +71,19 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 			result.SkippedAnonymous++
 			continue
 		}
-		// Determine the parent mutable change ID if it exists.
-		var mutableParentID string
+		// Determine all mutable parent change IDs.
+		var mutableParentIDs []string
 		for _, pID := range rev.Parents {
 			if pRev, ok := revmap[pID]; !ok {
 				return nil, fmt.Errorf("missing parent %s for %s", pID, rev.ID)
 			} else if pRev.IsMutable {
-				mutableParentID = pRev.ID
-				break
+				mutableParentIDs = append(mutableParentIDs, pRev.ID)
 			}
 		}
 		// Update trailers
 		var newDescription string
-		if mutableParentID != "" {
-			newDescription = forge.UpdateParentTrailer(rev.Description, mutableParentID)
+		if len(mutableParentIDs) > 0 {
+			newDescription = forge.UpdateParentTrailers(rev.Description, mutableParentIDs)
 		} else {
 			newDescription = forge.RemoveParentTrailer(rev.Description)
 		}

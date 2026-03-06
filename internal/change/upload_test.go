@@ -171,6 +171,69 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 	scenario.Verify()
 }
 
+func TestUpload_MultipleParents(t *testing.T) {
+	// C has two mutable parents A and B — should get two forge-parent trailers.
+	//   A   B
+	//    \ /
+	//     C
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{ID: "aaaaaaaaaaaa", Parents: []string{"root"}, IsMutable: true, Description: "A\n"},
+		jjtest.Commit{ID: "bbbbbbbbbbbb", Parents: []string{"root"}, IsMutable: true, Description: "B\n"},
+		jjtest.Commit{ID: "cccccccccccc", Parents: []string{"aaaaaaaaaaaa", "bbbbbbbbbbbb"}, IsMutable: true, Description: "C\n"},
+	)
+
+	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(mutable())~(mutable())"},
+			Output: jjtest.LogOutput("root"),
+		},
+		// A: no trailer (parent is immutable root)
+		// B: no trailer (parent is immutable root)
+		// C: gets two forge-parent trailers
+		jjtest.Call{
+			Args:       []string{"describe", "cccccccccccc", "--no-edit", "-m", "C\n\nforge-parent: aaaaaaaaaaaa\nforge-parent: bbbbbbbbbbbb\n"},
+			Output:     jjtest.EmptyOutput(),
+			SideEffect: jjtest.UpdateDescription("cccccccccccc", "C\n\nforge-parent: aaaaaaaaaaaa\nforge-parent: bbbbbbbbbbbb\n"),
+		},
+		// Push phase: re-resolve Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "mutable()"},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote, "--allow-new"},
+			Output: jjtest.EmptyOutput(),
+		},
+	)
+
+	client := scenario.Client()
+	result, err := Upload(context.Background(), client, "mutable()", testRemote, testUI)
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if result.Pushed != 3 {
+		t.Errorf("expected 3 pushes, got %d", result.Pushed)
+	}
+	if result.TrailersUpdated != 1 {
+		t.Errorf("expected 1 trailer update, got %d", result.TrailersUpdated)
+	}
+	scenario.Verify()
+}
+
 func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 	// B already has correct trailer - no describe call, but still pushes (not synced)
 	repo := jjtest.NewFakeRepo()

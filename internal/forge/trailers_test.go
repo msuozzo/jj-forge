@@ -2,43 +2,61 @@ package forge
 
 import "testing"
 
-func TestUpdateParentTrailer(t *testing.T) {
+func TestUpdateParentTrailers(t *testing.T) {
 	tests := []struct {
 		name        string
 		description string
-		parentID    string
+		parentIDs   []string
 		want        string
 	}{
 		{
 			name:        "empty description",
 			description: "",
-			parentID:    "abc123",
+			parentIDs:   []string{"abc123"},
 			want:        "forge-parent: abc123\n",
 		},
 		{
 			name:        "simple description",
 			description: "feat: add something",
-			parentID:    "abc123",
+			parentIDs:   []string{"abc123"},
 			want:        "feat: add something\n\nforge-parent: abc123\n",
 		},
 		{
 			name:        "update existing",
 			description: "feat: add something\n\nforge-parent: oldid\n",
-			parentID:    "newid",
+			parentIDs:   []string{"newid"},
 			want:        "feat: add something\n\nforge-parent: newid\n",
 		},
 		{
 			name:        "append to existing trailers",
 			description: "feat: add something\n\nSigned-off-by: Me <me@me.com>",
-			parentID:    "abc123",
+			parentIDs:   []string{"abc123"},
 			want:        "feat: add something\n\nSigned-off-by: Me <me@me.com>\nforge-parent: abc123\n",
+		},
+		{
+			name:        "multiple parents",
+			description: "feat: merge\n",
+			parentIDs:   []string{"parent1", "parent2"},
+			want:        "feat: merge\n\nforge-parent: parent1\nforge-parent: parent2\n",
+		},
+		{
+			name:        "replace single with multiple",
+			description: "feat: merge\n\nforge-parent: oldid\n",
+			parentIDs:   []string{"parent1", "parent2"},
+			want:        "feat: merge\n\nforge-parent: parent1\nforge-parent: parent2\n",
+		},
+		{
+			name:        "replace multiple with different",
+			description: "feat: merge\n\nforge-parent: old1\nforge-parent: old2\n",
+			parentIDs:   []string{"new1", "new2", "new3"},
+			want:        "feat: merge\n\nforge-parent: new1\nforge-parent: new2\nforge-parent: new3\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := UpdateParentTrailer(tt.description, tt.parentID); got != tt.want {
-				t.Errorf("UpdateParentTrailer() = %q, want %q", got, tt.want)
+			if got := UpdateParentTrailers(tt.description, tt.parentIDs); got != tt.want {
+				t.Errorf("UpdateParentTrailers() = %q, want %q", got, tt.want)
 			}
 		})
 	}

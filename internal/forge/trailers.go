@@ -58,18 +58,21 @@ func splitDescriptionAndTrailers(description string) (string, []jj.Trailer, bool
 	return body, trailers, true
 }
 
-// UpdateParentTrailer adds or updates the forge-parent trailer in the description.
-// It ensures that the trailer is placed in the trailer block at the end of the description.
-func UpdateParentTrailer(description, parentID string) string {
+// UpdateParentTrailers replaces all forge-parent trailers in the description
+// with trailers for the given parent IDs.
+func UpdateParentTrailers(description string, parentIDs []string) string {
 	body, trailers, hasTrailers := splitDescriptionAndTrailers(description)
 
-	// Use SetTrailer to add or update the forge-parent trailer
-	newTrailers := jj.SetTrailer(trailers, ParentTrailerKey, parentID)
+	// Remove all existing forge-parent trailers, then add one per parent.
+	newTrailers := jj.RemoveTrailer(trailers, ParentTrailerKey)
+	for _, id := range parentIDs {
+		newTrailers = jj.AddTrailer(newTrailers, ParentTrailerKey, id)
+	}
 
 	// Reconstruct the description
 	if body == "" && !hasTrailers {
 		// Empty description case
-		return jj.FormatTrailer(jj.Trailer{Key: ParentTrailerKey, Value: parentID}) + "\n"
+		return jj.FormatTrailers(newTrailers) + "\n"
 	}
 
 	if body == "" {
