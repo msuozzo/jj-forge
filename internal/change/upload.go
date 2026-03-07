@@ -138,6 +138,7 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 		return result, nil
 	}
 	// Use TaskTracker for progress display when pushing multiple changes.
+	fmt.Fprintf(u, "Pushing %d change(s)...\n", len(toPush))
 	taskNames := make([]string, len(toPush))
 	for i, item := range toPush {
 		taskNames[i] = item.rev.ID
