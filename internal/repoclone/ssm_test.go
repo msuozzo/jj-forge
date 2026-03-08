@@ -1,13 +1,18 @@
 package repoclone
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 func TestSSMRunner_InvalidURLFormat(t *testing.T) {
-	runner := NewSSMRunnerWithDeps(nil, &FakePrinter{})
+	var buf bytes.Buffer
+	u := ui.New(&buf, ui.ColorNever)
+	runner := NewSSMRunnerWithDeps(nil, u)
 	_, err := runner.Run(context.Background(), Params{
 		URL: "https://inst-897099121057.us-central1.sourcemanager.dev/ssci-demos/repo",
 	})

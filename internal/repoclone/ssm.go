@@ -8,6 +8,7 @@ import (
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge/ssm"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // SSMRunner orchestrates an SSM-specific clone operation.
@@ -15,28 +16,29 @@ import (
 // than GitHub: clone, rename remote, set trunk() alias, done.
 type SSMRunner struct {
 	jjExecutor cmd.Executor
-	printer    Printer
+	ui         *ui.UI
 }
 
 // NewSSMRunner creates an SSMRunner with default implementations.
-func NewSSMRunner() *SSMRunner {
+func NewSSMRunner(u *ui.UI) *SSMRunner {
 	return &SSMRunner{
 		jjExecutor: cmd.DefaultExecutor,
-		printer:    &DefaultPrinter{},
+		ui:         u,
 	}
 }
 
 // NewSSMRunnerWithDeps creates an SSMRunner with custom dependencies (for testing).
-func NewSSMRunnerWithDeps(jjExecutor cmd.Executor, printer Printer) *SSMRunner {
+func NewSSMRunnerWithDeps(jjExecutor cmd.Executor, u *ui.UI) *SSMRunner {
 	return &SSMRunner{
 		jjExecutor: jjExecutor,
-		printer:    printer,
+		ui:         u,
 	}
 }
 
 // Run executes the SSM clone operation.
 func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
-	r.printer.Info("Analyzing SSM repository...")
+	u := r.ui
+	fmt.Fprintf(u, "Analyzing SSM repository...\n")
 
 	// Parse and validate URL
 	_, _, _, repo, err := ssm.ParseSSMURL(params.URL)
@@ -58,51 +60,73 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 		return nil, fmt.Errorf("directory already exists: %s", clonePath)
 	}
 
-	// Clone the repository
-	r.printer.Step("Cloning repository...")
 	cloneURL := params.URL
-	_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "git", "clone", cloneURL, clonePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	absClonePath, err := filepath.Abs(clonePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path: %w", err)
-	}
-
-	// Rename origin to the configured remote name
 	remoteName := params.ForkRemote
 	if remoteName == "" {
 		remoteName = "og"
 	}
+
+	// Build task list
+	taskNames := []string{"Clone", "Configure remotes", "Configure trunk()"}
+	const (
+		taskClone   = 0
+		taskRemotes = 1
+		taskTrunk   = 2
+	)
+
+	fmt.Fprintf(u, "Cloning and configuring...\n")
+	tracker := ui.NewTaskTracker(u, taskNames)
+	tracker.Start()
+
+	// Clone the repository
+	tracker.SetStatus(taskClone, ui.TaskRunning)
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "git", "clone", cloneURL, clonePath)
+	if err != nil {
+		tracker.SetStatus(taskClone, ui.TaskFailed)
+		tracker.Finish()
+		return nil, fmt.Errorf("failed to clone repository: %w", err)
+	}
+	tracker.SetStatus(taskClone, ui.TaskDone)
+
+	// Configure remotes
+	tracker.SetStatus(taskRemotes, ui.TaskRunning)
+	absClonePath, err := filepath.Abs(clonePath)
+	if err != nil {
+		tracker.SetStatus(taskRemotes, ui.TaskFailed)
+		tracker.Finish()
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
 	if remoteName != "origin" {
 		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "rename", "origin", remoteName)...)
 		if err != nil {
+			tracker.SetStatus(taskRemotes, ui.TaskFailed)
+			tracker.Finish()
 			return nil, fmt.Errorf("failed to rename origin remote: %w", err)
 		}
 	}
-	r.printer.Success(fmt.Sprintf("Added remote '%s' → %s", remoteName, cloneURL))
-
-	// Determine default branch. Use "main" as a sensible default since we
-	// don't have a running SSM client in the clone flow.
-	defaultBranch := "main"
+	tracker.SetStatus(taskRemotes, ui.TaskDone)
 
 	// Configure trunk() alias
+	tracker.SetStatus(taskTrunk, ui.TaskRunning)
+	defaultBranch := "main"
 	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, remoteName)
 	_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)...)
 	if err != nil {
+		tracker.SetStatus(taskTrunk, ui.TaskFailed)
+		tracker.Finish()
 		return nil, fmt.Errorf("failed to configure trunk() alias: %w", err)
 	}
-	r.printer.Success(fmt.Sprintf("Configured trunk() → %s", trunkAlias))
+	tracker.SetStatus(taskTrunk, ui.TaskDone)
+	tracker.Finish()
 
 	// Print workflow summary
-	r.printer.Info("")
-	r.printer.Success("Configured PR-based workflow (SSM)")
-	r.printer.Info("")
-	r.printer.Info("Workflow: PR-based")
-	r.printer.Info("  Use 'jj-forge review open' to create PR (auto-uploads)")
-	r.printer.Info("  Use 'jj-forge review update' to sync content and update PR descriptions")
+	fmt.Fprintln(u)
+	fmt.Fprintf(u, "%s Configured PR-based workflow (SSM)\n", u.Styled("task_pass", "✓"))
+	fmt.Fprintln(u)
+	fmt.Fprintf(u, "Workflow: PR-based\n")
+	fmt.Fprintf(u, "  Use 'jj-forge review open' to create PR (auto-uploads)\n")
+	fmt.Fprintf(u, "  Use 'jj-forge review update' to sync content and update PR descriptions\n")
 
 	return &Result{
 		ClonePath:  clonePath,

@@ -761,9 +761,9 @@ Examples:
 			if forgeType == forge.ForgeTypeSSM {
 				var ssmRunner *repoclone.SSMRunner
 				if debugPrompt != "none" {
-					ssmRunner = repoclone.NewSSMRunnerWithDeps(newJJExecutor(), &repoclone.DefaultPrinter{})
+					ssmRunner = repoclone.NewSSMRunnerWithDeps(newJJExecutor(), stdoutUI)
 				} else {
-					ssmRunner = repoclone.NewSSMRunner()
+					ssmRunner = repoclone.NewSSMRunner(stdoutUI)
 				}
 				_, err := ssmRunner.Run(ctx, params)
 				return err
@@ -771,9 +771,9 @@ Examples:
 			var runner *repoclone.Runner
 			if debugPrompt != "none" {
 				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor(""))
-				runner = repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, &repoclone.DefaultPrinter{})
+				runner = repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, stdoutUI)
 			} else {
-				runner = repoclone.NewRunner()
+				runner = repoclone.NewRunner(stdoutUI)
 			}
 			_, err := runner.Run(ctx, params)
 			return err

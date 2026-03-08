@@ -1,6 +1,7 @@
 package repoclone
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // fakeGHExecutor builds a gh executor from a username and a map of
@@ -234,16 +236,6 @@ func (f *FakePrompter) Choose(prompt string, options []string, defaultIndex int)
 	return resp, nil
 }
 
-// FakePrinter for testing
-type FakePrinter struct {
-	messages []string
-}
-
-func (f *FakePrinter) Info(msg string)    { f.messages = append(f.messages, "INFO: "+msg) }
-func (f *FakePrinter) Success(msg string) { f.messages = append(f.messages, "SUCCESS: "+msg) }
-func (f *FakePrinter) Error(msg string)   { f.messages = append(f.messages, "ERROR: "+msg) }
-func (f *FakePrinter) Step(msg string)    { f.messages = append(f.messages, "STEP: "+msg) }
-
 // hasPrefix reports whether args starts with prefix.
 func hasPrefix(args, prefix []string) bool {
 	if len(args) < len(prefix) {
@@ -362,11 +354,13 @@ func TestRunner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jjExec, jjCmds := recordingJJExecutor()
+			var buf bytes.Buffer
+			u := ui.New(&buf, ui.ColorNever)
 			runner := NewRunnerWithDeps(
 				NewGitHubClientWithExecutor(fakeGHExecutor(t, "testuser", tt.repos)),
 				jjExec,
 				&FakePrompter{},
-				&FakePrinter{},
+				u,
 			)
 			result, err := runner.Run(context.Background(), tt.params)
 
