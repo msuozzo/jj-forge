@@ -364,6 +364,15 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
+			// Detect forge type and adjust remotes before pushing
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, openUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			// For forges without fork support, use upstream as fork remote
+			if !forgeClient.SupportsForks() {
+				openForkRemote = openUpstreamRemote
+			}
 			// Phase 3: Push
 			// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
 			var preResolved []*jj.Rev
@@ -396,14 +405,6 @@ use 'review open' and 'review submit' instead.`,
 					return fmt.Errorf("failed to resolve revset: %w", err)
 				}
 				slices.Reverse(revs) // parent-first (topological) order
-			}
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, openUpstreamRemote)
-			if err != nil {
-				return err
-			}
-			// For forges without fork support, use upstream as fork remote
-			if !forgeClient.SupportsForks() {
-				openForkRemote = openUpstreamRemote
 			}
 			// Get reviewers (flag or config default)
 			reviewers := openReviewers
