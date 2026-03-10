@@ -65,6 +65,10 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 	if remoteName == "" {
 		remoteName = "og"
 	}
+	upstreamRemote := params.UpstreamRemote
+	if upstreamRemote == "" {
+		upstreamRemote = "up"
+	}
 
 	// Build task list
 	taskNames := []string{"Clone", "Configure remotes", "Configure trunk()"}
@@ -105,12 +109,38 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 			return nil, fmt.Errorf("failed to rename origin remote: %w", err)
 		}
 	}
+	// Add upstream remote pointing to the same URL (SSM uses no forks)
+	if upstreamRemote != remoteName {
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "git", "remote", "add", upstreamRemote, cloneURL)...)
+		if err != nil {
+			tracker.SetStatus(taskRemotes, ui.TaskFailed)
+			tracker.Finish()
+			return nil, fmt.Errorf("failed to add upstream remote: %w", err)
+		}
+	}
+	// Configure git.fetch and git.push
+	if upstreamRemote != remoteName {
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "git.fetch", fmt.Sprintf("['%s', '%s']", upstreamRemote, remoteName))...)
+	} else {
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "git.fetch", remoteName)...)
+	}
+	if err != nil {
+		tracker.SetStatus(taskRemotes, ui.TaskFailed)
+		tracker.Finish()
+		return nil, fmt.Errorf("failed to set fetch remote(s): %w", err)
+	}
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "git.push", remoteName)...)
+	if err != nil {
+		tracker.SetStatus(taskRemotes, ui.TaskFailed)
+		tracker.Finish()
+		return nil, fmt.Errorf("failed to set push remote: %w", err)
+	}
 	tracker.SetStatus(taskRemotes, ui.TaskDone)
 
 	// Configure trunk() alias
 	tracker.SetStatus(taskTrunk, ui.TaskRunning)
 	defaultBranch := "main"
-	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, remoteName)
+	trunkAlias := fmt.Sprintf("%s@%s", defaultBranch, upstreamRemote)
 	_, err = r.jjExecutor(ctx, cmd.Opts{}, append([]string{"jj", "-R", absClonePath}, "config", "set", "--repo", "revset-aliases.\"trunk()\"", trunkAlias)...)
 	if err != nil {
 		tracker.SetStatus(taskTrunk, ui.TaskFailed)
@@ -129,8 +159,9 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 	fmt.Fprintf(u, "  Use 'jj-forge review update' to sync content and update PR descriptions\n")
 
 	return &Result{
-		ClonePath:  clonePath,
-		Workflow:   WorkflowPR,
-		ForkRemote: remoteName,
+		ClonePath:    clonePath,
+		Workflow:     WorkflowPR,
+		ForkRemote:   remoteName,
+		UpstreamName: upstreamRemote,
 	}, nil
 }
