@@ -76,7 +76,7 @@ func (c *Client) prName(number int) string {
 
 // prURL builds the web UI URL for a pull request.
 func (c *Client) prURL(number int) string {
-	return fmt.Sprintf("%s/-/pull/%d", c.htmlURL, number)
+	return fmt.Sprintf("%s/pulls/%d", c.htmlURL, number)
 }
 
 // parsePRNumber extracts the PR number from a resource name.

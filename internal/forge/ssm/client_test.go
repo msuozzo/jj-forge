@@ -71,8 +71,8 @@ func TestGetReview_Success(t *testing.T) {
 	if review.State != forge.ReviewStateOpen {
 		t.Errorf("expected state open, got %s", review.State)
 	}
-	if review.URL != testHTMLURL+"/-/pull/42" {
-		t.Errorf("expected URL %s, got %s", testHTMLURL+"/-/pull/42", review.URL)
+	if review.URL != testHTMLURL+"/pulls/42" {
+		t.Errorf("expected URL %s, got %s", testHTMLURL+"/pulls/42", review.URL)
 	}
 }
 
@@ -347,8 +347,8 @@ func TestCreateReview_Success(t *testing.T) {
 	if result.Number != 99 {
 		t.Errorf("expected number 99, got %d", result.Number)
 	}
-	if result.URL != testHTMLURL+"/-/pull/99" {
-		t.Errorf("expected URL %s, got %s", testHTMLURL+"/-/pull/99", result.URL)
+	if result.URL != testHTMLURL+"/pulls/99" {
+		t.Errorf("expected URL %s, got %s", testHTMLURL+"/pulls/99", result.URL)
 	}
 }
 

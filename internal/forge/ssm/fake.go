@@ -53,7 +53,7 @@ func (f *FakeForge) CreateReview(_ context.Context, repoURI string, params forge
 	number := f.nextNumber
 	f.nextNumber++
 
-	url := fmt.Sprintf("%s/-/pull/%d", repoURI, number)
+	url := fmt.Sprintf("%s/pulls/%d", repoURI, number)
 
 	review := &Review{
 		Number: number,
