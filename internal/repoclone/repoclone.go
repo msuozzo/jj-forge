@@ -296,6 +296,12 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 			tracker.Finish()
 			return nil, fmt.Errorf("failed to add upstream remote: %w", err)
 		}
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "git", "fetch", "--remote", params.UpstreamRemote)
+		if err != nil {
+			tracker.SetStatus(taskUpstream, ui.TaskFailed)
+			tracker.Finish()
+			return nil, fmt.Errorf("failed to fetch from upstream: %w", err)
+		}
 		result.UpstreamName = params.UpstreamRemote
 		tracker.SetStatus(taskUpstream, ui.TaskDone)
 	}
