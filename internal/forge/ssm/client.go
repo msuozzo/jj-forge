@@ -25,7 +25,7 @@ type httpDoer interface {
 type Client struct {
 	baseURL    string       // https://securesourcemanager.googleapis.com/v1
 	repoName   string       // projects/P/locations/L/repositories/R
-	htmlURL    string       // https://{instance}-git.{location}.sourcemanager.dev/{project}/{repo}
+	htmlURL    string       // https://{instance}.{location}.sourcemanager.dev/{project}/{repo}
 	httpClient httpDoer     // interface for testability
 	executor   cmd.Executor // for `gcloud auth print-access-token`
 
@@ -44,7 +44,7 @@ func NewClientFromURL(ctx context.Context, url string, executor cmd.Executor) (*
 		return nil, fmt.Errorf("invalid SSM URL: %w", err)
 	}
 	repoName := ResourceName(project, location, repo)
-	htmlURL := fmt.Sprintf("https://%s-git.%s.sourcemanager.dev/%s/%s", instance, location, project, repo)
+	htmlURL := fmt.Sprintf("https://%s.%s.sourcemanager.dev/%s/%s", instance, location, project, repo)
 
 	return &Client{
 		baseURL:    "https://securesourcemanager.googleapis.com/v1",
