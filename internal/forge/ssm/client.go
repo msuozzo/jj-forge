@@ -211,7 +211,7 @@ type pullRequestJSON struct {
 	Body  string    `json:"body"`
 	Head  branchRef `json:"head"`
 	Base  branchRef `json:"base"`
-	State string    `json:"state"`
+	State string    `json:"state,omitempty"`
 }
 
 type branchRef struct {
