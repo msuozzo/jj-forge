@@ -716,6 +716,7 @@ use 'review open' and 'review submit' instead.`,
 
 	var cloneForkRemote, cloneUpstreamRemote string
 	var cloneUseHTTPS, cloneNoFork bool
+	var cloneTrackBranches []string
 	cloneCmd := &cobra.Command{
 		Use:   "clone <url> [path]",
 		Short: "Clone repository with intelligent workflow detection",
@@ -756,6 +757,7 @@ Examples:
 				UpstreamRemote: cloneUpstreamRemote,
 				UseHTTPS:       cloneUseHTTPS,
 				NoFork:         cloneNoFork,
+				TrackBranches:  cloneTrackBranches,
 			}
 			// Dispatch to SSM clone flow for SSM URLs
 			forgeType, _ := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
@@ -784,6 +786,7 @@ Examples:
 	cloneCmd.Flags().StringVar(&cloneUpstreamRemote, "upstream-remote", "up", "Name for upstream remote")
 	cloneCmd.Flags().BoolVar(&cloneUseHTTPS, "https", false, "Use HTTPS instead of SSH for remotes")
 	cloneCmd.Flags().BoolVar(&cloneNoFork, "no-fork", false, "Don't create fork for external repos (fail instead)")
+	cloneCmd.Flags().StringArrayVar(&cloneTrackBranches, "track-branches", []string{"push-*"}, "Glob patterns for branches to track from fork remote (repeatable)")
 
 	var rulesetUpstreamRemote string
 	setupRulesetCmd := &cobra.Command{

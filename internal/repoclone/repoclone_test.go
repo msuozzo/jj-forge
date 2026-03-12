@@ -331,6 +331,57 @@ func TestRunner(t *testing.T) {
 			},
 		},
 		{
+			name: "personal non-fork with track-branches",
+			repos: map[string]string{
+				"repos/testuser/my-project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:testuser/my-project.git", "clone_url": "https://github.com/testuser/my-project.git", "default_branch": "main"}`,
+			},
+			params: Params{
+				URL:            "git@github.com:testuser/my-project.git",
+				Path:           "/tmp/test-clone",
+				ForkRemote:     "og",
+				UpstreamRemote: "up",
+				TrackBranches:  []string{"push-*"},
+			},
+			wantResult: &Result{
+				ClonePath: "/tmp/test-clone", Workflow: WorkflowMain, ForkRemote: "og",
+			},
+			wantJJ: [][]string{
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "og"},
+				{"jj", "-R", "/tmp/test-clone", "bookmark", "track", "push-*", "--remote", "og"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "og"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@og"},
+			},
+		},
+		{
+			name: "personal fork with multiple track-branches",
+			repos: map[string]string{
+				"repos/testuser/forked-project":       `{"fork": true, "parent_owner": "upstream-owner", "parent_name": "forked-project", "ssh_url": "git@github.com:testuser/forked-project.git", "clone_url": "https://github.com/testuser/forked-project.git", "default_branch": "main"}`,
+				"repos/upstream-owner/forked-project": `{"ssh_url": "git@github.com:upstream-owner/forked-project.git", "clone_url": "https://github.com/upstream-owner/forked-project.git", "default_branch": "main"}`,
+			},
+			params: Params{
+				URL:            "git@github.com:testuser/forked-project.git",
+				Path:           "/tmp/test-clone",
+				ForkRemote:     "og",
+				UpstreamRemote: "up",
+				TrackBranches:  []string{"push-*", "feature-*"},
+			},
+			wantResult: &Result{
+				ClonePath: "/tmp/test-clone", Workflow: WorkflowPR, ForkRemote: "og", UpstreamName: "up",
+			},
+			wantJJ: [][]string{
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "rename"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "og"},
+				{"jj", "-R", "/tmp/test-clone", "git", "remote", "add"},
+				{"jj", "-R", "/tmp/test-clone", "git", "fetch", "--remote", "up"},
+				{"jj", "-R", "/tmp/test-clone", "bookmark", "track", "push-*", "feature-*", "--remote", "og"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "['up', 'og']"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
+			},
+		},
+		{
 			name: "external repo with --no-fork",
 			repos: map[string]string{
 				"repos/external/project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:external/project.git", "clone_url": "https://github.com/external/project.git"}`,

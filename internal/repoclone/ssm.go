@@ -71,12 +71,23 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 	}
 
 	// Build task list
-	taskNames := []string{"Clone", "Configure remotes", "Configure trunk()"}
+	needsTrackBranches := len(params.TrackBranches) > 0
+	taskNames := []string{"Clone", "Configure remotes"}
+	if needsTrackBranches {
+		taskNames = append(taskNames, "Track branches")
+	}
+	taskNames = append(taskNames, "Configure trunk()")
 	const (
 		taskClone   = 0
 		taskRemotes = 1
-		taskTrunk   = 2
 	)
+	nextTask := 2
+	taskTrackBranches := -1
+	if needsTrackBranches {
+		taskTrackBranches = nextTask
+		nextTask++
+	}
+	taskTrunk := nextTask
 
 	fmt.Fprintf(u, "Cloning and configuring...\n")
 	tracker := ui.NewTaskTracker(u, taskNames)
@@ -136,6 +147,20 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 		return nil, fmt.Errorf("failed to set push remote: %w", err)
 	}
 	tracker.SetStatus(taskRemotes, ui.TaskDone)
+
+	// Track branches from fork remote
+	if needsTrackBranches {
+		tracker.SetStatus(taskTrackBranches, ui.TaskRunning)
+		trackArgs := append([]string{"jj", "-R", absClonePath, "bookmark", "track"}, params.TrackBranches...)
+		trackArgs = append(trackArgs, "--remote", remoteName)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, trackArgs...)
+		if err != nil {
+			tracker.SetStatus(taskTrackBranches, ui.TaskFailed)
+			tracker.Finish()
+			return nil, fmt.Errorf("failed to track branches: %w", err)
+		}
+		tracker.SetStatus(taskTrackBranches, ui.TaskDone)
+	}
 
 	// Configure trunk() alias
 	tracker.SetStatus(taskTrunk, ui.TaskRunning)

@@ -23,12 +23,13 @@ const (
 
 // Params holds the parameters for the clone command.
 type Params struct {
-	URL            string // Repository URL to clone
-	Path           string // Clone to this path (empty = default to repo name)
-	ForkRemote     string // Name for fork/personal remote (default: "og")
-	UpstreamRemote string // Name for upstream remote (default: "up")
-	UseHTTPS       bool   // Use HTTPS instead of SSH for remotes
-	NoFork         bool   // Don't create fork for external repos (fail instead)
+	URL            string   // Repository URL to clone
+	Path           string   // Clone to this path (empty = default to repo name)
+	ForkRemote     string   // Name for fork/personal remote (default: "og")
+	UpstreamRemote string   // Name for upstream remote (default: "up")
+	UseHTTPS       bool     // Use HTTPS instead of SSH for remotes
+	NoFork         bool     // Don't create fork for external repos (fail instead)
+	TrackBranches  []string // Glob patterns for branches to track from fork remote (e.g. "push-*")
 }
 
 // Result contains the outcome of the clone operation.
@@ -213,6 +214,10 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 	if needsUpstream {
 		taskNames = append(taskNames, "Add upstream")
 	}
+	needsTrackBranches := len(params.TrackBranches) > 0
+	if needsTrackBranches {
+		taskNames = append(taskNames, "Track branches")
+	}
 	taskNames = append(taskNames, "Configure trunk()")
 
 	const (
@@ -220,11 +225,17 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 		taskRemotes = 1
 	)
 	taskUpstream := -1
-	taskTrunk := 2
+	nextTask := 2
 	if needsUpstream {
-		taskUpstream = 2
-		taskTrunk = 3
+		taskUpstream = nextTask
+		nextTask++
 	}
+	taskTrackBranches := -1
+	if needsTrackBranches {
+		taskTrackBranches = nextTask
+		nextTask++
+	}
+	taskTrunk := nextTask
 
 	fmt.Fprintf(u, "Cloning and configuring...\n")
 	tracker := ui.NewTaskTracker(u, taskNames)
@@ -304,6 +315,21 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 		}
 		result.UpstreamName = params.UpstreamRemote
 		tracker.SetStatus(taskUpstream, ui.TaskDone)
+	}
+
+	// Track branches from fork remote
+	if needsTrackBranches {
+		tracker.SetStatus(taskTrackBranches, ui.TaskRunning)
+		trackArgs := []string{"jj", "-R", absClonePath, "bookmark", "track"}
+		trackArgs = append(trackArgs, params.TrackBranches...)
+		trackArgs = append(trackArgs, "--remote", params.ForkRemote)
+		_, err = r.jjExecutor(ctx, cmd.Opts{}, trackArgs...)
+		if err != nil {
+			tracker.SetStatus(taskTrackBranches, ui.TaskFailed)
+			tracker.Finish()
+			return nil, fmt.Errorf("failed to track branches: %w", err)
+		}
+		tracker.SetStatus(taskTrackBranches, ui.TaskDone)
 	}
 
 	// Configure fetch remotes
