@@ -1,6 +1,8 @@
 package check
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +18,17 @@ const lockFileName = "check.lock"
 
 type lockFile struct {
 	path string
+}
+
+// lockContention is returned by tryAcquire when the lock is held by a live process.
+type lockContention struct {
+	pid  int
+	age  time.Duration
+	path string
+}
+
+func (e *lockContention) Error() string {
+	return fmt.Sprintf("another jj-forge change check is running (pid %d, started %s ago)", e.pid, e.age)
 }
 
 func acquireLock(dir string) (*lockFile, error) {
@@ -40,10 +53,7 @@ func tryAcquire(path string, isRetry bool) (*lockFile, error) {
 	}
 	// Lock file exists — check if stale.
 	if isRetry {
-		return nil, &ui.UserError{
-			Msg:  "another jj-forge change check is running",
-			Hint: fmt.Sprintf("if this is stale, remove %s", path),
-		}
+		return nil, &lockContention{path: path}
 	}
 	data, readErr := os.ReadFile(path)
 	if readErr != nil {
@@ -71,9 +81,39 @@ func tryAcquire(path string, isRetry bool) (*lockFile, error) {
 	}
 	// Process alive — real contention.
 	age := time.Since(time.Unix(ts, 0)).Truncate(time.Second)
-	return nil, &ui.UserError{
-		Msg:  fmt.Sprintf("another jj-forge change check is running (pid %d, started %s ago)", pid, age),
-		Hint: fmt.Sprintf("if this is stale, remove %s", path),
+	return nil, &lockContention{pid: pid, age: age, path: path}
+}
+
+// acquireLockWait polls until the check lock can be acquired. If the lock is
+// held by another process, it prints a waiting message and retries every 500ms.
+func acquireLockWait(ctx context.Context, dir string, u *ui.UI) (*lockFile, error) {
+	path := filepath.Join(dir, lockFileName)
+	lf, err := tryAcquire(path, false)
+	if err == nil {
+		return lf, nil
+	}
+	var lc *lockContention
+	if !errors.As(err, &lc) {
+		return nil, err
+	}
+	lastPID := 0
+	for {
+		if lc.pid != lastPID {
+			fmt.Fprintf(u, "Waiting for running check to complete (pid %d)...\n", lc.pid)
+			lastPID = lc.pid
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+		lf, err = tryAcquire(path, false)
+		if err == nil {
+			return lf, nil
+		}
+		if !errors.As(err, &lc) {
+			return nil, err
+		}
 	}
 }
 

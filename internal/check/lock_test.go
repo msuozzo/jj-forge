@@ -1,6 +1,7 @@
 package check
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -62,12 +63,9 @@ func TestAcquireLock_AlreadyHeld(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on second acquire, got nil")
 	}
-	var ue *ui.UserError
-	if !errors.As(err, &ue) {
-		t.Fatalf("expected *ui.UserError, got %T: %v", err, err)
-	}
-	if ue.Hint == "" {
-		t.Error("expected non-empty hint")
+	var lc *lockContention
+	if !errors.As(err, &lc) {
+		t.Fatalf("expected *lockContention, got %T: %v", err, err)
 	}
 }
 
@@ -149,5 +147,53 @@ func TestRelease_Nil(t *testing.T) {
 	var lock *lockFile
 	if err := lock.release(); err != nil {
 		t.Errorf("nil release should return nil, got %v", err)
+	}
+}
+
+func TestAcquireLockWait_NoContention(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	u := ui.New(os.Stdout, ui.ColorNever)
+	lock, err := acquireLockWait(context.Background(), dir, u)
+	if err != nil {
+		t.Fatalf("acquireLockWait failed: %v", err)
+	}
+	defer lock.release()
+}
+
+func TestAcquireLockWait_WaitsForRelease(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	u := ui.New(os.Stdout, ui.ColorNever)
+
+	// Acquire the lock in the main goroutine.
+	lock, err := acquireLock(dir)
+	if err != nil {
+		t.Fatalf("acquireLock failed: %v", err)
+	}
+
+	// Start a goroutine that waits for the lock.
+	type result struct {
+		lock *lockFile
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		lf, err := acquireLockWait(context.Background(), dir, u)
+		ch <- result{lf, err}
+	}()
+
+	// Give the waiter time to start polling, then release.
+	time.Sleep(100 * time.Millisecond)
+	lock.release()
+
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			t.Fatalf("acquireLockWait failed: %v", r.err)
+		}
+		defer r.lock.release()
+	case <-time.After(5 * time.Second):
+		t.Fatal("acquireLockWait did not return after lock was released")
 	}
 }

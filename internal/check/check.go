@@ -84,7 +84,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return err
 	}
-	lock, err := acquireLock(forgeDir)
+	lock, err := acquireLockWait(ctx, forgeDir, u)
 	if err != nil {
 		return err
 	}
