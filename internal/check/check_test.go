@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
@@ -21,12 +22,13 @@ var testUI = ui.New(io.Discard, ui.ColorNever)
 
 // mockClient implements jj.Client for testing.
 type mockClient struct {
-	mu      sync.Mutex
-	config  map[string]string
-	revs    []*jj.Rev
-	root    string
-	gitDir  string
-	callLog [][]string
+	mu       sync.Mutex
+	config   map[string]string
+	revs     []*jj.Rev
+	revsFunc func(ctx context.Context, revset string) ([]*jj.Rev, error) // if set, overrides revs
+	root     string
+	gitDir   string
+	callLog  [][]string
 }
 
 func newMockClient(revs []*jj.Rev) *mockClient {
@@ -92,7 +94,14 @@ func (m *mockClient) Rev(ctx context.Context, rev string) (*jj.Rev, error) {
 }
 
 func (m *mockClient) Revs(ctx context.Context, revset string) ([]*jj.Rev, error) {
-	return m.revs, nil
+	m.mu.Lock()
+	fn := m.revsFunc
+	revs := m.revs
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, revset)
+	}
+	return revs, nil
 }
 
 func (m *mockClient) Root(ctx context.Context) (string, error) {
@@ -644,5 +653,64 @@ func TestRunMixedMutability(t *testing.T) {
 	}
 	if verdict != nil {
 		t.Errorf("immutable revision c2 should not have a verdict, got %v", verdict)
+	}
+}
+
+func TestRunDriftCancellation(t *testing.T) {
+	t.Parallel()
+	// Speed up drift polling for test.
+	origInterval := driftPollInterval
+	driftPollInterval = 100 * time.Millisecond
+	defer func() { driftPollInterval = origInterval }()
+
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
+	mock := newMockClient(revs)
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	// The runner blocks until context is cancelled (simulating a long-running check).
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "sh -c echo hello") {
+			<-ctx.Done()
+			return "", ctx.Err()
+		}
+		// Materialization commands
+		return "fake-data", nil
+	}
+
+	// After the first Revs call (for initial resolution), subsequent calls
+	// return a different commit ID to simulate the user amending.
+	var callCount atomic.Int32
+	mock.revsFunc = func(ctx context.Context, revset string) ([]*jj.Rev, error) {
+		n := callCount.Add(1)
+		if n == 1 {
+			// Initial resolution
+			return []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}, nil
+		}
+		// Drift: commit ID changed
+		return []*jj.Rev{{ID: "c1", CommitID: "def456", IsMutable: true}}, nil
+	}
+
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify no verdict was written (drift = skip verdict).
+	verdict, err := configMgr.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
+	}
+	// The "running" verdict was set before execution, but the drift cancellation
+	// should not overwrite it with pass/fail. It stays as "running".
+	if verdict != nil && verdict.Verdict == forge.CheckVerdictPass {
+		t.Errorf("expected no pass verdict for drifted check, got %q", verdict.Verdict)
 	}
 }

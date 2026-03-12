@@ -2,16 +2,23 @@ package check
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
+
+// driftPollInterval controls how often the drift watcher polls jj for
+// commit ID changes. Exported for testing.
+var driftPollInterval = 1 * time.Second
 
 // Run executes the configured check command against the given revset.
 //
@@ -21,6 +28,10 @@ import (
 //
 // Multiple revisions are checked in parallel by materializing them into
 // persistent pool directories using the backing git store.
+//
+// A background watcher polls jj for commit ID drift. If a change's commit ID
+// changes while its check is pending or running (e.g. user amended), the
+// goroutine is cancelled and its pool slot freed.
 func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset string, force bool, runner cmd.Executor, u *ui.UI) error {
 	// Read check command from config
 	checkCmd, err := configMgr.GetCheckCommand()
@@ -43,26 +54,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return nil
 	}
 	// Filter out revisions with cached passing verdicts (batch)
-	var toCheck []*jj.Rev
-	if force {
-		toCheck = revs
-	} else {
-		verdicts, err := configMgr.GetCheckVerdicts()
-		if err != nil {
-			return fmt.Errorf("failed to get verdicts: %w", err)
-		}
-		for _, rev := range revs {
-			i := slices.IndexFunc(verdicts, func(v forge.CheckVerdict) bool {
-				return v.ChangeID == rev.ID
-			})
-			if i != -1 {
-				if verdict := verdicts[i]; verdict.Verdict == forge.CheckVerdictPass && verdict.CommitID == rev.CommitID {
-					continue // skip cached pass
-				}
-			}
-			toCheck = append(toCheck, rev)
-		}
-	}
+	toCheck := filterCached(revs, configMgr, force)
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
@@ -89,6 +81,13 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return err
 	}
 	defer lock.release()
+	// Re-filter after lock acquisition: the previous holder may have completed
+	// some checks while we waited.
+	toCheck = filterCached(toCheck, configMgr, force)
+	if len(toCheck) == 0 {
+		tracker.Finish()
+		return nil
+	}
 	// Write "running" verdicts before starting execution.
 	var runningVerdicts []forge.CheckVerdict
 	for _, rev := range toCheck {
@@ -125,33 +124,99 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return fmt.Errorf("failed to create work pool: %w", err)
 	}
-	// Run checks in parallel, streaming verdicts as they complete.
+	// Run checks in parallel with per-goroutine cancellation.
 	type result struct {
 		rev *jj.Rev
 		err error
 	}
 	resultCh := make(chan result, len(toCheck))
+
+	// Per-goroutine handles for drift cancellation.
+	var mu sync.Mutex
+	type goroutineHandle struct {
+		rev    *jj.Rev
+		cancel context.CancelFunc
+	}
+	handles := make(map[string]*goroutineHandle, len(toCheck))
+
 	for _, rev := range toCheck {
+		gctx, cancel := context.WithCancel(ctx)
+		mu.Lock()
+		handles[rev.ID] = &goroutineHandle{rev: rev, cancel: cancel}
+		mu.Unlock()
 		go func() {
-			wd, err := pool.Acquire(ctx)
+			defer func() {
+				mu.Lock()
+				delete(handles, rev.ID)
+				mu.Unlock()
+			}()
+			wd, err := pool.Acquire(gctx)
 			if err != nil {
-				resultCh <- result{rev: rev, err: fmt.Errorf("failed to acquire pool directory: %w", err)}
+				resultCh <- result{rev: rev, err: err}
 				return
 			}
 			defer pool.Release(wd)
 			tracker.SetStatus(revIndex[rev.ID], ui.TaskRunning)
-			resultCh <- result{rev: rev, err: runInDir(ctx, pool, runner, wd, rev.CommitID, checkCmd)}
+			err = runInDir(gctx, pool, runner, wd, rev.CommitID, checkCmd)
+			if err != nil && gctx.Err() != nil {
+				err = gctx.Err()
+			}
+			resultCh <- result{rev: rev, err: err}
 		}()
 	}
+
+	// Start drift watcher: polls jj for commit ID changes and cancels
+	// goroutines whose changes have been amended.
+	watchCtx, watchCancel := context.WithCancel(ctx)
+	go func() {
+		defer watchCancel()
+		ticker := time.NewTicker(driftPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-watchCtx.Done():
+				return
+			case <-ticker.C:
+			}
+			mu.Lock()
+			if len(handles) == 0 {
+				mu.Unlock()
+				return
+			}
+			ids := make([]string, 0, len(handles))
+			for id := range handles {
+				ids = append(ids, id)
+			}
+			mu.Unlock()
+
+			batchRevset := strings.Join(ids, "|")
+			currentRevs, err := client.Revs(watchCtx, batchRevset)
+			if err != nil {
+				continue // jj call failed, retry next tick
+			}
+			currentByID := make(map[string]string, len(currentRevs))
+			for _, r := range currentRevs {
+				currentByID[r.ID] = r.CommitID
+			}
+
+			mu.Lock()
+			for id, h := range handles {
+				if currentCommit, ok := currentByID[id]; ok && currentCommit != h.rev.CommitID {
+					h.cancel()
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+
 	// Store verdicts as they arrive and collect errors.
 	var failures []string
 	for range len(toCheck) {
-		var r result
-		select {
-		case r = <-resultCh:
-		case <-ctx.Done():
-			tracker.Finish()
-			return ctx.Err()
+		r := <-resultCh
+		// Context cancellation means drift (or parent cancellation) — skip verdict.
+		if r.err != nil && errors.Is(r.err, context.Canceled) {
+			tracker.SetStatus(revIndex[r.rev.ID], ui.TaskSkipped)
+			continue
 		}
 		verdictStr := forge.CheckVerdictPass
 		taskStatus := ui.TaskDone
@@ -166,6 +231,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 			CommitID: r.rev.CommitID,
 		}); err != nil {
 			tracker.Finish()
+			watchCancel()
 			return fmt.Errorf("failed to store check verdict: %w", err)
 		}
 		outstanding = slices.DeleteFunc(outstanding, func(rev *jj.Rev) bool {
@@ -176,10 +242,37 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		}
 	}
 	tracker.Finish()
+	watchCancel()
 	if len(failures) > 0 {
 		return fmt.Errorf("check command failed for: %s", strings.Join(failures, ", "))
 	}
 	return nil
+}
+
+// filterCached returns the subset of revs that need checking. When force is
+// true all revs are returned. Otherwise, revisions with a cached passing
+// verdict whose commit ID matches are filtered out.
+func filterCached(revs []*jj.Rev, configMgr *forge.ConfigManager, force bool) []*jj.Rev {
+	if force {
+		return revs
+	}
+	verdicts, err := configMgr.GetCheckVerdicts()
+	if err != nil {
+		return revs // on error, check everything
+	}
+	var toCheck []*jj.Rev
+	for _, rev := range revs {
+		i := slices.IndexFunc(verdicts, func(v forge.CheckVerdict) bool {
+			return v.ChangeID == rev.ID
+		})
+		if i != -1 {
+			if verdict := verdicts[i]; verdict.Verdict == forge.CheckVerdictPass && verdict.CommitID == rev.CommitID {
+				continue // skip cached pass
+			}
+		}
+		toCheck = append(toCheck, rev)
+	}
+	return toCheck
 }
 
 func runInDir(ctx context.Context, pool *WorkPool, runner cmd.Executor, wd *WorkDir, commitID, checkCmd string) error {

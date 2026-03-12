@@ -32,4 +32,5 @@ var Styles = map[string]Style{
 	"task_fail":    {Fg: Red},
 	"task_running": {Fg: Yellow},
 	"task_pending": {Dim: true},
+	"task_skipped": {Dim: true},
 }

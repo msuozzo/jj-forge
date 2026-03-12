@@ -14,6 +14,7 @@ const (
 	TaskRunning
 	TaskDone
 	TaskFailed
+	TaskSkipped
 )
 
 var spinnerFrames = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
@@ -87,7 +88,7 @@ func (t *TaskTracker) SetStatus(index int, status TaskStatus) {
 	interactive := t.ui.IsInteractive()
 	t.mu.Unlock()
 
-	if !interactive && (status == TaskDone || status == TaskFailed) {
+	if !interactive && (status == TaskDone || status == TaskFailed || status == TaskSkipped) {
 		t.printTerminalLine(entry)
 	}
 }
@@ -106,6 +107,8 @@ func (t *TaskTracker) printTerminalLine(e *taskEntry) {
 		fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_pass", "✓"), e.name)
 	case TaskFailed:
 		fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_fail", "✗"), e.name)
+	case TaskSkipped:
+		fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_skipped", "◌"), t.ui.Styled("task_skipped", e.name))
 	}
 }
 
@@ -135,6 +138,8 @@ func (t *TaskTracker) render() {
 			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_pass", "✓"), e.name)
 		case TaskFailed:
 			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_fail", "✗"), e.name)
+		case TaskSkipped:
+			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_skipped", "◌"), t.ui.Styled("task_skipped", e.name))
 		}
 	}
 }
