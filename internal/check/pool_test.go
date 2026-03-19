@@ -23,25 +23,29 @@ type cmdRecord struct {
 // mockRunner builds a cmd.Executor that replays pre-configured command results
 // and records every invocation.
 type mockRunner struct {
-	handlers []func(ctx context.Context, opts cmd.Opts, args ...string) (string, error)
+	handlers []func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error)
 	calls    []cmdRecord
 }
 
-func (m *mockRunner) run(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+func (m *mockRunner) run(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 	if len(m.handlers) == 0 {
-		return "", fmt.Errorf("unexpected call: %v", args)
+		return nil, fmt.Errorf("unexpected call: %v", args)
 	}
 	h := m.handlers[0]
 	m.handlers = m.handlers[1:]
-	out, err := h(ctx, opts, args...)
+	result, err := h(ctx, opts, args...)
 	var stdinStr string
 	if opts.Stdin != nil {
 		b := make([]byte, 1024*1024)
 		n, _ := opts.Stdin.Read(b)
 		stdinStr = string(b[:n])
 	}
-	m.calls = append(m.calls, cmdRecord{args: args, opts: opts, stdin: stdinStr, output: out, err: err})
-	return out, err
+	var output string
+	if result != nil {
+		output = result.Stdout
+	}
+	m.calls = append(m.calls, cmdRecord{args: args, opts: opts, stdin: stdinStr, output: output, err: err})
+	return result, err
 }
 
 func TestNewWorkPool_CreatesDirectories(t *testing.T) {
@@ -132,26 +136,26 @@ func TestMaterialize_FullMaterialization(t *testing.T) {
 	t.Parallel()
 	baseDir := t.TempDir()
 	mr := &mockRunner{
-		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (string, error){
+		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error){
 			// git archive
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 				if !contains(args, "archive") {
 					t.Errorf("expected 'archive' in args, got %v", args)
 				}
 				if !contains(args, "commit1") {
 					t.Errorf("expected 'commit1' in args, got %v", args)
 				}
-				return "fake-tar-data", nil
+				return &cmd.Result{Stdout: "fake-tar-data"}, nil
 			},
 			// tar -xf -
-			func(_ context.Context, opts cmd.Opts, args ...string) (string, error) {
+			func(_ context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 				if !contains(args, "tar") {
 					t.Errorf("expected 'tar' in args, got %v", args)
 				}
 				if opts.WorkDir == "" {
 					t.Error("expected WorkDir to be set for tar")
 				}
-				return "", nil
+				return &cmd.Result{}, nil
 			},
 		},
 	}
@@ -221,26 +225,26 @@ func TestMaterialize_IncrementalUpdate(t *testing.T) {
 	}
 
 	mr := &mockRunner{
-		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (string, error){
+		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error){
 			// git diff
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 				if !contains(args, "diff") {
 					t.Errorf("expected 'diff' in args, got %v", args)
 				}
 				if !contains(args, "commit1..commit2") {
 					t.Errorf("expected 'commit1..commit2' in args, got %v", args)
 				}
-				return "fake-diff-output", nil
+				return &cmd.Result{Stdout: "fake-diff-output"}, nil
 			},
 			// git apply
-			func(_ context.Context, opts cmd.Opts, args ...string) (string, error) {
+			func(_ context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 				if !contains(args, "patch") {
 					t.Errorf("expected 'patch' in args, got %v", args)
 				}
 				if opts.WorkDir == "" {
 					t.Error("expected WorkDir to be set for apply")
 				}
-				return "", nil
+				return &cmd.Result{}, nil
 			},
 		},
 	}
@@ -277,25 +281,25 @@ func TestMaterialize_IncrementalFallback(t *testing.T) {
 	}
 
 	mr := &mockRunner{
-		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (string, error){
+		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error){
 			// git diff - succeeds
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
-				return "fake-diff", nil
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
+				return &cmd.Result{Stdout: "fake-diff"}, nil
 			},
 			// git apply - fails
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
-				return "", fmt.Errorf("apply conflict")
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
+				return nil, fmt.Errorf("apply conflict")
 			},
 			// git archive - fallback full materialization
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 				if !contains(args, "archive") {
 					t.Errorf("expected 'archive' in fallback, got %v", args)
 				}
-				return "fake-tar", nil
+				return &cmd.Result{Stdout: "fake-tar"}, nil
 			},
 			// tar -xf -
-			func(_ context.Context, _ cmd.Opts, args ...string) (string, error) {
-				return "", nil
+			func(_ context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
+				return &cmd.Result{}, nil
 			},
 		},
 	}

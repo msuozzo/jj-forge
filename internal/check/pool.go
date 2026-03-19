@@ -102,18 +102,18 @@ func (p *WorkPool) Materialize(ctx context.Context, wd *WorkDir, commitID string
 // incrementalUpdate applies the diff between the current and target commits.
 func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID string) error {
 	// Generate the diff
-	diff, err := p.runner(ctx, cmd.Opts{},
+	diffResult, err := p.runner(ctx, cmd.Opts{},
 		"git", "--git-dir", p.gitDir, "diff", wd.CommitID+".."+commitID)
 	if err != nil {
 		return fmt.Errorf("git diff failed: %w", err)
 	}
-	if diff == "" {
+	if diffResult.Stdout == "" {
 		return nil // no changes
 	}
 	// Apply the diff
 	_, err = p.runner(ctx, cmd.Opts{
 		WorkDir: wd.Path,
-		Stdin:   strings.NewReader(diff),
+		Stdin:   strings.NewReader(diffResult.Stdout),
 	}, "patch", "-p1")
 	if err != nil {
 		return fmt.Errorf("patch failed: %w", err)
@@ -137,14 +137,14 @@ func (p *WorkPool) fullMaterialize(ctx context.Context, wd *WorkDir, commitID st
 		}
 	}
 	// Extract the commit tree using git archive | tar -x
-	archive, err := p.runner(ctx, cmd.Opts{},
+	archiveResult, err := p.runner(ctx, cmd.Opts{},
 		"git", "--git-dir", p.gitDir, "archive", "--format=tar", commitID)
 	if err != nil {
 		return fmt.Errorf("git archive failed: %w", err)
 	}
 	_, err = p.runner(ctx, cmd.Opts{
 		WorkDir: wd.Path,
-		Stdin:   strings.NewReader(archive),
+		Stdin:   strings.NewReader(archiveResult.Stdout),
 	}, "tar", "-xf", "-")
 	if err != nil {
 		return fmt.Errorf("tar extract failed: %w", err)

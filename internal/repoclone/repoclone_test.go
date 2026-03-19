@@ -17,29 +17,29 @@ import (
 // API path ("repos/owner/name") → JSON response. Missing entries return 404.
 func fakeGHExecutor(t *testing.T, user string, repos map[string]string) cmd.Executor {
 	t.Helper()
-	return func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	return func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		if len(args) >= 2 && args[0] == "api" && args[1] == "user" {
-			return user + "\n", nil
+			return &cmd.Result{Stdout: user + "\n"}, nil
 		}
 		if len(args) >= 2 && args[0] == "api" && strings.HasPrefix(args[1], "repos/") {
 			resp, ok := repos[args[1]]
 			if !ok {
-				return "", fmt.Errorf("gh command failed: 404 Not Found")
+				return nil, fmt.Errorf("gh command failed: 404 Not Found")
 			}
-			return resp, nil
+			return &cmd.Result{Stdout: resp}, nil
 		}
 		t.Errorf("unexpected gh command: %s", strings.Join(args, " "))
-		return "", fmt.Errorf("unexpected gh command: %s", strings.Join(args, " "))
+		return nil, fmt.Errorf("unexpected gh command: %s", strings.Join(args, " "))
 	}
 }
 
 // recordingJJExecutor returns a jj executor that records all commands.
 func recordingJJExecutor() (cmd.Executor, *[][]string) {
 	var cmds [][]string
-	exec := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	exec := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmds = append(cmds, args)
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 	return exec, &cmds
 }

@@ -87,7 +87,7 @@ func NewScenario(t *testing.T, repo *FakeRepo, calls ...Call) *Scenario {
 
 // Executor returns an executor function for use with jj.NewClientWithExecutor.
 func (s *Scenario) Executor() cmd.Executor {
-	return func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	return func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		s.T.Helper()
 
 		// Strip binary name and -R flag if present
@@ -116,7 +116,10 @@ func (s *Scenario) Executor() cmd.Executor {
 			stdout = call.Output(s.Repo)
 		}
 
-		return stdout, call.Err
+		if call.Err != nil {
+			return nil, call.Err
+		}
+		return &cmd.Result{Stdout: stdout}, nil
 	}
 }
 

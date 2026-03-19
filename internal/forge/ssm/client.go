@@ -63,8 +63,8 @@ func newClientForTest(doer httpDoer, repoName, htmlURL string) *Client {
 		htmlURL:    htmlURL,
 		httpClient: doer,
 		pollDelay:  time.Nanosecond,
-		executor: func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-			return "fake-token", nil
+		executor: func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+			return &cmd.Result{Stdout: "fake-token"}, nil
 		},
 	}
 }
@@ -93,8 +93,10 @@ func parsePRNumber(name string) (int, error) {
 // TODO: Add disk-based token cache to avoid the ~2s gcloud penalty on every CLI invocation.
 func (c *Client) getToken(ctx context.Context) (string, error) {
 	c.tokenOnce.Do(func() {
-		out, err := c.executor(ctx, cmd.Opts{}, "gcloud", "auth", "print-access-token")
-		c.token = strings.TrimSpace(out)
+		result, err := c.executor(ctx, cmd.Opts{}, "gcloud", "auth", "print-access-token")
+		if err == nil {
+			c.token = strings.TrimSpace(result.Stdout)
+		}
 		c.tokenErr = err
 	})
 	return c.token, c.tokenErr

@@ -123,9 +123,9 @@ func TestRunNoConfig(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
@@ -150,14 +150,14 @@ func TestRunPass(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	var ranCheck atomic.Bool
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") {
 			ranCheck.Store(true)
-			return "", nil
+			return &cmd.Result{}, nil
 		}
 		// Materialization commands (git archive, tar)
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
@@ -196,13 +196,13 @@ func TestRunFail(t *testing.T) {
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
 
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c false") {
-			return "", fmt.Errorf("exit status 1")
+			return nil, fmt.Errorf("exit status 1")
 		}
 		// Materialization commands
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
@@ -240,9 +240,9 @@ func TestRunSkipCached(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	// force=false should skip execution
@@ -277,9 +277,9 @@ func TestRunForceIgnoresCache(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	// force=true should run regardless
@@ -312,14 +312,14 @@ func TestRunMultipleRevs(t *testing.T) {
 	}
 
 	var poolRuns atomic.Int32
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") && opts.WorkDir != "" {
 			poolRuns.Add(1)
-			return "", nil
+			return &cmd.Result{}, nil
 		}
 		// Materialization commands (git archive, tar)
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
@@ -371,9 +371,9 @@ func TestRunMultipleRevs_CachedSkip(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", false, runner, testUI)
@@ -403,16 +403,16 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 	}
 
 	var checkCount atomic.Int32
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") {
 			if checkCount.Add(1) == 1 {
-				return "", nil // first check passes
+				return &cmd.Result{}, nil // first check passes
 			}
-			return "", fmt.Errorf("check failed") // second check fails
+			return nil, fmt.Errorf("check failed") // second check fails
 		}
 		// Materialization commands
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
@@ -460,14 +460,14 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 	}
 
 	var poolRuns atomic.Int32
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") && opts.WorkDir != "" {
 			poolRuns.Add(1)
-			return "", nil
+			return &cmd.Result{}, nil
 		}
 		// Materialization commands
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
@@ -501,9 +501,9 @@ func TestRunStaleCache(t *testing.T) {
 	}
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	// force=false, but commit ID changed — should re-run
@@ -528,9 +528,9 @@ func TestRunImmutableSkipped(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	ran := false
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		ran = true
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
@@ -559,13 +559,13 @@ func TestRunSetsRunningBeforeExecution(t *testing.T) {
 	started := make(chan struct{})
 	proceed := make(chan struct{})
 
-	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "echo hello") {
 			started <- struct{}{}
 			<-proceed
 		}
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	errCh := make(chan error, 1)
@@ -627,13 +627,13 @@ func TestRunMixedMutability(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	var ranCheck atomic.Bool
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") {
 			ranCheck.Store(true)
 		}
 		// Materialization commands
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	err := Run(context.Background(), mock, configMgr, "@-::@", true, runner, testUI)
@@ -675,14 +675,14 @@ func TestRunDriftCancellation(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	// The runner blocks until context is cancelled (simulating a long-running check).
-	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") {
 			<-ctx.Done()
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		}
 		// Materialization commands
-		return "fake-data", nil
+		return &cmd.Result{Stdout: "fake-data"}, nil
 	}
 
 	// After the first Revs call (for initial resolution), subsequent calls

@@ -23,12 +23,12 @@ func TestCreateReview_Success(t *testing.T) {
 		"--reviewer", "reviewer1",
 	}
 
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
-		return "https://github.com/owner/repo/pull/42\n", nil
+		return &cmd.Result{Stdout: "https://github.com/owner/repo/pull/42\n"}, nil
 	}
 
 	client := NewClientWithExecutor("/path/to/gh", executor)
@@ -66,12 +66,12 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 		"--reviewer", "user2",
 	}
 
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
-		return "https://github.com/owner/repo/pull/1", nil
+		return &cmd.Result{Stdout: "https://github.com/owner/repo/pull/1"}, nil
 	}
 
 	client := NewClientWithExecutor("/gh", executor)
@@ -90,7 +90,7 @@ func TestCreateReview_MultipleReviewers(t *testing.T) {
 }
 
 func TestCreateReview_NoReviewers(t *testing.T) {
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		// Verify no --reviewer flags present
 		for i, arg := range args {
@@ -98,7 +98,7 @@ func TestCreateReview_NoReviewers(t *testing.T) {
 				t.Errorf("unexpected --reviewer at position %d", i)
 			}
 		}
-		return "https://github.com/owner/repo/pull/1", nil
+		return &cmd.Result{Stdout: "https://github.com/owner/repo/pull/1"}, nil
 	}
 
 	client := NewClientWithExecutor("/gh", executor)
@@ -118,8 +118,8 @@ func TestCreateReview_NoReviewers(t *testing.T) {
 
 func TestCreateReview_ExecutorError(t *testing.T) {
 	expectedErr := errors.New("gh command failed")
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		return "", expectedErr
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		return nil, expectedErr
 	}
 
 	client := NewClientWithExecutor("/gh", executor)
@@ -141,8 +141,8 @@ func TestCreateReview_ExecutorError(t *testing.T) {
 }
 
 func TestCreateReview_InvalidOutput(t *testing.T) {
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		return "invalid-url-format", nil
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		return &cmd.Result{Stdout: "invalid-url-format"}, nil
 	}
 
 	client := NewClientWithExecutor("/gh", executor)
@@ -171,12 +171,12 @@ func TestMergeReview_Success(t *testing.T) {
 		"--squash",
 	}
 
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	client := NewClientWithExecutor("/git", executor)
@@ -189,8 +189,8 @@ func TestMergeReview_Success(t *testing.T) {
 
 func TestMergeReview_Error(t *testing.T) {
 	expectedErr := errors.New("merge failed")
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		return "", expectedErr
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		return nil, expectedErr
 	}
 
 	client := NewClientWithExecutor("/git", executor)
@@ -212,12 +212,12 @@ func TestCloseReview_Success(t *testing.T) {
 		"--repo", "https://github.com/owner/repo",
 	}
 
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		if diff := cmp.Diff(args, expectedArgs); diff != "" {
 			t.Errorf("unexpected args:\ngot:  %v\nwant: %v", args, expectedArgs)
 		}
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	client := NewClientWithExecutor("/git", executor)
@@ -230,8 +230,8 @@ func TestCloseReview_Success(t *testing.T) {
 
 func TestCloseReview_Error(t *testing.T) {
 	expectedErr := errors.New("close failed")
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		return "", expectedErr
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		return nil, expectedErr
 	}
 
 	client := NewClientWithExecutor("/git", executor)
@@ -251,19 +251,19 @@ func TestSetupRuleset_Success(t *testing.T) {
 	var gotCreateArgs []string
 	var gotStdin []byte
 
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		args = args[1:] // strip binary name
 		// First call: list existing rulesets (GET)
 		if len(gotListArgs) == 0 && opts.Stdin == nil {
 			gotListArgs = args
-			return "[]", nil // No existing rulesets
+			return &cmd.Result{Stdout: "[]"}, nil // No existing rulesets
 		}
 		// Second call: create ruleset (POST)
 		gotCreateArgs = args
 		if opts.Stdin != nil {
 			gotStdin, _ = io.ReadAll(opts.Stdin)
 		}
-		return "{}", nil
+		return &cmd.Result{Stdout: "{}"}, nil
 	}
 
 	client := NewClientWithExecutor("/git", executor)
@@ -307,15 +307,15 @@ func TestSetupRuleset_Success(t *testing.T) {
 
 func TestSetupRuleset_AlreadyExists(t *testing.T) {
 	callCount := 0
-	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		_ = args[0] // binary name
 		callCount++
 		if callCount == 1 {
 			// Return existing ruleset with matching name
-			return `[{"name": "reject-forge-parent-trailer"}]`, nil
+			return &cmd.Result{Stdout: `[{"name": "reject-forge-parent-trailer"}]`}, nil
 		}
 		t.Fatal("should not make a second call when ruleset already exists")
-		return "", nil
+		return nil, nil
 	}
 
 	client := NewClientWithExecutor("/git", executor)

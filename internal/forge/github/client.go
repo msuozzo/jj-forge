@@ -41,7 +41,11 @@ func (c *Client) run(ctx context.Context, opts cmd.Opts, args ...string) (string
 	if c.gitDir != "" {
 		opts.Env = append(opts.Env, fmt.Sprintf("GIT_DIR=%s", c.gitDir))
 	}
-	return c.executor(ctx, opts, append([]string{"gh"}, args...)...)
+	result, err := c.executor(ctx, opts, append([]string{"gh"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	return result.Stdout, nil
 }
 
 // CreateReview creates a new pull request on GitHub.

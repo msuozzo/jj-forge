@@ -50,12 +50,12 @@ func TestRemoteURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 				args = args[1:] // strip binary name
 				if len(args) == 3 && args[0] == "git" && args[1] == "remote" && args[2] == "list" {
-					return tt.listOutput, nil
+					return &cmd.Result{Stdout: tt.listOutput}, nil
 				}
-				return "", errors.New("unexpected command")
+				return nil, errors.New("unexpected command")
 			}
 
 			client := NewClientWithExecutor("", executor)
@@ -98,12 +98,12 @@ func TestGitDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (string, error) {
+			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
 				args = args[1:] // strip binary name
 				if len(args) == 2 && args[0] == "git" && args[1] == "root" {
-					return tt.rootOutput, nil
+					return &cmd.Result{Stdout: tt.rootOutput}, nil
 				}
-				return "", errors.New("unexpected command")
+				return nil, errors.New("unexpected command")
 			}
 
 			client := NewClientWithExecutor("", executor)

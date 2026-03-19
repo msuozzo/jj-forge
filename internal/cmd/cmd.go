@@ -31,13 +31,19 @@ func (e *ExecError) Error() string {
 
 func (e *ExecError) Unwrap() error { return e.Err }
 
+// Result holds the output of a successfully executed command.
+type Result struct {
+	Stdout string
+	Stderr string
+}
+
 // Executor defines the function signature for running shell commands.
 // The first element of args is the binary name.
-type Executor func(ctx context.Context, opts Opts, args ...string) (stdout string, err error)
+type Executor func(ctx context.Context, opts Opts, args ...string) (*Result, error)
 
 // DefaultExecutor is an Executor that runs args[0] as the binary with
 // args[1:] as arguments, honoring Opts.Stdin, Opts.WorkDir, and Opts.Env.
-func DefaultExecutor(ctx context.Context, opts Opts, args ...string) (string, error) {
+func DefaultExecutor(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 	c := exec.CommandContext(ctx, args[0], args[1:]...)
 	if opts.WorkDir != "" {
 		c.Dir = opts.WorkDir
@@ -52,7 +58,7 @@ func DefaultExecutor(ctx context.Context, opts Opts, args ...string) (string, er
 		c.Stdin = opts.Stdin
 	}
 	if err := c.Run(); err != nil {
-		return "", &ExecError{Args: args, Stderr: stderr.String(), Err: err}
+		return nil, &ExecError{Args: args, Stderr: stderr.String(), Err: err}
 	}
-	return stdout.String(), nil
+	return &Result{Stdout: stdout.String(), Stderr: stderr.String()}, nil
 }

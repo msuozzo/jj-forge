@@ -74,17 +74,17 @@ func (p *DefaultPrompter) Choose(prompt string, options []string, defaultIndex i
 // arg-prefix matched against args[1:] (after stripping any leading -R <path>).
 func NewPromptingExecutor(inner Executor, prompter Prompter, confirmOps [][]string) Executor {
 	var mu sync.Mutex
-	return func(ctx context.Context, opts Opts, args ...string) (string, error) {
+	return func(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 		if len(args) > 0 && matchesOp(args[1:], confirmOps) {
 			mu.Lock()
 			// NOTE: Hard-code with a default accept.
 			confirmed, err := prompter.Confirm(strings.Join(args, " "), true)
 			mu.Unlock()
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			if !confirmed {
-				return "", fmt.Errorf("command aborted by user")
+				return nil, fmt.Errorf("command aborted by user")
 			}
 		}
 		return inner(ctx, opts, args...)

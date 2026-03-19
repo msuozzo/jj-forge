@@ -59,9 +59,9 @@ func TestMatchesOp(t *testing.T) {
 
 func TestNewPromptingExecutor_WriteConfirmed(t *testing.T) {
 	innerCalled := false
-	inner := func(ctx context.Context, opts Opts, args ...string) (string, error) {
+	inner := func(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 		innerCalled = true
-		return "ok", nil
+		return &Result{Stdout: "ok"}, nil
 	}
 	prompter := &fakePrompter{response: true}
 	patterns := [][]string{{"describe"}}
@@ -72,8 +72,8 @@ func TestNewPromptingExecutor_WriteConfirmed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out != "ok" {
-		t.Errorf("got output %q, want %q", out, "ok")
+	if out.Stdout != "ok" {
+		t.Errorf("got output %q, want %q", out.Stdout, "ok")
 	}
 	if !prompter.called {
 		t.Error("prompter was not called")
@@ -85,9 +85,9 @@ func TestNewPromptingExecutor_WriteConfirmed(t *testing.T) {
 
 func TestNewPromptingExecutor_WriteDenied(t *testing.T) {
 	innerCalled := false
-	inner := func(ctx context.Context, opts Opts, args ...string) (string, error) {
+	inner := func(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 		innerCalled = true
-		return "ok", nil
+		return &Result{Stdout: "ok"}, nil
 	}
 	prompter := &fakePrompter{response: false}
 	patterns := [][]string{{"describe"}}
@@ -111,9 +111,9 @@ func TestNewPromptingExecutor_WriteDenied(t *testing.T) {
 
 func TestNewPromptingExecutor_AllPromptsEverything(t *testing.T) {
 	innerCalled := false
-	inner := func(ctx context.Context, opts Opts, args ...string) (string, error) {
+	inner := func(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 		innerCalled = true
-		return "ok", nil
+		return &Result{Stdout: "ok"}, nil
 	}
 	prompter := &fakePrompter{response: true}
 
@@ -123,8 +123,8 @@ func TestNewPromptingExecutor_AllPromptsEverything(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out != "ok" {
-		t.Errorf("got output %q, want %q", out, "ok")
+	if out.Stdout != "ok" {
+		t.Errorf("got output %q, want %q", out.Stdout, "ok")
 	}
 	if !prompter.called {
 		t.Error("prompter was not called for read command with nil patterns")
@@ -136,9 +136,9 @@ func TestNewPromptingExecutor_AllPromptsEverything(t *testing.T) {
 
 func TestNewPromptingExecutor_ReadSkipsPrompt(t *testing.T) {
 	innerCalled := false
-	inner := func(ctx context.Context, opts Opts, args ...string) (string, error) {
+	inner := func(ctx context.Context, opts Opts, args ...string) (*Result, error) {
 		innerCalled = true
-		return "ok", nil
+		return &Result{Stdout: "ok"}, nil
 	}
 	prompter := &fakePrompter{response: false}
 	patterns := [][]string{{"describe"}}
@@ -149,8 +149,8 @@ func TestNewPromptingExecutor_ReadSkipsPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out != "ok" {
-		t.Errorf("got output %q, want %q", out, "ok")
+	if out.Stdout != "ok" {
+		t.Errorf("got output %q, want %q", out.Stdout, "ok")
 	}
 	if prompter.called {
 		t.Error("prompter should not have been called for non-matching command")

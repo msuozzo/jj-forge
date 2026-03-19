@@ -59,7 +59,11 @@ func (j *client) Run(ctx context.Context, args ...string) (string, error) {
 	if j.repository != "" {
 		args = append([]string{"-R", j.repository}, args...)
 	}
-	return j.executor(ctx, cmd.Opts{}, append([]string{"jj"}, args...)...)
+	result, err := j.executor(ctx, cmd.Opts{}, append([]string{"jj"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	return result.Stdout, nil
 }
 
 // Root returns the repo root path.

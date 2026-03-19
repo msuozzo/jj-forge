@@ -24,7 +24,11 @@ func NewGitHubClient() *GitHubClient {
 
 // run calls the executor with "gh" prepended to args.
 func (c *GitHubClient) run(ctx context.Context, args ...string) (string, error) {
-	return c.executor(ctx, cmd.Opts{}, append([]string{"gh"}, args...)...)
+	result, err := c.executor(ctx, cmd.Opts{}, append([]string{"gh"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	return result.Stdout, nil
 }
 
 // NewGitHubClientWithExecutor creates a GitHubClient with a custom executor (for testing).
