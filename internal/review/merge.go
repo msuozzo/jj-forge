@@ -130,6 +130,7 @@ func Merge(
 		params.UI.PrintWarning("failed to clean up check verdict: %v", err)
 	}
 	// Clean up PR links on sibling reviews (non-fatal)
+	fmt.Fprintf(params.UI, "Updating PR links on sibling reviews...\n")
 	if err := cleanupLinksAfterMerge(ctx, jjClient, forgeClient, configMgr, rev.ID, upstreamRemoteURL); err != nil {
 		params.UI.PrintWarning("failed to clean up PR links: %v", err)
 	}
@@ -139,8 +140,8 @@ func Merge(
 	}, nil
 }
 
-// cleanupLinksAfterMerge re-derives and updates PR links for all remaining
-// open reviews after a change has been merged.
+// cleanupLinksAfterMerge updates PR links on direct children of the merged
+// change (reviews whose forge-parent pointed at the merged change).
 func cleanupLinksAfterMerge(
 	ctx context.Context,
 	jjClient jj.Client,
@@ -154,57 +155,77 @@ func cleanupLinksAfterMerge(
 		return fmt.Errorf("failed to get review records: %w", err)
 	}
 
-	// Collect open review records (excluding the merged one)
+	// Collect open review records (excluding the merged one).
 	var openRecords []forge.ReviewRecord
-	for _, rec := range records {
+	reviewByChange := make(map[string]*forge.ReviewRecord)
+	for i := range records {
+		rec := &records[i]
 		if rec.Status == forge.ReviewStateOpen && rec.ChangeID != mergedChangeID {
-			openRecords = append(openRecords, rec)
+			openRecords = append(openRecords, *rec)
+			reviewByChange[rec.ChangeID] = rec
 		}
 	}
 	if len(openRecords) == 0 {
 		return nil
 	}
 
-	// Resolve revisions for each open review and build parent/child maps
-	reviewByChange := make(map[string]*forge.ReviewRecord)
+	// Bulk-resolve all open reviews in one jj call.
+	var revsetParts []string
+	for _, rec := range openRecords {
+		revsetParts = append(revsetParts, rec.ChangeID)
+	}
+	revs, err := jjClient.Revs(ctx, strings.Join(revsetParts, "|"))
+	if err != nil {
+		return fmt.Errorf("failed to resolve revisions: %w", err)
+	}
+	revByChange := make(map[string]*jj.Rev, len(revs))
+	for _, rev := range revs {
+		revByChange[rev.ID] = rev
+	}
+
+	// Find reviews adjacent to the merged change: direct children whose
+	// forge-parent pointed at the merged change.
+	affectedIDs := make(map[string]bool)
 	parentOf := make(map[string]string)
 	childrenOf := make(map[string][]string)
 
-	for i := range openRecords {
-		rec := &openRecords[i]
-		reviewByChange[rec.ChangeID] = rec
-
-		rev, err := jjClient.Rev(ctx, rec.ChangeID)
-		if err != nil {
-			continue // Skip if revision can't be resolved
+	for _, rec := range openRecords {
+		changeID := rec.ChangeID
+		rev, ok := revByChange[changeID]
+		if !ok {
+			continue
 		}
 		trailers := jj.ParseDescriptionTrailers(rev.Description)
 		parentTrailer, found := jj.GetTrailer(trailers, forge.ParentTrailerKey)
-		if found {
-			parentID := parentTrailer.Value
-			// Only track relationships between open reviews (not the merged one)
-			if parentID != mergedChangeID {
-				parentOf[rec.ChangeID] = parentID
-				childrenOf[parentID] = append(childrenOf[parentID], rec.ChangeID)
-			}
+		if !found {
+			continue
 		}
+		parentID := parentTrailer.Value
+		if parentID == mergedChangeID {
+			// This review was a child of the merged change.
+			affectedIDs[changeID] = true
+			continue
+		}
+		// Track parent/child relationships among remaining open reviews.
+		parentOf[changeID] = parentID
+		childrenOf[parentID] = append(childrenOf[parentID], changeID)
 	}
 
-	// Update PR descriptions for reviews that referenced the merged change
-	for _, rec := range openRecords {
+	if len(affectedIDs) == 0 {
+		return nil
+	}
+
+	// Update PR descriptions only for affected reviews.
+	for changeID := range affectedIDs {
+		rec := reviewByChange[changeID]
 		reviewNumber, err := forgeClient.ParseID(rec.ForgeID)
 		if err != nil {
 			continue
 		}
 
-		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewNumber)
-		if err != nil {
-			continue
-		}
-
-		// Build parent links
+		// Build parent links (excluding the merged change).
 		var parentLinks []PRLink
-		if pID, ok := parentOf[rec.ChangeID]; ok {
+		if pID, ok := parentOf[changeID]; ok {
 			if pRec, ok := reviewByChange[pID]; ok {
 				pNum, err := forgeClient.ParseID(pRec.ForgeID)
 				if err == nil {
@@ -213,9 +234,9 @@ func cleanupLinksAfterMerge(
 			}
 		}
 
-		// Build child links
+		// Build child links.
 		var childLinks []PRLink
-		for _, cID := range childrenOf[rec.ChangeID] {
+		for _, cID := range childrenOf[changeID] {
 			if cRec, ok := reviewByChange[cID]; ok {
 				cNum, err := forgeClient.ParseID(cRec.ForgeID)
 				if err == nil {
@@ -224,6 +245,10 @@ func cleanupLinksAfterMerge(
 			}
 		}
 
+		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewNumber)
+		if err != nil {
+			continue
+		}
 		newBody := SetPRLinks(details.Body, parentLinks, childLinks)
 		if newBody != details.Body {
 			if err := forgeClient.UpdateReview(ctx, upstreamURL, reviewNumber, newBody); err != nil {

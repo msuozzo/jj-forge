@@ -663,21 +663,14 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			},
 		},
 		// cleanupLinksAfterMerge: getForgeConfig cached from RemoveCheckVerdicts (no write)
-		// cleanupLinksAfterMerge: Rev("bbbbbbbbbbbb")
+		// cleanupLinksAfterMerge: bulk Revs for open reviews
 		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "bbbbbbbbbbbb"},
-			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "bbbbbbbbbbbb|cccccccccccc"},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "cccccccccccc"),
 		},
-		// cleanupLinksAfterMerge: Rev("cccccccccccc")
-		jjtest.Call{
-			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "cccccccccccc"},
-			Output: jjtest.LogOutput("cccccccccccc"),
-		},
-		// cleanupLinksAfterMerge: GetReview + UpdateReview for B and C
+		// cleanupLinksAfterMerge: GetReview + UpdateReview for B only
 		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
 		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
-		jjtest.Call{Args: []string{"forge:GetReview", "3"}},
-		jjtest.Call{Args: []string{"forge:UpdateReview", "3"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
