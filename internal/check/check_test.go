@@ -40,14 +40,14 @@ func newMockClient(revs []*jj.Rev) *mockClient {
 	}
 }
 
-func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
+func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.callLog = append(m.callLog, args)
 
 	if len(args) < 4 {
-		return "", fmt.Errorf("unexpected args: %v", args)
+		return nil, fmt.Errorf("unexpected args: %v", args)
 	}
 
 	if args[0] == "config" && args[1] == "list" && args[2] == "--repo" {
@@ -57,12 +57,12 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
 			for k, v := range m.config {
 				result += fmt.Sprintf("forge.%s = %s\n", k, v)
 			}
-			return result, nil
+			return &cmd.Result{Stdout: result}, nil
 		}
 		if val, ok := m.config[key]; ok {
-			return fmt.Sprintf("%s = %s", key, val), nil
+			return &cmd.Result{Stdout: fmt.Sprintf("%s = %s", key, val)}, nil
 		}
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
 	if args[0] == "config" && args[1] == "set" && args[2] == "--repo" {
@@ -76,10 +76,10 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (string, error) {
 		default:
 			m.config[key] = value
 		}
-		return "", nil
+		return &cmd.Result{}, nil
 	}
 
-	return "", fmt.Errorf("unexpected command: %v", args)
+	return nil, fmt.Errorf("unexpected command: %v", args)
 }
 
 func (m *mockClient) Rev(ctx context.Context, rev string) (*jj.Rev, error) {

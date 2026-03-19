@@ -25,7 +25,7 @@ type Rev struct {
 
 // Client defines the interface for interacting with Jujutsu.
 type Client interface {
-	Run(context.Context, ...string) (string, error)
+	Run(context.Context, ...string) (*cmd.Result, error)
 	Root(context.Context) (string, error)
 	Revs(context.Context, string) ([]*Rev, error)
 	Rev(context.Context, string) (*Rev, error)
@@ -55,24 +55,20 @@ func NewClientWithExecutor(repository string, exec cmd.Executor) Client {
 }
 
 // Run executes a jj command and returns its output.
-func (j *client) Run(ctx context.Context, args ...string) (string, error) {
+func (j *client) Run(ctx context.Context, args ...string) (*cmd.Result, error) {
 	if j.repository != "" {
 		args = append([]string{"-R", j.repository}, args...)
 	}
-	result, err := j.executor(ctx, cmd.Opts{}, append([]string{"jj"}, args...)...)
-	if err != nil {
-		return "", err
-	}
-	return result.Stdout, nil
+	return j.executor(ctx, cmd.Opts{}, append([]string{"jj"}, args...)...)
 }
 
 // Root returns the repo root path.
 func (j *client) Root(ctx context.Context) (abspath string, err error) {
-	rootPath, err := j.Run(ctx, "root")
+	result, err := j.Run(ctx, "root")
 	if err != nil {
 		return "", fmt.Errorf("failed to get root path: %w", err)
 	}
-	return strings.TrimSpace(rootPath), nil
+	return strings.TrimSpace(result.Stdout), nil
 }
 
 // Revs returns detailed information for all revisions in the specified revset.
@@ -91,15 +87,16 @@ func (j *client) Revs(ctx context.Context, revset string) ([]*Rev, error) {
 		`"\n"`,
 	}
 	template := strings.Join(tplParts, `++" "++`)
-	out, err := j.Run(ctx, "log", "--no-graph", "--template", template, "-r", revset)
+	result, err := j.Run(ctx, "log", "--no-graph", "--template", template, "-r", revset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit info for %s: %w", revset, err)
 	}
 	var revs []*Rev
-	if strings.TrimSpace(out) == "" {
+	out := strings.TrimSpace(result.Stdout)
+	if out == "" {
 		return revs, nil
 	}
-	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		parts := strings.SplitN(line, " ", len(tplParts)-1)
 		if len(parts) < len(tplParts)-1 {
 			return nil, fmt.Errorf("unexpected log entry format: %q", line)
@@ -146,11 +143,11 @@ func (j *client) Rev(ctx context.Context, revset string) (*Rev, error) {
 
 // RemoteURL returns the URL for a given git remote.
 func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
-	out, err := j.Run(ctx, "git", "remote", "list")
+	result, err := j.Run(ctx, "git", "remote", "list")
 	if err != nil {
 		return "", fmt.Errorf("failed to list remotes: %w", err)
 	}
-	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
 		parts := strings.Fields(line)
 		if len(parts) >= 2 && parts[0] == remote {
 			return parts[1], nil
@@ -161,11 +158,11 @@ func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
 
 // GitDir returns the absolute path to the backing git directory.
 func (j *client) GitDir(ctx context.Context) (string, error) {
-	out, err := j.Run(ctx, "git", "root")
+	result, err := j.Run(ctx, "git", "root")
 	if err != nil {
 		return "", fmt.Errorf("failed to get git root: %w", err)
 	}
-	out = strings.TrimSpace(out)
+	out := strings.TrimSpace(result.Stdout)
 	if out == "" {
 		return "", fmt.Errorf("git root is empty")
 	}

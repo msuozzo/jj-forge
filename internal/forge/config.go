@@ -103,11 +103,11 @@ func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
 	if m.cachedConfig != nil {
 		return m.cachedConfig, nil
 	}
-	output, err := m.client.Run(context.Background(), "config", "list", "--repo", "forge")
+	result, err := m.client.Run(context.Background(), "config", "list", "--repo", "forge")
 	if err != nil {
 		return nil, err
 	}
-	output = strings.TrimSpace(output)
+	output := strings.TrimSpace(result.Stdout)
 	if output == "" {
 		cfg := &ForgeConfig{}
 		m.cachedConfig = cfg
