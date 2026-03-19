@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
@@ -86,23 +87,30 @@ func Merge(
 	if !params.NoCleanup {
 		bookmarkName := fmt.Sprintf("push-%s", rev.ID)
 		u := params.UI
-		// Fetch from fork remote to update tracking info (the merge may have
-		// changed the remote ref, causing push to fail with "stale info").
+		// Fetch the target bookmark from fork remote and delete it.
+		// If the push fails (e.g. "stale info" from async post-merge ref
+		// changes on GitHub), retry up to 2 more times: re-fetch the
+		// bookmark, re-delete to resolve any conflict (jj#7722), and retry.
 		fmt.Fprintf(u, "Fetching from %s...\n", u.Styled("remote", params.ForkRemote))
-		_, err = jjClient.Run(ctx, "git", "fetch", "--remote", params.ForkRemote)
+		_, err = jjClient.Run(ctx, "git", "fetch", "--remote", params.ForkRemote, "--branch", bookmarkName)
 		if err != nil {
 			u.PrintWarning("failed to fetch from %s: %v", params.ForkRemote, err)
 		}
-		// Delete bookmark
 		fmt.Fprintf(u, "Deleting bookmark %s...\n", u.Styled("bookmark", bookmarkName))
 		_, err = jjClient.Run(ctx, "bookmark", "delete", bookmarkName)
 		if err != nil {
-			// Non-fatal: log warning and continue
 			u.PrintWarning("failed to delete bookmark %s: %v", bookmarkName, err)
 		}
-		// Push bookmark deletion
 		fmt.Fprintf(u, "Pushing bookmark deletion to %s...\n", u.Styled("remote", params.ForkRemote))
 		_, err = jjClient.Run(ctx, "git", "push", "--remote", params.ForkRemote, "--bookmark", bookmarkName)
+		for attempt := 0; err != nil && attempt < 2; attempt++ {
+			result, fetchErr := jjClient.Run(ctx, "git", "fetch", "--remote", params.ForkRemote, "--branch", bookmarkName)
+			if fetchErr != nil || strings.Contains(result.Stderr, "Nothing changed.") {
+				break
+			}
+			jjClient.Run(ctx, "bookmark", "delete", bookmarkName)
+			_, err = jjClient.Run(ctx, "git", "push", "--remote", params.ForkRemote, "--bookmark", bookmarkName)
+		}
 		if err != nil {
 			u.PrintWarning("failed to push bookmark deletion: %v", err)
 		}

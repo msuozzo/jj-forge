@@ -53,7 +53,7 @@ func TestMerge_Success(t *testing.T) {
 			},
 		},
 		jjtest.Call{
-			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Args:   []string{"git", "fetch", "--remote", testRemote, "--branch", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -616,7 +616,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		},
 		// Cleanup: fetch fork + bookmark delete + push + fetch upstream
 		jjtest.Call{
-			Args:   []string{"git", "fetch", "--remote", testRemote},
+			Args:   []string{"git", "fetch", "--remote", testRemote, "--branch", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
