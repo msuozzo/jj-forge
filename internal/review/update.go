@@ -58,12 +58,13 @@ func Update(
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}
-	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + trailerResult.SkippedImmutable + pushResult.SkippedSynced
 	uploadResult := &change.UploadResult{
 		Pushed:           pushResult.Pushed,
 		Skipped:          skipped,
 		SkippedEmpty:     trailerResult.SkippedEmpty,
 		SkippedAnonymous: trailerResult.SkippedAnonymous,
+		SkippedImmutable: trailerResult.SkippedImmutable,
 		SkippedSynced:    pushResult.SkippedSynced,
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}

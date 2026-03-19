@@ -267,8 +267,8 @@ func main() {
 				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", result.Pushed, result.TrailersUpdated)
 			}
 			if result.Skipped > 0 {
-				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
-					result.Skipped, result.SkippedEmpty, result.SkippedAnonymous, result.SkippedSynced)
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, immutable: %d, synced: %d)\n",
+					result.Skipped, result.SkippedEmpty, result.SkippedAnonymous, result.SkippedImmutable, result.SkippedSynced)
 			}
 			return nil
 		},
@@ -386,13 +386,13 @@ use 'review open' and 'review submit' instead.`,
 				return err
 			}
 			// Print upload summary
-			skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+			skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + trailerResult.SkippedImmutable + pushResult.SkippedSynced
 			if pushResult.Pushed > 0 || trailerResult.TrailersUpdated > 0 {
 				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", pushResult.Pushed, trailerResult.TrailersUpdated)
 			}
 			if skipped > 0 {
-				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
-					skipped, trailerResult.SkippedEmpty, trailerResult.SkippedAnonymous, pushResult.SkippedSynced)
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, immutable: %d, synced: %d)\n",
+					skipped, trailerResult.SkippedEmpty, trailerResult.SkippedAnonymous, trailerResult.SkippedImmutable, pushResult.SkippedSynced)
 			}
 			// Use resolved revs from trailer phase if trailers weren't updated;
 			// otherwise re-resolve since commit IDs changed.
@@ -686,8 +686,8 @@ use 'review open' and 'review submit' instead.`,
 				fmt.Fprintf(stdoutUI, "Pushed %d change(s), updated %d trailer(s)\n", ur.Pushed, ur.TrailersUpdated)
 			}
 			if ur.Skipped > 0 {
-				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, synced: %d)\n",
-					ur.Skipped, ur.SkippedEmpty, ur.SkippedAnonymous, ur.SkippedSynced)
+				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, immutable: %d, synced: %d)\n",
+					ur.Skipped, ur.SkippedEmpty, ur.SkippedAnonymous, ur.SkippedImmutable, ur.SkippedSynced)
 			}
 			if result.PRsUpdated > 0 {
 				fmt.Fprintf(stdoutUI, "Updated %d PR description(s)\n", result.PRsUpdated)

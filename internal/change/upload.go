@@ -17,6 +17,7 @@ type UploadResult struct {
 	Skipped          int
 	SkippedEmpty     int
 	SkippedAnonymous int
+	SkippedImmutable int
 	SkippedSynced    int
 	TrailersUpdated  int
 }
@@ -26,6 +27,7 @@ type UpdateTrailersResult struct {
 	TrailersUpdated  int
 	SkippedEmpty     int
 	SkippedAnonymous int
+	SkippedImmutable int
 	Revs             []*jj.Rev // Resolved revisions (pre-trailer-update order, children first)
 }
 
@@ -59,6 +61,12 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 		revmap[rev.ID] = rev
 	}
 	for _, rev := range stack {
+		// Skip immutable commits
+		if !rev.IsMutable {
+			fmt.Fprintf(u, "Skipping immutable change: %s\n", u.Styled("change_id", rev.ID))
+			result.SkippedImmutable++
+			continue
+		}
 		// Skip empty commits
 		if rev.IsEmpty {
 			fmt.Fprintf(u, "Skipping empty change: %s\n", u.Styled("change_id", rev.ID))
@@ -117,14 +125,14 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 	}
 	slices.Reverse(stack) // order from parents to children
 	result := &PushResult{}
-	// Identify pushable revisions (skip empty, anonymous, and already-synced).
+	// Identify pushable revisions (skip empty, anonymous, immutable, and already-synced).
 	type pushItem struct {
 		rev   *jj.Rev
 		index int // index into taskNames for TaskTracker
 	}
 	var toPush []pushItem
 	for _, rev := range stack {
-		if rev.IsEmpty || strings.TrimSpace(rev.Description) == "" {
+		if rev.IsEmpty || strings.TrimSpace(rev.Description) == "" || !rev.IsMutable {
 			continue
 		}
 		if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
@@ -174,12 +182,13 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 	if err != nil {
 		return nil, err
 	}
-	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + pushResult.SkippedSynced
+	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + trailerResult.SkippedImmutable + pushResult.SkippedSynced
 	return &UploadResult{
 		Pushed:           pushResult.Pushed,
 		Skipped:          skipped,
 		SkippedEmpty:     trailerResult.SkippedEmpty,
 		SkippedAnonymous: trailerResult.SkippedAnonymous,
+		SkippedImmutable: trailerResult.SkippedImmutable,
 		SkippedSynced:    pushResult.SkippedSynced,
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}, nil

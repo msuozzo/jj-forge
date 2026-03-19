@@ -610,5 +610,37 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 	scenario.Verify()
 }
 
+func TestUpload_SkipImmutableChange(t *testing.T) {
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{ID: "aaaaaaaaaaaa", Parents: []string{"root"}, IsMutable: false, Description: "A\n"},
+	)
+
+	scenario := jjtest.NewScenario(t, repo,
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "all()"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "parents(all())~(all())"},
+			Output: jjtest.LogOutput("root"),
+		},
+		// No push - skipped (immutable)
+	)
+
+	client := scenario.Client()
+	result, err := Upload(context.Background(), client, "all()", testRemote, testUI)
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if result.SkippedImmutable != 1 {
+		t.Errorf("expected 1 skipped immutable, got %d", result.SkippedImmutable)
+	}
+	if result.Pushed != 0 {
+		t.Errorf("expected 0 pushes, got %d", result.Pushed)
+	}
+	scenario.Verify()
+}
+
 // templateMatcher matches the jj log template used by client.Revs()
 var templateMatcher = `change_id.short()++" "++commit_id.short()++" "++conflict++" "++divergent++" "++!immutable++" "++empty++" "++parents.map(|c| c.change_id().short()).join(",")++" "++bookmarks.map(|b| b.name()).join(",")++" "++remote_bookmarks.map(|b| b.remote() ++ "/" ++ b.name()).join(",")++" "++description.escape_json()++" "++"\n"`
