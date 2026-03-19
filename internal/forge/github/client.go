@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -26,7 +24,7 @@ type Client struct {
 func NewClient(gitDir string) *Client {
 	return &Client{
 		gitDir:   gitDir,
-		executor: defaultExecutor(gitDir),
+		executor: cmd.DefaultExecutor,
 	}
 }
 
@@ -38,35 +36,12 @@ func NewClientWithExecutor(gitDir string, exec cmd.Executor) *Client {
 	}
 }
 
-// run calls the executor with "gh" prepended to args.
+// run calls the executor with "gh" prepended to args, injecting GIT_DIR if set.
 func (c *Client) run(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-	return c.executor(ctx, opts, append([]string{"gh"}, args...)...)
-}
-
-// DefaultExecutor creates an executor that runs commands with proper GIT_DIR.
-func DefaultExecutor(gitDir string) cmd.Executor {
-	return defaultExecutor(gitDir)
-}
-
-// defaultExecutor creates an executor that runs commands with proper GIT_DIR.
-func defaultExecutor(gitDir string) cmd.Executor {
-	return func(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
-		c := exec.CommandContext(ctx, args[0], args[1:]...)
-		var stdout, stderr bytes.Buffer
-		c.Stdout = &stdout
-		c.Stderr = &stderr
-		if opts.Stdin != nil {
-			c.Stdin = opts.Stdin
-		}
-		// Set GIT_DIR environment variable if provided
-		if gitDir != "" {
-			c.Env = append(os.Environ(), fmt.Sprintf("GIT_DIR=%s", gitDir))
-		}
-		if err := c.Run(); err != nil {
-			return "", fmt.Errorf("command failed: %s\nerror: %w\nstderr: %s", strings.Join(args, " "), err, stderr.String())
-		}
-		return stdout.String(), nil
+	if c.gitDir != "" {
+		opts.Env = append(opts.Env, fmt.Sprintf("GIT_DIR=%s", c.gitDir))
 	}
+	return c.executor(ctx, opts, append([]string{"gh"}, args...)...)
 }
 
 // CreateReview creates a new pull request on GitHub.

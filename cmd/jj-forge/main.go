@@ -70,15 +70,14 @@ func newJJExecutor() cmdpkg.Executor {
 	}
 }
 
-func newGHExecutor(gitDir string) cmdpkg.Executor {
-	base := github.DefaultExecutor(gitDir)
+func newGHExecutor() cmdpkg.Executor {
 	switch debugPrompt {
 	case "all":
-		return cmdpkg.NewPromptingExecutor(base, &cmdpkg.DefaultPrompter{}, nil)
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, nil)
 	case "writes":
-		return cmdpkg.NewPromptingExecutor(base, &cmdpkg.DefaultPrompter{}, ghConfirmOps)
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, ghConfirmOps)
 	default:
-		return base
+		return cmdpkg.DefaultExecutor
 	}
 }
 
@@ -104,7 +103,7 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to get git directory: %w", err)
 		}
-		return github.NewClientWithExecutor(gitDir, newGHExecutor(gitDir)), url, nil
+		return github.NewClientWithExecutor(gitDir, newGHExecutor()), url, nil
 	case forge.ForgeTypeGitLab:
 		return nil, "", &ui.UserError{
 			Msg: "GitLab is not yet supported",
@@ -776,7 +775,7 @@ Examples:
 			}
 			var runner *repoclone.Runner
 			if debugPrompt != "none" {
-				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor(""))
+				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor())
 				runner = repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, stdoutUI)
 			} else {
 				runner = repoclone.NewRunner(stdoutUI)
