@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"errors"
 	"slices"
@@ -115,7 +117,8 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
 	rootCmd := &cobra.Command{
 		Use:   "jj-forge",

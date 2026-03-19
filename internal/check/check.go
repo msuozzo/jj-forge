@@ -101,6 +101,20 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err := configMgr.SetCheckVerdicts(runningVerdicts); err != nil {
 		return fmt.Errorf("failed to set running verdicts: %w", err)
 	}
+	outstanding := slices.Clone(toCheck)
+	defer func() {
+		if ctx.Err() == nil {
+			return
+		}
+		// Remove verdicts for checks that haven't yet completed.
+		var ids []string
+		for _, rev := range outstanding {
+			ids = append(ids, rev.ID)
+		}
+		if len(ids) > 0 {
+			configMgr.RemoveCheckVerdicts(ids)
+		}
+	}()
 	// Initialize pool.
 	gitDir, err := client.GitDir(ctx)
 	if err != nil {
@@ -132,7 +146,13 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	// Store verdicts as they arrive and collect errors.
 	var failures []string
 	for range len(toCheck) {
-		r := <-resultCh
+		var r result
+		select {
+		case r = <-resultCh:
+		case <-ctx.Done():
+			tracker.Finish()
+			return ctx.Err()
+		}
 		verdictStr := forge.CheckVerdictPass
 		taskStatus := ui.TaskDone
 		if r.err != nil {
@@ -148,6 +168,9 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 			tracker.Finish()
 			return fmt.Errorf("failed to store check verdict: %w", err)
 		}
+		outstanding = slices.DeleteFunc(outstanding, func(rev *jj.Rev) bool {
+			return rev.ID == r.rev.ID
+		})
 		if r.err != nil {
 			failures = append(failures, fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID))
 		}
