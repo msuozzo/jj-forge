@@ -52,6 +52,8 @@ func TestClose_Success(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: close review
+		jjtest.Call{Args: []string{"forge:CloseReview", "1"}},
 		jjtest.Call{
 			Args:   []string{"git", "fetch", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
@@ -97,7 +99,8 @@ func TestClose_Success(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	result, err := Close(context.Background(), scenario.Client(), fakeForge, configMgr, CloseParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Close(context.Background(), scenario.Client(), wrappedForge, configMgr, CloseParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -205,7 +208,8 @@ func TestClose_StatusErrors(t *testing.T) {
 				}
 			}
 
-			_, err := Close(context.Background(), scenario.Client(), fakeForge, configMgr, CloseParams{
+			wrappedForge := scenario.WrapForge(fakeForge)
+			_, err := Close(context.Background(), scenario.Client(), wrappedForge, configMgr, CloseParams{
 				Rev:        "@",
 				ForkRemote: testRemote,
 				Force:      true,
@@ -263,6 +267,8 @@ func TestClose_ForgeError(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: CloseReview returns error
+		jjtest.Call{Args: []string{"forge:CloseReview", "1"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -277,7 +283,8 @@ func TestClose_ForgeError(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Close(context.Background(), scenario.Client(), fakeForge, configMgr, CloseParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Close(context.Background(), scenario.Client(), wrappedForge, configMgr, CloseParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -336,6 +343,8 @@ func TestClose_AbandonFailure(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: close review
+		jjtest.Call{Args: []string{"forge:CloseReview", "1"}},
 		jjtest.Call{
 			Args:   []string{"git", "fetch", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
@@ -376,7 +385,8 @@ func TestClose_AbandonFailure(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Close(context.Background(), scenario.Client(), fakeForge, configMgr, CloseParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Close(context.Background(), scenario.Client(), wrappedForge, configMgr, CloseParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",

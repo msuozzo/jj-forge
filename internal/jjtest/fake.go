@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
 )
 
@@ -134,6 +136,62 @@ func (s *Scenario) Verify() {
 // Client returns a jj.Client configured with this scenario's executor.
 func (s *Scenario) Client() jj.Client {
 	return jj.NewClientWithExecutor(s.Repo.Root, s.Executor())
+}
+
+// Record advances the scenario index and validates args, for non-jj calls
+// (e.g. forge API calls) interleaved with jj calls in the same sequence.
+func (s *Scenario) Record(args ...string) {
+	s.T.Helper()
+	if s.idx >= len(s.Calls) {
+		s.T.Fatalf("unexpected call: %v", args)
+	}
+	call := s.Calls[s.idx]
+	s.idx++
+	if !slices.Equal(call.Args, args) {
+		s.T.Fatalf("arg mismatch at call %d:\nwant: %v\ngot:  %v", s.idx, call.Args, args)
+	}
+}
+
+// ScenarioForge wraps a forge.Forge and records each API call into the
+// scenario, then delegates to the underlying forge.
+type ScenarioForge struct {
+	forge.Forge
+	scenario *Scenario
+}
+
+// WrapForge creates a ScenarioForge that records forge API calls into the scenario.
+func (s *Scenario) WrapForge(f forge.Forge) *ScenarioForge {
+	return &ScenarioForge{Forge: f, scenario: s}
+}
+
+func (sf *ScenarioForge) GetReview(ctx context.Context, repoURI string, number int) (*forge.ReviewDetails, error) {
+	sf.scenario.Record("forge:GetReview", strconv.Itoa(number))
+	return sf.Forge.GetReview(ctx, repoURI, number)
+}
+
+func (sf *ScenarioForge) UpdateReview(ctx context.Context, repoURI string, number int, body string) error {
+	sf.scenario.Record("forge:UpdateReview", strconv.Itoa(number))
+	return sf.Forge.UpdateReview(ctx, repoURI, number, body)
+}
+
+func (sf *ScenarioForge) MergeReview(ctx context.Context, repoURI string, number int) error {
+	sf.scenario.Record("forge:MergeReview", strconv.Itoa(number))
+	return sf.Forge.MergeReview(ctx, repoURI, number)
+}
+
+func (sf *ScenarioForge) CreateReview(ctx context.Context, repoURI string, params forge.ReviewCreateParams) (*forge.ReviewCreateResult, error) {
+	sf.scenario.Record("forge:CreateReview", params.FromBranch)
+	return sf.Forge.CreateReview(ctx, repoURI, params)
+}
+
+func (sf *ScenarioForge) CloseReview(ctx context.Context, repoURI string, number int) error {
+	sf.scenario.Record("forge:CloseReview", strconv.Itoa(number))
+	return sf.Forge.CloseReview(ctx, repoURI, number)
+}
+
+func (sf *ScenarioForge) FindReview(ctx context.Context, repoURI, branch string) (*forge.ReviewDetails, error) {
+	sf.scenario.Record("forge:FindReview", branch)
+	return sf.Forge.FindReview(ctx, repoURI, branch)
 }
 
 // LogOutput generates output in the format expected by jj.Client.Revs().

@@ -52,6 +52,10 @@ func TestMerge_Success(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: merge + strip links from merged PR
+		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		// No forge:UpdateReview — review has no body/links to strip
 		jjtest.Call{
 			Args:   []string{"git", "fetch", "--remote", testRemote, "--branch", "push-aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
@@ -80,7 +84,7 @@ func TestMerge_Success(t *testing.T) {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// cleanupLinksAfterMerge: getForgeConfig cached from RemoveCheckVerdicts (no write)
+		// cleanupLinksAfterMerge: no other open reviews
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -105,7 +109,8 @@ func TestMerge_Success(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -186,7 +191,10 @@ func TestMerge_NoCleanup(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
-		// No cleanup commands
+		// forge: merge + strip links from merged PR
+		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		// No cleanup commands (NoCleanup=true)
 		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
@@ -199,7 +207,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// cleanupLinksAfterMerge: getForgeConfig cached from RemoveCheckVerdicts (no write)
+		// cleanupLinksAfterMerge: no other open reviews
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -224,7 +232,8 @@ func TestMerge_NoCleanup(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -309,7 +318,8 @@ func TestMerge_StatusErrors(t *testing.T) {
 				}
 			}
 
-			_, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+			wrappedForge := scenario.WrapForge(fakeForge)
+			_, err := Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 				Rev:        "@",
 				ForkRemote: testRemote,
 				UI:         testUI,
@@ -374,7 +384,8 @@ func TestMerge_NotUploaded(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -438,7 +449,8 @@ func TestMerge_HasParentTrailer(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -498,6 +510,8 @@ func TestMerge_ForgeError(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: MergeReview returns error
+		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -512,7 +526,8 @@ func TestMerge_ForgeError(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "@",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -614,6 +629,10 @@ func TestMerge_LinkCleanup(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: merge + strip links from merged PR A
+		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
 		// Cleanup: fetch fork + bookmark delete + push + fetch upstream
 		jjtest.Call{
 			Args:   []string{"git", "fetch", "--remote", testRemote, "--branch", "push-aaaaaaaaaaaa"},
@@ -654,7 +673,11 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "cccccccccccc"},
 			Output: jjtest.LogOutput("cccccccccccc"),
 		},
-		// GetReview + UpdateReview for B and C happen via fakeForge
+		// cleanupLinksAfterMerge: GetReview + UpdateReview for B and C
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "3"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "3"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -699,7 +722,8 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		}
 	}
 
-	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:            "aaaaaaaaaaaa",
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
@@ -777,6 +801,10 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 			},
 		},
 		// No "git remote list" call: UpstreamRemoteURL is pre-resolved
+		// forge: merge + strip links from merged PR
+		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		// No cleanup commands (NoCleanup=true)
 		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
@@ -789,7 +817,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// cleanupLinksAfterMerge: getForgeConfig cached from RemoveCheckVerdicts (no write)
+		// cleanupLinksAfterMerge: no other open reviews
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -814,7 +842,8 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	result, err := Merge(context.Background(), scenario.Client(), fakeForge, configMgr, MergeParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Merge(context.Background(), scenario.Client(), wrappedForge, configMgr, MergeParams{
 		Rev:               "@",
 		ForkRemote:        testRemote,
 		UpstreamRemote:    "up",

@@ -53,6 +53,8 @@ func TestOpen_Success(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
 		// AddReviewRecord: getForgeConfig is cached from above, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
@@ -69,7 +71,8 @@ func TestOpen_Success(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -162,6 +165,8 @@ func TestOpen_StripsTrailers(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
 		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
@@ -171,7 +176,8 @@ func TestOpen_StripsTrailers(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		UpstreamRemote: testRemote,
 		ForkRemote:     testRemote,
@@ -232,6 +238,8 @@ func TestOpen_StackedReview(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-bbbbbbbbbbbb"}},
 		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["bbbbbbbbbbbb\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
@@ -241,7 +249,8 @@ func TestOpen_StackedReview(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	_, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -276,7 +285,8 @@ func TestOpen_EmptyDescription(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	_, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -314,7 +324,8 @@ func TestOpen_NotUploaded(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	_, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -380,7 +391,8 @@ func TestOpen_AlreadyExists(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	_, err = Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err = Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -432,11 +444,14 @@ func TestOpen_ForgeError(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: CreateReview returns error
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	_, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	_, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -500,6 +515,8 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
 		// AddReviewRecord: getForgeConfig is cached from GetReviewByChangeID above
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
@@ -520,7 +537,8 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 		t.Fatalf("failed to add config record: %v", err)
 	}
 
-	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		Reviewers:      []string{"reviewer1"},
 		UpstreamRemote: testRemote,
@@ -576,6 +594,8 @@ func TestOpen_CrossRepo(t *testing.T) {
 				return "og git@github.com:fork-owner/repo.git\nup git@github.com:upstream-owner/repo.git\n"
 			},
 		},
+		// forge: create review (cross-repo: fork-owner prefix)
+		jjtest.Call{Args: []string{"forge:CreateReview", "fork-owner:push-aaaaaaaaaaaa"}},
 		// AddReviewRecord: getForgeConfig is cached, no config list needed
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/upstream-owner/repo/pull/1\nopen"]`},
@@ -585,7 +605,8 @@ func TestOpen_CrossRepo(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:            "@",
 		UpstreamRemote: "up",
 		ForkRemote:     "og",
@@ -643,6 +664,8 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 				return "og git@github.com:owner/repo.git\n"
 			},
 		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
 		// AddReviewRecord
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
@@ -652,7 +675,8 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 
 	configMgr := forge.NewConfigManager(scenario.Client())
 
-	result, err := Open(context.Background(), scenario.Client(), fakeForge, configMgr, OpenParams{
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
 		Rev:               "@",
 		Reviewers:         []string{"reviewer1"},
 		UpstreamRemote:    testRemote,
