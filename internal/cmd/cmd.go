@@ -17,6 +17,20 @@ type Opts struct {
 	Env     []string // Additional env vars in "KEY=VALUE" format. Appended to os.Environ().
 }
 
+// ExecError represents a command that exited with a non-zero status.
+type ExecError struct {
+	Args   []string // The full command arguments.
+	Stderr string   // Captured stderr output.
+	Err    error    // Underlying error (typically *exec.ExitError).
+}
+
+func (e *ExecError) Error() string {
+	return fmt.Sprintf("command failed: %s\nerror: %s\nstderr: %s",
+		strings.Join(e.Args, " "), e.Err, e.Stderr)
+}
+
+func (e *ExecError) Unwrap() error { return e.Err }
+
 // Executor defines the function signature for running shell commands.
 // The first element of args is the binary name.
 type Executor func(ctx context.Context, opts Opts, args ...string) (stdout string, err error)
@@ -38,7 +52,7 @@ func DefaultExecutor(ctx context.Context, opts Opts, args ...string) (string, er
 		c.Stdin = opts.Stdin
 	}
 	if err := c.Run(); err != nil {
-		return "", fmt.Errorf("command failed: %s\nerror: %w\nstderr: %s", strings.Join(args, " "), err, stderr.String())
+		return "", &ExecError{Args: args, Stderr: stderr.String(), Err: err}
 	}
 	return stdout.String(), nil
 }
