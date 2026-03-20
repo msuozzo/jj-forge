@@ -139,7 +139,7 @@ func renderCommands(out io.Writer, cmd *cobra.Command, u *ui.UI) {
 }
 
 // flagNameWidth returns the display width of the flag's name portion
-// (e.g. "-r, --remote <REMOTE>" has width 22 with the leading 2-space indent).
+// (e.g. "-r, --remote <REMOTE>" has width 23 with the leading 2-space indent).
 func flagNameWidth(f *pflag.Flag) int {
 	// "  " prefix
 	w := 2

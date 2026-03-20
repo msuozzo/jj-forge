@@ -11,12 +11,12 @@ import (
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
-// ErrNotUploaded is returned when a merge is attempted on a change that
-// has not been pushed to the fork remote.
+// ErrNotUploaded is returned when an operation requires a change to have been
+// pushed to the fork remote but it has not been.
 var ErrNotUploaded = errors.New("change not uploaded")
 
-// ErrHasParentTrailer is returned when a merge is attempted on a change that
-// still has a forge-parent annotation, indicating a parent should be merged first.
+// ErrHasParentTrailer is returned when an operation requires a change to have
+// no forge-parent annotation, indicating a parent should be merged first.
 var ErrHasParentTrailer = errors.New("change has forge-parent annotation")
 
 // MergeParams contains parameters for the merge command.

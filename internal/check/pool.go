@@ -33,8 +33,8 @@ type WorkPool struct {
 }
 
 // NewWorkPool creates a pool of working directories under baseDir.
-// Existing directories with state files are reused; new directories are
-// created as needed up to poolSize.
+// All poolSize directories are created upfront. Existing directories with
+// state files are reused.
 func NewWorkPool(gitDir, baseDir string, poolSize int, runner cmd.Executor) (*WorkPool, error) {
 	if poolSize <= 0 {
 		poolSize = defaultPoolSize

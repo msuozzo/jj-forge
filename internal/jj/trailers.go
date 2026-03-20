@@ -122,9 +122,10 @@ func parseTrailersImpl(body string) ([]Trailer, bool, bool, string) {
 }
 
 // ParseDescriptionTrailers parses trailers from a full commit description.
-// It requires either a blank line before the trailers or the presence of
-// recognized git trailers (Signed-off-by, cherry-pick lines).
-// Returns an empty slice if no valid trailers are found.
+// It requires a blank line before the trailers. If the trailer paragraph
+// contains non-trailer lines, it is only considered valid when recognized
+// git trailers (Signed-off-by, cherry-pick lines) are also present.
+// Returns nil if no valid trailers are found.
 func ParseDescriptionTrailers(description string) []Trailer {
 	trailers, foundBlank, foundGitTrailer, nonTrailerLine := parseTrailersImpl(description)
 

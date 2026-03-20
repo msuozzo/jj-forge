@@ -72,8 +72,8 @@ type Forge interface {
 	SetupRuleset(ctx context.Context, repoURI string) error
 
 	// FormatHeadBranch returns the head/source branch reference for creating a review.
-	// GitHub: "owner:push-{changeID}" (cross-repo PR)
-	// SSM: "push-{changeID}" (same-repo PR)
+	// GitHub: "owner:push-{changeID}" (fork-qualified ref)
+	// SSM: "push-{changeID}" (bare branch name)
 	FormatHeadBranch(ctx context.Context, jjClient jj.Client, forkRemote, changeID string) (string, error)
 
 	// NormalizeRepoURL converts a remote URL to this forge's canonical format.

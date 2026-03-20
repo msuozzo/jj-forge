@@ -80,7 +80,7 @@ func (t *TaskTracker) loop() {
 
 // SetStatus updates the status of task at index. It is safe to call from
 // multiple goroutines. In non-interactive mode, a line is printed when the
-// task reaches a terminal state (TaskDone or TaskFailed).
+// task reaches a terminal state (TaskDone, TaskFailed, or TaskSkipped).
 func (t *TaskTracker) SetStatus(index int, status TaskStatus) {
 	t.mu.Lock()
 	t.entries[index].status = status

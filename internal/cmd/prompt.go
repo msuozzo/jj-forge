@@ -11,7 +11,7 @@ import (
 
 // Prompter handles user confirmation prompts.
 type Prompter interface {
-	Confirm(prompt string, defaultAccept bool) (bool, error)
+	Confirm(prompt string, defaultYes bool) (bool, error)
 }
 
 // DefaultPrompter implements Prompter using stdin/stdout.
