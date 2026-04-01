@@ -31,24 +31,28 @@ type taskEntry struct {
 // animation. In non-interactive contexts it prints a single line per task
 // when it reaches a terminal state.
 type TaskTracker struct {
-	ui      *UI
-	entries []*taskEntry
-	mu      sync.Mutex
-	stopCh  chan struct{}
-	frame   int
-	started bool
+	ui          *UI
+	entries     []*taskEntry
+	nameToIndex map[string]int
+	mu          sync.Mutex
+	stopCh      chan struct{}
+	frame       int
+	started     bool
 }
 
 // NewTaskTracker creates a tracker for the given task names.
 func NewTaskTracker(u *UI, taskNames []string) *TaskTracker {
 	entries := make([]*taskEntry, len(taskNames))
+	nameToIndex := make(map[string]int, len(taskNames))
 	for i, name := range taskNames {
 		entries[i] = &taskEntry{name: name, status: TaskPending}
+		nameToIndex[name] = i
 	}
 	return &TaskTracker{
-		ui:      u,
-		entries: entries,
-		stopCh:  make(chan struct{}),
+		ui:          u,
+		entries:     entries,
+		nameToIndex: nameToIndex,
+		stopCh:      make(chan struct{}),
 	}
 }
 
@@ -97,12 +101,37 @@ func (t *TaskTracker) SetStatus(index int, status TaskStatus) {
 	}
 }
 
+// SetStatusByName updates the status of task by name.
+func (t *TaskTracker) SetStatusByName(name string, status TaskStatus) {
+	t.mu.Lock()
+	index, ok := t.nameToIndex[name]
+	t.mu.Unlock()
+	if ok {
+		t.SetStatus(index, status)
+	}
+}
+
 // SetMessage updates the message of task at index. It is safe to call from
 // multiple goroutines.
 func (t *TaskTracker) SetMessage(index int, message string) {
 	t.mu.Lock()
 	t.entries[index].message = message
 	t.mu.Unlock()
+}
+
+// SetMessageByName updates the message of task by name.
+func (t *TaskTracker) SetMessageByName(name string, message string) {
+	t.mu.Lock()
+	index, ok := t.nameToIndex[name]
+	t.mu.Unlock()
+	if ok {
+		t.SetMessage(index, message)
+	}
+}
+
+// IsInteractive reports whether the output is an interactive terminal.
+func (t *TaskTracker) IsInteractive() bool {
+	return t.ui.IsInteractive()
 }
 
 // Finish stops the animation loop and renders the final state.

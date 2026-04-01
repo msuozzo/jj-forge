@@ -43,22 +43,39 @@ func Update(
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}
+	if len(trailerResult.Revs) == 0 {
+		return &UpdateResult{UploadResult: &change.UploadResult{}}, nil
+	}
+
+	taskNames := make([]string, len(trailerResult.Revs))
+	for i, rev := range trailerResult.Revs {
+		taskNames[i] = rev.ID
+	}
+	tracker := ui.NewTaskTracker(params.UI, taskNames)
+	tracker.Start()
+	defer tracker.Finish()
+
 	// Phase 2: Run checks (if configured)
 	if params.CheckFn != nil {
+		for i := range trailerResult.Revs {
+			tracker.SetMessage(i, "running checks")
+		}
 		if err := params.CheckFn(); err != nil {
 			return nil, err
 		}
 	}
+
 	// Phase 3: Push
 	// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
 	var preResolved []*jj.Rev
 	if trailerResult.TrailersUpdated == 0 {
 		preResolved = trailerResult.Revs
 	}
-	pushResult, err := change.Push(ctx, jjClient, params.Revset, params.ForkRemote, params.UI, preResolved)
+	pushResult, err := change.Push(ctx, jjClient, params.Revset, params.ForkRemote, params.UI, preResolved, tracker)
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}
+
 	skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + trailerResult.SkippedImmutable + pushResult.SkippedSynced
 	uploadResult := &change.UploadResult{
 		Pushed:           pushResult.Pushed,
@@ -69,16 +86,23 @@ func Update(
 		SkippedSynced:    pushResult.SkippedSynced,
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}
+
 	// Phase 4: Update PR descriptions with links
 	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, UpdatePRLinksParams{
 		Revset:            params.Revset,
 		UpstreamRemote:    params.UpstreamRemote,
 		UpstreamRemoteURL: params.UpstreamRemoteURL,
+		Tracker:           tracker,
 		Ordered:           params.Ordered,
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	for i := range trailerResult.Revs {
+		tracker.SetStatus(i, ui.TaskDone)
+	}
+
 	return &UpdateResult{
 		UploadResult: uploadResult,
 		PRsUpdated:   prsUpdated,
@@ -90,7 +114,8 @@ type UpdatePRLinksParams struct {
 	Revset            string // Revset to update
 	UpstreamRemote    string // Remote to update PRs on
 	UpstreamRemoteURL string // Pre-resolved upstream remote URL (optional; resolved if empty)
-	Ordered           bool   // If true, update PRs sequentially in parent-to-child order
+	Tracker           *ui.TaskTracker
+	Ordered           bool // If true, update PRs sequentially in parent-to-child order
 }
 
 // UpdatePRLinks updates PR descriptions with parent/child links for the given revset.
@@ -108,6 +133,8 @@ func UpdatePRLinks(
 ) (int, error) {
 	revset := params.Revset
 	upstreamRemote := params.UpstreamRemote
+	tr := params.Tracker
+
 	// Resolve the target revset whose PRs will be updated.
 	targetRevs, err := jjClient.Revs(ctx, revset)
 	if err != nil {
@@ -168,6 +195,7 @@ func UpdatePRLinks(
 
 	// Pre-compute link data and identify PRs to update (serial, local-only).
 	type prUpdate struct {
+		changeID     string
 		reviewNumber int
 		parentLinks  []PRLink
 		childLinks   []PRLink
@@ -206,6 +234,7 @@ func UpdatePRLinks(
 			}
 		}
 		updates = append(updates, prUpdate{
+			changeID:     rev.ID,
 			reviewNumber: reviewNumber,
 			parentLinks:  parentLinks,
 			childLinks:   childLinks,
@@ -234,6 +263,9 @@ func UpdatePRLinks(
 	if params.Ordered {
 		// Sequential updates in parent-to-child order.
 		for _, u := range updates {
+			if tr != nil {
+				tr.SetMessageByName(u.changeID, "updating PR")
+			}
 			if err := updateOne(u); err != nil {
 				return 0, err
 			}
@@ -246,6 +278,9 @@ func UpdatePRLinks(
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				if tr != nil {
+					tr.SetMessageByName(u.changeID, "updating PR")
+				}
 				if err := updateOne(u); err != nil {
 					errCh <- err
 				}

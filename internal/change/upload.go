@@ -38,7 +38,12 @@ type PushResult struct {
 }
 
 // UpdateTrailers updates forge-parent trailers for a stack of revisions.
-func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.UI) (*UpdateTrailersResult, error) {
+func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.UI, tracker ...*ui.TaskTracker) (*UpdateTrailersResult, error) {
+	var tr *ui.TaskTracker
+	if len(tracker) > 0 {
+		tr = tracker[0]
+	}
+
 	stack, err := client.Revs(ctx, revset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stack: %w", err)
@@ -63,19 +68,25 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 	for _, rev := range stack {
 		// Skip immutable commits
 		if !rev.IsMutable {
-			fmt.Fprintf(u, "Skipping immutable change: %s\n", u.Styled("change_id", rev.ID))
+			if tr == nil {
+				fmt.Fprintf(u, "Skipping immutable change: %s\n", u.Styled("change_id", rev.ID))
+			}
 			result.SkippedImmutable++
 			continue
 		}
 		// Skip empty commits
 		if rev.IsEmpty {
-			fmt.Fprintf(u, "Skipping empty change: %s\n", u.Styled("change_id", rev.ID))
+			if tr == nil {
+				fmt.Fprintf(u, "Skipping empty change: %s\n", u.Styled("change_id", rev.ID))
+			}
 			result.SkippedEmpty++
 			continue
 		}
 		// Skip anonymous commits (empty description)
 		if strings.TrimSpace(rev.Description) == "" {
-			fmt.Fprintf(u, "Skipping anonymous change: %s\n", u.Styled("change_id", rev.ID))
+			if tr == nil {
+				fmt.Fprintf(u, "Skipping anonymous change: %s\n", u.Styled("change_id", rev.ID))
+			}
 			result.SkippedAnonymous++
 			continue
 		}
@@ -96,7 +107,11 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 			newDescription = forge.RemoveParentTrailer(rev.Description)
 		}
 		if newDescription != rev.Description {
-			fmt.Fprintf(u, "Updating trailers for %s...\n", u.Styled("change_id", rev.ID))
+			if tr != nil {
+				tr.SetMessageByName(rev.ID, "updating trailers")
+			} else {
+				fmt.Fprintf(u, "Updating trailers for %s...\n", u.Styled("change_id", rev.ID))
+			}
 			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update trailers for %s: %w", rev.ID, err)
@@ -110,11 +125,16 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 // Push pushes a stack of revisions to the given remote, skipping those already synced.
 // If preResolved is non-nil, it is used directly instead of re-resolving the revset.
 // The preResolved slice should be in jj log order (children first); it will be reversed internally.
-func Push(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI, preResolved ...[]*jj.Rev) (*PushResult, error) {
+func Push(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI, preResolved []*jj.Rev, tracker ...*ui.TaskTracker) (*PushResult, error) {
+	var tr *ui.TaskTracker
+	if len(tracker) > 0 {
+		tr = tracker[0]
+	}
+
 	var stack []*jj.Rev
-	if len(preResolved) > 0 && preResolved[0] != nil {
-		stack = make([]*jj.Rev, len(preResolved[0]))
-		copy(stack, preResolved[0])
+	if preResolved != nil {
+		stack = make([]*jj.Rev, len(preResolved))
+		copy(stack, preResolved)
 	} else {
 		// Re-resolve revset since commits may have changed due to trailer updates
 		var err error
@@ -136,7 +156,9 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 			continue
 		}
 		if slices.Contains(rev.RemoteBookmarks, remote+"/push-"+rev.ID) {
-			fmt.Fprintf(u, "Skipping synced change: %s\n", u.Styled("change_id", rev.ID))
+			if tr == nil {
+				fmt.Fprintf(u, "Skipping synced change: %s\n", u.Styled("change_id", rev.ID))
+			}
 			result.SkippedSynced++
 			continue
 		}
@@ -145,31 +167,39 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 	if len(toPush) == 0 {
 		return result, nil
 	}
-	// Use TaskTracker for progress display when pushing multiple changes.
-	fmt.Fprintf(u, "Pushing %d change(s)...\n", len(toPush))
-	taskNames := make([]string, len(toPush))
-	for i, item := range toPush {
-		taskNames[i] = item.rev.ID
+
+	if tr == nil {
+		// Use internal TaskTracker for progress display when pushing multiple changes.
+		fmt.Fprintf(u, "Pushing %d change(s)...\n", len(toPush))
+		taskNames := make([]string, len(toPush))
+		for i, item := range toPush {
+			taskNames[i] = item.rev.ID
+		}
+		tr = ui.NewTaskTracker(u, taskNames)
+		tr.Start()
+		defer tr.Finish()
 	}
-	tracker := ui.NewTaskTracker(u, taskNames)
-	tracker.Start()
+
 	for _, item := range toPush {
-		tracker.SetStatus(item.index, ui.TaskRunning)
+		tr.SetMessageByName(item.rev.ID, "pushing")
+		tr.SetStatusByName(item.rev.ID, ui.TaskRunning)
 		if _, err := client.Run(ctx, "git", "push", "--change", item.rev.ID, "--remote", remote, "--allow-new"); err != nil {
-			tracker.SetStatus(item.index, ui.TaskFailed)
-			tracker.Finish()
+			tr.SetStatusByName(item.rev.ID, ui.TaskFailed)
 			return nil, fmt.Errorf("failed to push %s: %w", item.rev.ID, err)
 		}
-		tracker.SetStatus(item.index, ui.TaskDone)
+		// If we are using an external tracker, we don't set terminal status here
+		// because other phases (like PR updates) might follow.
+		if tr.IsInteractive() && len(tracker) == 0 {
+			tr.SetStatusByName(item.rev.ID, ui.TaskDone)
+		}
 		result.Pushed++
 	}
-	tracker.Finish()
 	return result, nil
 }
 
 // Upload orchestrates the trailer updates and pushing of a stack of revisions.
-func Upload(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI) (*UploadResult, error) {
-	trailerResult, err := UpdateTrailers(ctx, client, revset, u)
+func Upload(ctx context.Context, client jj.Client, revset string, remote string, u *ui.UI, tracker ...*ui.TaskTracker) (*UploadResult, error) {
+	trailerResult, err := UpdateTrailers(ctx, client, revset, u, tracker...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +208,7 @@ func Upload(ctx context.Context, client jj.Client, revset string, remote string,
 	if trailerResult.TrailersUpdated == 0 {
 		preResolved = trailerResult.Revs
 	}
-	pushResult, err := Push(ctx, client, revset, remote, u, preResolved)
+	pushResult, err := Push(ctx, client, revset, remote, u, preResolved, tracker...)
 	if err != nil {
 		return nil, err
 	}
