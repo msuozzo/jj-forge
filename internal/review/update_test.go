@@ -64,10 +64,12 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
-		// GetReview is called for PR #1 — no forge-parent trailer, so no links
+		// GetReview for PR #1 — no forge-parent trailer, so no links; body unchanged
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create review in forge
 	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
@@ -80,11 +82,12 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 		t.Fatalf("failed to create review: %v", err)
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -166,10 +169,15 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
-		// GetReview + UpdateReview for each PR are handled by fakeForge
+		// Forge calls in parent-to-child order (Ordered: true)
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create reviews in forge
 	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
@@ -191,11 +199,12 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 		t.Fatalf("failed to create review: %v", err)
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -287,9 +296,17 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// Forge calls in parent-to-child order: A(#1), B(#2), C(#3)
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "3"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "3"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create reviews
 	for _, params := range []forge.ReviewCreateParams{
@@ -302,11 +319,12 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 		}
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -390,15 +408,18 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// No forge calls — no review records
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -476,9 +497,13 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// Only B is in the target set
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create reviews in forge
 	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
@@ -500,11 +525,12 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 		t.Fatalf("failed to create review: %v", err)
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -512,12 +538,6 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 
 	if result.PRsUpdated != 1 {
 		t.Errorf("expected 1 PR updated, got %d", result.PRsUpdated)
-	}
-
-	// Verify parent PR (A) was NOT updated (not in target revset)
-	parentReview, _ := fakeForge.GetTestReview(1)
-	if strings.Contains(parentReview.Body, "Children:") {
-		t.Errorf("expected parent PR to be unchanged, got body %q", parentReview.Body)
 	}
 
 	// Verify child PR (B) got parent link to A
@@ -629,6 +649,7 @@ func TestUpdate_PartialStack_ChildNotUploaded_RetainsChildLink(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -739,9 +760,21 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 				return "up git@github.com:owner/repo.git\n"
 			},
 		},
+		// Forge calls in parent-to-child order: D(#1), E(#2), C(#3), A(#4), B(#5)
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "3"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "3"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "4"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "4"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "5"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "5"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create reviews (numbered 1-5 in creation order: D, E, C, A, B)
 	for _, params := range []forge.ReviewCreateParams{
@@ -756,11 +789,12 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 		}
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:         revset,
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -837,6 +871,7 @@ func TestUpdate_UploadError(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 	})
 
 	if err == nil {
@@ -886,6 +921,7 @@ func TestUpdate_CheckFnError_AbortsPush(t *testing.T) {
 		ForkRemote:     testRemote,
 		UpstreamRemote: "up",
 		UI:             testUI,
+		Ordered:        true,
 		CheckFn:        func() error { return checkErr },
 	})
 
@@ -957,10 +993,15 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 			},
 		},
 		// No "git remote list" call: UpstreamRemoteURL is pre-resolved
-		// GetReview + UpdateReview for each PR are handled by fakeForge
+		// Forge calls in parent-to-child order
+		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
 
 	// Create reviews in forge
 	_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", forge.ReviewCreateParams{
@@ -982,12 +1023,13 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 		t.Fatalf("failed to create review: %v", err)
 	}
 
-	result, err := Update(context.Background(), scenario.Client(), fakeForge, configMgr, UpdateParams{
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
 		Revset:            revset,
 		ForkRemote:        testRemote,
 		UpstreamRemote:    "up",
 		UpstreamRemoteURL: "git@github.com:owner/repo.git",
 		UI:                testUI,
+		Ordered:           true,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)

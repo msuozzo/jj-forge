@@ -21,6 +21,7 @@ type UpdateParams struct {
 	UpstreamRemoteURL string       // Pre-resolved upstream remote URL (optional; resolved if empty)
 	UI                *ui.UI       // UI for styled output
 	CheckFn           func() error // Optional: runs between trailer updates and push
+	Ordered           bool         // If true, update PRs sequentially in parent-to-child order
 }
 
 // UpdateResult contains the result of the update command.
@@ -69,7 +70,12 @@ func Update(
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}
 	// Phase 4: Update PR descriptions with links
-	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, params.Revset, params.UpstreamRemote, params.UpstreamRemoteURL)
+	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, UpdatePRLinksParams{
+		Revset:            params.Revset,
+		UpstreamRemote:    params.UpstreamRemote,
+		UpstreamRemoteURL: params.UpstreamRemoteURL,
+		Ordered:           params.Ordered,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +83,14 @@ func Update(
 		UploadResult: uploadResult,
 		PRsUpdated:   prsUpdated,
 	}, nil
+}
+
+// UpdatePRLinksParams contains parameters for UpdatePRLinks.
+type UpdatePRLinksParams struct {
+	Revset            string // Revset to update
+	UpstreamRemote    string // Remote to update PRs on
+	UpstreamRemoteURL string // Pre-resolved upstream remote URL (optional; resolved if empty)
+	Ordered           bool   // If true, update PRs sequentially in parent-to-child order
 }
 
 // UpdatePRLinks updates PR descriptions with parent/child links for the given revset.
@@ -90,10 +104,10 @@ func UpdatePRLinks(
 	jjClient jj.Client,
 	forgeClient forge.Forge,
 	configMgr *forge.ConfigManager,
-	revset string,
-	upstreamRemote string,
-	upstreamRemoteURL ...string,
+	params UpdatePRLinksParams,
 ) (int, error) {
+	revset := params.Revset
+	upstreamRemote := params.UpstreamRemote
 	// Resolve the target revset whose PRs will be updated.
 	targetRevs, err := jjClient.Revs(ctx, revset)
 	if err != nil {
@@ -142,8 +156,8 @@ func UpdatePRLinks(
 	}
 
 	var upstreamURL string
-	if len(upstreamRemoteURL) > 0 && upstreamRemoteURL[0] != "" {
-		upstreamURL = upstreamRemoteURL[0]
+	if params.UpstreamRemoteURL != "" {
+		upstreamURL = params.UpstreamRemoteURL
 	} else {
 		var err error
 		upstreamURL, err = jjClient.RemoteURL(ctx, upstreamRemote)
@@ -200,34 +214,48 @@ func UpdatePRLinks(
 	if len(updates) == 0 {
 		return 0, nil
 	}
-	// Parallel forge API calls: GetReview + UpdateReview per PR.
+
 	var prsUpdated atomic.Int32
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(updates))
-	for _, u := range updates {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewNumber)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to get review #%d: %w", u.reviewNumber, err)
-				return
+	updateOne := func(u prUpdate) error {
+		details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewNumber)
+		if err != nil {
+			return fmt.Errorf("failed to get review #%d: %w", u.reviewNumber, err)
+		}
+		newBody := SetPRLinks(details.Body, u.parentLinks, u.childLinks)
+		if newBody != details.Body {
+			if err := forgeClient.UpdateReview(ctx, upstreamURL, u.reviewNumber, newBody); err != nil {
+				return fmt.Errorf("failed to update review #%d: %w", u.reviewNumber, err)
 			}
-			newBody := SetPRLinks(details.Body, u.parentLinks, u.childLinks)
-			if newBody != details.Body {
-				if err := forgeClient.UpdateReview(ctx, upstreamURL, u.reviewNumber, newBody); err != nil {
-					errCh <- fmt.Errorf("failed to update review #%d: %w", u.reviewNumber, err)
-					return
-				}
-				prsUpdated.Add(1)
-			}
-		}()
+			prsUpdated.Add(1)
+		}
+		return nil
 	}
-	wg.Wait()
-	close(errCh)
-	// Return first error if any.
-	for err := range errCh {
-		return 0, err
+
+	if params.Ordered {
+		// Sequential updates in parent-to-child order.
+		for _, u := range updates {
+			if err := updateOne(u); err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		// Parallel forge API calls.
+		var wg sync.WaitGroup
+		errCh := make(chan error, len(updates))
+		for _, u := range updates {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := updateOne(u); err != nil {
+					errCh <- err
+				}
+			}()
+		}
+		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			return 0, err
+		}
 	}
 	return int(prsUpdated.Load()), nil
 }

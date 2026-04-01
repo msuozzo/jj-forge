@@ -451,7 +451,11 @@ use 'review open' and 'review submit' instead.`,
 			fmt.Fprintf(stdoutUI, "Opened %d review(s), skipped %d\n", opened, skipped)
 			// Update PR descriptions with parent/child links
 			if opened > 0 {
-				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, revset, openUpstreamRemote, upstreamRemoteURL)
+				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, review.UpdatePRLinksParams{
+					Revset:            revset,
+					UpstreamRemote:    openUpstreamRemote,
+					UpstreamRemoteURL: upstreamRemoteURL,
+				})
 				if err != nil {
 					stdoutUI.PrintWarning("failed to update PR links: %v", err)
 				} else if prsUpdated > 0 {
