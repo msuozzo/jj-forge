@@ -80,8 +80,9 @@ func Update(
 }
 
 // UpdatePRLinks updates PR descriptions with parent/child links for the given revset.
-// The revset is expanded to include mutable parents so that parent PRs get child links
-// even when only a subset of the stack is passed.
+// Only PRs for commits in the revset are updated. The revset is expanded to include
+// mutable parents and children as context for reading trailers, so that parent and
+// child links are accurate even when only a subset of the stack is uploaded.
 // If upstreamRemoteURL is non-empty, it is used instead of resolving upstreamRemote.
 // Returns the number of PRs updated.
 func UpdatePRLinks(
@@ -93,7 +94,18 @@ func UpdatePRLinks(
 	upstreamRemote string,
 	upstreamRemoteURL ...string,
 ) (int, error) {
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	// Resolve the target revset whose PRs will be updated.
+	targetRevs, err := jjClient.Revs(ctx, revset)
+	if err != nil {
+		return 0, fmt.Errorf("failed to resolve revset: %w", err)
+	}
+	targetIDs := make(map[string]bool, len(targetRevs))
+	for _, rev := range targetRevs {
+		targetIDs[rev.ID] = true
+	}
+
+	// Expand to include mutable parents and children for trailer context only.
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 	stack, err := jjClient.Revs(ctx, expandedRevset)
 	if err != nil {
 		return 0, fmt.Errorf("failed to resolve expanded revset: %w", err)
@@ -118,11 +130,6 @@ func UpdatePRLinks(
 	// Build parent/child map from forge-parent trailers
 	parentOf := make(map[string][]string)   // changeID -> parent changeIDs
 	childrenOf := make(map[string][]string) // changeID -> child changeIDs
-
-	stackIDs := make(map[string]bool)
-	for _, rev := range stack {
-		stackIDs[rev.ID] = true
-	}
 
 	for _, rev := range stack {
 		trailers := jj.ParseDescriptionTrailers(rev.Description)
@@ -153,6 +160,9 @@ func UpdatePRLinks(
 	}
 	var updates []prUpdate
 	for _, rev := range stack {
+		if !targetIDs[rev.ID] {
+			continue // Context-only rev (parent/child), don't update its PR
+		}
 		rec, ok := reviewByChange[rev.ID]
 		if !ok {
 			continue // No open review for this change

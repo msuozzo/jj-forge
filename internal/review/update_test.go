@@ -25,7 +25,7 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 	fakeForge := github.NewFakeForge()
 
 	revset := "::@ & mutable()"
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase: Revs(revset)
@@ -40,7 +40,12 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip synced (already has remote bookmark)
-		// UpdatePRLinks phase: Revs(expandedRevset) for links
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -122,7 +127,7 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 
 	revset := "::@ & mutable()"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase: Revs(revset)
@@ -137,7 +142,12 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip sync (already synced)
-		// UpdatePRLinks phase: Revs(expandedRevset)
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -241,7 +251,7 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 
 	revset := "::@ & mutable()"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase
@@ -255,7 +265,12 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip sync (all synced)
-		// UpdatePRLinks phase
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -340,7 +355,7 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 
 	revset := "::@ & mutable()"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase
@@ -353,7 +368,12 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 			Output: jjtest.LogOutput("root"),
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
-		// UpdatePRLinks phase
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
@@ -417,7 +437,7 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 	// The user passes a revset that only includes B
 	revset := "bbbbbbbbbbbb"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase: Revs(revset) — only B
@@ -432,7 +452,12 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip sync (already synced)
-		// UpdatePRLinks phase: Revs(expandedRevset) — includes both A and B
+		// UpdatePRLinks phase: Revs(revset) for target set —only B
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) —includes both A and B
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
@@ -485,20 +510,142 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	if result.PRsUpdated != 2 {
-		t.Errorf("expected 2 PRs updated, got %d", result.PRsUpdated)
+	if result.PRsUpdated != 1 {
+		t.Errorf("expected 1 PR updated, got %d", result.PRsUpdated)
 	}
 
-	// Verify parent PR (A) got children link to B
+	// Verify parent PR (A) was NOT updated (not in target revset)
 	parentReview, _ := fakeForge.GetTestReview(1)
-	if !strings.Contains(parentReview.Body, "Children: [#2]") {
-		t.Errorf("expected parent PR to have children link, got body %q", parentReview.Body)
+	if strings.Contains(parentReview.Body, "Children:") {
+		t.Errorf("expected parent PR to be unchanged, got body %q", parentReview.Body)
 	}
 
 	// Verify child PR (B) got parent link to A
 	childReview, _ := fakeForge.GetTestReview(2)
 	if !strings.Contains(childReview.Body, "Parents: [#1]") {
 		t.Errorf("expected child PR to have parent link, got body %q", childReview.Body)
+	}
+
+	scenario.Verify()
+}
+
+func TestUpdate_PartialStack_ChildNotUploaded_RetainsChildLink(t *testing.T) {
+	// Stack A<-B<-C, all have open PRs. Update with revset covering only B.
+	// C is not in the upload set but is a mutable child of B, so the expanded
+	// revset should include C for context. B should retain its child link to C.
+	// A is a mutable parent of B, so also included for context.
+	// Only B's PR should be updated.
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(
+		jjtest.Commit{
+			ID:              "aaaaaaaaaaaa",
+			Parents:         []string{"root"},
+			Description:     "feat: grandparent\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+		},
+		jjtest.Commit{
+			ID:              "bbbbbbbbbbbb",
+			Parents:         []string{"aaaaaaaaaaaa"},
+			Description:     "feat: parent\n\nforge-parent: aaaaaaaaaaaa\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-bbbbbbbbbbbb"},
+		},
+		jjtest.Commit{
+			ID:              "cccccccccccc",
+			Parents:         []string{"bbbbbbbbbbbb"},
+			Description:     "feat: child\n\nforge-parent: bbbbbbbbbbbb\n",
+			IsMutable:       true,
+			RemoteBookmarks: []string{"og/push-cccccccccccc"},
+		},
+	)
+
+	fakeForge := github.NewFakeForge()
+
+	// Only uploading B
+	revset := "bbbbbbbbbbbb"
+	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
+
+	scenario := jjtest.NewScenario(t, repo,
+		// UpdateTrailers phase: Revs(revset)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+		},
+		// UpdateTrailers phase: Revs(parents(revset)~(revset))
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", parentRevset},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		// Push: skip re-resolve (trailers unchanged, revs reused)
+		// Push: skip synced (already has remote bookmark)
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset), includes A (parent), B, and C (child)
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
+			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// GetReviewRecords
+		jjtest.Call{
+			Args: []string{"config", "list", "--repo", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`
+			},
+		},
+		// RemoteURL
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "up git@github.com:owner/repo.git\n"
+			},
+		},
+		// Only B's PR should be fetched and updated (not A or C)
+		jjtest.Call{Args: []string{"forge:GetReview", "2"}},
+		jjtest.Call{Args: []string{"forge:UpdateReview", "2"}},
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+	wrappedForge := scenario.WrapForge(fakeForge)
+
+	// Create reviews in forge
+	for i, params := range []forge.ReviewCreateParams{
+		{Title: "feat: grandparent", Body: "A body", FromBranch: "push-aaaaaaaaaaaa", ToBranch: "main"},
+		{Title: "feat: parent", Body: "B body", FromBranch: "push-bbbbbbbbbbbb", ToBranch: "main"},
+		{Title: "feat: child", Body: "C body", FromBranch: "push-cccccccccccc", ToBranch: "main"},
+	} {
+		_, err := fakeForge.CreateReview(context.Background(), "github.com/owner/repo", params)
+		if err != nil {
+			t.Fatalf("failed to create review %d: %v", i+1, err)
+		}
+	}
+
+	result, err := Update(context.Background(), scenario.Client(), wrappedForge, configMgr, UpdateParams{
+		Revset:         revset,
+		ForkRemote:     testRemote,
+		UpstreamRemote: "up",
+		UI:             testUI,
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	// Only B gets a link update (A and C are context-only)
+	if result.PRsUpdated != 1 {
+		t.Errorf("expected 1 PR updated, got %d", result.PRsUpdated)
+	}
+
+	// B: should have parent link to A AND child link to C
+	bReview, _ := fakeForge.GetTestReview(2)
+	if !strings.Contains(bReview.Body, "Parents: [#1]") {
+		t.Errorf("expected B PR to have parent link to A, got body %q", bReview.Body)
+	}
+	if !strings.Contains(bReview.Body, "Children: [#3]") {
+		t.Errorf("expected B PR to have child link to C, got body %q", bReview.Body)
 	}
 
 	scenario.Verify()
@@ -556,7 +703,7 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 
 	revset := "::@ & mutable()"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase
@@ -570,7 +717,12 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip sync (all synced)
-		// UpdatePRLinks phase
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa", "cccccccccccc", "eeeeeeeeeeee", "dddddddddddd"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa", "cccccccccccc", "eeeeeeeeeeee", "dddddddddddd"),
@@ -772,7 +924,7 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 
 	revset := "::@ & mutable()"
 	parentRevset := fmt.Sprintf("parents(%s)~(%s)", revset, revset)
-	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable())", revset, revset)
+	expandedRevset := fmt.Sprintf("(%s) | (parents(%s) & mutable()) | (children(%s) & mutable())", revset, revset, revset)
 
 	scenario := jjtest.NewScenario(t, repo,
 		// UpdateTrailers phase: Revs(revset)
@@ -787,7 +939,12 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 		},
 		// Push: skip re-resolve (trailers unchanged, revs reused)
 		// Push: skip sync (already synced)
-		// UpdatePRLinks phase: Revs(expandedRevset)
+		// UpdatePRLinks phase: Revs(revset) for target set
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset},
+			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
+		},
+		// UpdatePRLinks phase: Revs(expandedRevset) for context
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", expandedRevset},
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
