@@ -20,8 +20,9 @@ const (
 var spinnerFrames = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
 
 type taskEntry struct {
-	name   string
-	status TaskStatus
+	name    string
+	status  TaskStatus
+	message string
 }
 
 // TaskTracker displays animated progress for a set of named tasks.
@@ -84,6 +85,9 @@ func (t *TaskTracker) loop() {
 func (t *TaskTracker) SetStatus(index int, status TaskStatus) {
 	t.mu.Lock()
 	t.entries[index].status = status
+	if status == TaskDone || status == TaskFailed || status == TaskSkipped {
+		t.entries[index].message = ""
+	}
 	entry := t.entries[index]
 	interactive := t.ui.IsInteractive()
 	t.mu.Unlock()
@@ -91,6 +95,14 @@ func (t *TaskTracker) SetStatus(index int, status TaskStatus) {
 	if !interactive && (status == TaskDone || status == TaskFailed || status == TaskSkipped) {
 		t.printTerminalLine(entry)
 	}
+}
+
+// SetMessage updates the message of task at index. It is safe to call from
+// multiple goroutines.
+func (t *TaskTracker) SetMessage(index int, message string) {
+	t.mu.Lock()
+	t.entries[index].message = message
+	t.mu.Unlock()
 }
 
 // Finish stops the animation loop and renders the final state.
@@ -129,11 +141,17 @@ func (t *TaskTracker) render() {
 	for _, e := range t.entries {
 		// Clear the current line.
 		fmt.Fprint(t.ui, "\x1b[2K")
+
+		msg := ""
+		if e.message != "" {
+			msg = "  " + t.ui.Styled("task_pending", e.message)
+		}
+
 		switch e.status {
 		case TaskPending:
-			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_pending", "·"), t.ui.Styled("task_pending", e.name))
+			fmt.Fprintf(t.ui, "  %s %s%s\n", t.ui.Styled("task_pending", "·"), t.ui.Styled("task_pending", e.name), msg)
 		case TaskRunning:
-			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_running", string(spinner)), e.name)
+			fmt.Fprintf(t.ui, "  %s %s%s\n", t.ui.Styled("task_running", string(spinner)), e.name, msg)
 		case TaskDone:
 			fmt.Fprintf(t.ui, "  %s %s\n", t.ui.Styled("task_pass", "✓"), e.name)
 		case TaskFailed:

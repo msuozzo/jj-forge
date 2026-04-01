@@ -70,7 +70,7 @@ func TestTaskTracker_NonInteractive_PendingNoOutput(t *testing.T) {
 	}
 }
 
-func TestTaskTracker_NonInteractive_Mixed(t *testing.T) {
+func TestTaskTracker_Mixed(t *testing.T) {
 	var buf bytes.Buffer
 	u := New(&buf, ColorNever)
 	tracker := NewTaskTracker(u, []string{"pass-task", "fail-task"})
@@ -89,5 +89,21 @@ func TestTaskTracker_NonInteractive_Mixed(t *testing.T) {
 	}
 	if !strings.Contains(got, "✗ fail-task") {
 		t.Errorf("expected cross for fail-task, got %q", got)
+	}
+}
+
+func TestTaskTracker_SetMessage(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorNever)
+	tracker := NewTaskTracker(u, []string{"task-a"})
+
+	tracker.SetMessage(0, "waiting")
+	if tracker.entries[0].message != "waiting" {
+		t.Errorf("SetMessage(0, \"waiting\") failed, got %q", tracker.entries[0].message)
+	}
+
+	tracker.SetStatus(0, TaskDone)
+	if tracker.entries[0].message != "" {
+		t.Errorf("SetStatus(0, TaskDone) should clear message, got %q", tracker.entries[0].message)
 	}
 }

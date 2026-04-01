@@ -68,6 +68,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	}
 	tracker := ui.NewTaskTracker(u, taskNames)
 	tracker.Start()
+
+	for i := range toCheck {
+		tracker.SetMessage(i, "waiting for lock")
+	}
+
 	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
@@ -81,6 +86,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return err
 	}
 	defer lock.release()
+
+	for i := range toCheck {
+		tracker.SetMessage(i, "")
+	}
+
 	// Re-filter after lock acquisition: the previous holder may have completed
 	// some checks while we waited.
 	toCheck = filterCached(toCheck, configMgr, force)
@@ -150,12 +160,14 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 				delete(handles, rev.ID)
 				mu.Unlock()
 			}()
+			tracker.SetMessage(revIndex[rev.ID], "queued")
 			wd, err := pool.Acquire(gctx)
 			if err != nil {
 				resultCh <- result{rev: rev, err: err}
 				return
 			}
 			defer pool.Release(wd)
+			tracker.SetMessage(revIndex[rev.ID], "running")
 			tracker.SetStatus(revIndex[rev.ID], ui.TaskRunning)
 			err = runInDir(gctx, pool, runner, wd, rev.CommitID, checkCmd)
 			if err != nil && gctx.Err() != nil {
