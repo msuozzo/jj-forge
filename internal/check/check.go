@@ -68,11 +68,6 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	}
 	tracker := ui.NewTaskTracker(u, taskNames)
 	tracker.Start()
-
-	for i := range toCheck {
-		tracker.SetMessage(i, "waiting for lock")
-	}
-
 	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
@@ -81,7 +76,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return err
 	}
-	lock, err := acquireLockWait(ctx, forgeDir, u)
+	lock, err := acquireLockWait(ctx, forgeDir, tracker)
 	if err != nil {
 		return err
 	}

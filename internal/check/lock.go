@@ -85,8 +85,9 @@ func tryAcquire(path string, isRetry bool) (*lockFile, error) {
 }
 
 // acquireLockWait polls until the check lock can be acquired. If the lock is
-// held by another process, it prints a waiting message and retries every 500ms.
-func acquireLockWait(ctx context.Context, dir string, u *ui.UI) (*lockFile, error) {
+// held by another process, it sets a waiting message on the tracker and retries
+// every 500ms.
+func acquireLockWait(ctx context.Context, dir string, tracker *ui.TaskTracker) (*lockFile, error) {
 	path := filepath.Join(dir, lockFileName)
 	lf, err := tryAcquire(path, false)
 	if err == nil {
@@ -96,10 +97,15 @@ func acquireLockWait(ctx context.Context, dir string, u *ui.UI) (*lockFile, erro
 	if !errors.As(err, &lc) {
 		return nil, err
 	}
+	setAllMessages := func(msg string) {
+		for i := range tracker.Len() {
+			tracker.SetMessage(i, msg)
+		}
+	}
 	lastPID := 0
 	for {
 		if lc.pid != lastPID {
-			fmt.Fprintf(u, "Waiting for running check to complete (pid %d)...\n", lc.pid)
+			setAllMessages(fmt.Sprintf("waiting for lock (pid %d)", lc.pid))
 			lastPID = lc.pid
 		}
 		select {
@@ -109,6 +115,7 @@ func acquireLockWait(ctx context.Context, dir string, u *ui.UI) (*lockFile, erro
 		}
 		lf, err = tryAcquire(path, false)
 		if err == nil {
+			setAllMessages("")
 			return lf, nil
 		}
 		if !errors.As(err, &lc) {

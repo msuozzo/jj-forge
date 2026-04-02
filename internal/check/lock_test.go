@@ -150,11 +150,17 @@ func TestRelease_Nil(t *testing.T) {
 	}
 }
 
+func testTracker(t *testing.T) *ui.TaskTracker {
+	t.Helper()
+	u := ui.New(os.Stdout, ui.ColorNever)
+	return ui.NewTaskTracker(u, []string{"test"})
+}
+
 func TestAcquireLockWait_NoContention(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	u := ui.New(os.Stdout, ui.ColorNever)
-	lock, err := acquireLockWait(context.Background(), dir, u)
+	tracker := testTracker(t)
+	lock, err := acquireLockWait(context.Background(), dir, tracker)
 	if err != nil {
 		t.Fatalf("acquireLockWait failed: %v", err)
 	}
@@ -164,7 +170,7 @@ func TestAcquireLockWait_NoContention(t *testing.T) {
 func TestAcquireLockWait_WaitsForRelease(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	u := ui.New(os.Stdout, ui.ColorNever)
+	tracker := testTracker(t)
 
 	// Acquire the lock in the main goroutine.
 	lock, err := acquireLock(dir)
@@ -179,7 +185,7 @@ func TestAcquireLockWait_WaitsForRelease(t *testing.T) {
 	}
 	ch := make(chan result, 1)
 	go func() {
-		lf, err := acquireLockWait(context.Background(), dir, u)
+		lf, err := acquireLockWait(context.Background(), dir, tracker)
 		ch <- result{lf, err}
 	}()
 

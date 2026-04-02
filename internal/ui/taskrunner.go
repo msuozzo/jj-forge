@@ -129,6 +129,11 @@ func (t *TaskTracker) SetMessageByName(name string, message string) {
 	}
 }
 
+// Len returns the number of tracked tasks.
+func (t *TaskTracker) Len() int {
+	return len(t.entries)
+}
+
 // IsInteractive reports whether the output is an interactive terminal.
 func (t *TaskTracker) IsInteractive() bool {
 	return t.ui.IsInteractive()
