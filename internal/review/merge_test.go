@@ -72,6 +72,10 @@ func TestMerge_Success(t *testing.T) {
 			Args:   []string{"git", "fetch", "--remote", "up"},
 			Output: jjtest.EmptyOutput(),
 		},
+		jjtest.Call{
+			Args:   []string{"abandon", "present(aaaaaaaaaaaa)"},
+			Output: jjtest.EmptyOutput(),
+		},
 		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
@@ -648,6 +652,10 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		},
 		jjtest.Call{
 			Args:   []string{"git", "fetch", "--remote", "up"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args:   []string{"abandon", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.EmptyOutput(),
 		},
 		// AddReviewRecord (mark merged): getForgeConfig cached from GetReviewByChangeID

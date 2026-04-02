@@ -120,6 +120,15 @@ func Merge(
 		if err != nil {
 			u.PrintWarning("failed to fetch: %v", err)
 		}
+		// Abandon the merged change, if present.
+		// NOTE: The fetch may have already abandoned it which occurs iff
+		// git.abandon-unreachable-commits is true AND none of the change's
+		// descendents have bookmarks.
+		fmt.Fprintf(u, "Abandoning change %s...\n", u.Styled("change_id", rev.ID))
+		_, err = jjClient.Run(ctx, "abandon", fmt.Sprintf("present(%s)", rev.ID))
+		if err != nil {
+			u.PrintWarning("failed to abandon change: %v", err)
+		}
 	}
 	reviewRecord.Status = forge.ReviewStateMerged
 	if err := configMgr.AddReviewRecord(*reviewRecord); err != nil {
