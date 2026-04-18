@@ -34,6 +34,7 @@ type TaskTracker struct {
 	ui          *UI
 	entries     []*taskEntry
 	nameToIndex map[string]int
+	warnings    []string
 	mu          sync.Mutex
 	stopCh      chan struct{}
 	frame       int
@@ -139,11 +140,28 @@ func (t *TaskTracker) IsInteractive() bool {
 	return t.ui.IsInteractive()
 }
 
-// Finish stops the animation loop and renders the final state.
+// Warning buffers a warning message to be displayed after the tracker
+// finishes. It is safe to call from multiple goroutines.
+func (t *TaskTracker) Warning(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	t.mu.Lock()
+	t.warnings = append(t.warnings, msg)
+	t.mu.Unlock()
+}
+
+// Finish stops the animation loop, renders the final state, and flushes
+// any buffered warnings below the tracker output.
 func (t *TaskTracker) Finish() {
 	if t.started {
 		close(t.stopCh)
 		t.render()
+	}
+	t.mu.Lock()
+	warnings := t.warnings
+	t.warnings = nil
+	t.mu.Unlock()
+	for _, msg := range warnings {
+		t.ui.PrintWarning("%s", msg)
 	}
 }
 

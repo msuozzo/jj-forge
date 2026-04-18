@@ -92,6 +92,53 @@ func TestTaskTracker_Mixed(t *testing.T) {
 	}
 }
 
+func TestTaskTracker_Warning_FlushedAfterFinish(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorNever)
+	tracker := NewTaskTracker(u, []string{"task-a"})
+	tracker.Start()
+
+	tracker.SetStatus(0, TaskRunning)
+	tracker.Warning("something went wrong: %s", "details")
+	tracker.Warning("another issue")
+	tracker.SetStatus(0, TaskDone)
+
+	tracker.Finish()
+
+	got := buf.String()
+	// Task output comes first.
+	taskIdx := strings.Index(got, "✓ task-a")
+	warn1Idx := strings.Index(got, "Warning: something went wrong: details")
+	warn2Idx := strings.Index(got, "Warning: another issue")
+	if taskIdx == -1 {
+		t.Fatalf("expected task output, got %q", got)
+	}
+	if warn1Idx == -1 || warn2Idx == -1 {
+		t.Fatalf("expected both warnings, got %q", got)
+	}
+	if warn1Idx < taskIdx {
+		t.Errorf("warning should appear after task output")
+	}
+	if warn2Idx < warn1Idx {
+		t.Errorf("warnings should appear in order")
+	}
+}
+
+func TestTaskTracker_Warning_NoWarnings(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorNever)
+	tracker := NewTaskTracker(u, []string{"task-a"})
+	tracker.Start()
+
+	tracker.SetStatus(0, TaskDone)
+	tracker.Finish()
+
+	got := buf.String()
+	if strings.Contains(got, "Warning") {
+		t.Errorf("expected no warnings, got %q", got)
+	}
+}
+
 func TestTaskTracker_SetMessage(t *testing.T) {
 	var buf bytes.Buffer
 	u := New(&buf, ColorNever)
