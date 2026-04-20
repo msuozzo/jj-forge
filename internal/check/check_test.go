@@ -223,6 +223,46 @@ func TestRunFail(t *testing.T) {
 	}
 }
 
+func TestRunFailureOutput(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
+	mock := newMockClient(revs)
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"false\""
+	configMgr := forge.NewConfigManager(mock)
+
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		cmdStr := strings.Join(args, " ")
+		if strings.Contains(cmdStr, "sh -c false") {
+			return nil, &cmd.ExecError{
+				Args:   args,
+				Stderr: "assertion failed: expected 1, got 0\nstack trace...",
+				Err:    fmt.Errorf("exit status 1"),
+			}
+		}
+		// Materialization commands
+		return &cmd.Result{Stdout: "fake-data"}, nil
+	}
+
+	err := Run(context.Background(), mock, configMgr, "@", true, runner, testUI)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	want := `check command failed:
+c1 (abc123)
+  stderr:
+    assertion failed: expected 1, got 0
+    stack trace...`
+	if err.Error() != want {
+		t.Errorf("unexpected error message:\ngot:  %q\nwant: %q", err.Error(), want)
+	}
+}
+
 func TestRunSkipCached(t *testing.T) {
 	t.Parallel()
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}

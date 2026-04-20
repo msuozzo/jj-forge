@@ -3,6 +3,7 @@ package ui
 import (
 	"io"
 	"os"
+	"strings"
 
 	"golang.org/x/term"
 )
@@ -70,6 +71,15 @@ func (u *UI) IsColor() bool {
 // IsInteractive reports whether the output is an interactive terminal.
 func (u *UI) IsInteractive() bool {
 	return u.interactive
+}
+
+// Indent returns s with each line indented by n spaces.
+func Indent(s string, n int) string {
+	if s == "" {
+		return ""
+	}
+	prefix := strings.Repeat(" ", n)
+	return prefix + strings.ReplaceAll(s, "\n", "\n"+prefix)
 }
 
 // isTerminal reports whether w is a terminal.

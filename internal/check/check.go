@@ -245,13 +245,18 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 			return rev.ID == r.rev.ID
 		})
 		if r.err != nil {
-			failures = append(failures, fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID))
+			msg := fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID)
+			var execErr *cmd.ExecError
+			if errors.As(r.err, &execErr) && execErr.Stderr != "" {
+				msg += fmt.Sprintf("\n  stderr:\n%s", ui.Indent(strings.TrimSpace(execErr.Stderr), 4))
+			}
+			failures = append(failures, msg)
 		}
 	}
 	tracker.Finish()
 	watchCancel()
 	if len(failures) > 0 {
-		return fmt.Errorf("check command failed for: %s", strings.Join(failures, ", "))
+		return fmt.Errorf("check command failed:\n%s", strings.Join(failures, "\n"))
 	}
 	return nil
 }
