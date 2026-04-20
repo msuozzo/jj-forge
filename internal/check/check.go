@@ -248,7 +248,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 			msg := fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID)
 			var execErr *cmd.ExecError
 			if errors.As(r.err, &execErr) && execErr.Stderr != "" {
-				msg += fmt.Sprintf("\n  stderr:\n%s", ui.Indent(strings.TrimSpace(execErr.Stderr), 4))
+				msg += "\n" + ui.Indent(strings.TrimSpace(execErr.Stderr), 2)
 			}
 			failures = append(failures, msg)
 		}

@@ -264,9 +264,8 @@ func TestRunFailureOutput(t *testing.T) {
 	}
 
 	wantDetails := `c1 (abc123)
-  stderr:
-    assertion failed: expected 1, got 0
-    stack trace...`
+  assertion failed: expected 1, got 0
+  stack trace...`
 	if userErr.Details != wantDetails {
 		t.Errorf("unexpected error details:\ngot:  %q\nwant: %q", userErr.Details, wantDetails)
 	}
