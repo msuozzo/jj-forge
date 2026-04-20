@@ -80,6 +80,34 @@ func TestPrintError_UserErrorWithHint(t *testing.T) {
 	}
 }
 
+func TestPrintError_UserErrorWithDetails(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorAlways)
+
+	err := &UserError{
+		Msg:     "check command failed",
+		Details: "stderr output",
+	}
+	u.PrintError(err)
+
+	got := buf.String()
+	// Should contain red bold "Error: ", bold message, and red (not bold) details
+	if !bytes.Contains([]byte(got), []byte("\x1b[1;31mError: \x1b[0m")) {
+		t.Errorf("PrintError() missing red bold Error prefix in:\n%q", got)
+	}
+	if !bytes.Contains([]byte(got), []byte("\x1b[1mcheck command failed\x1b[0m")) {
+		t.Errorf("PrintError() missing bold message in:\n%q", got)
+	}
+	if !bytes.Contains([]byte(got), []byte("\x1b[32mstderr output\x1b[0m")) {
+		// Wait, Fg Red is 31, Green is 32. Let me check color.go again.
+		// Black=0, Red=1, Green=2, ...
+		// ansiCode = 30 + int(c-Black) = 30 + 1 = 31.
+		if !bytes.Contains([]byte(got), []byte("\x1b[31mstderr output\x1b[0m")) {
+			t.Errorf("PrintError() missing red details in:\n%q", got)
+		}
+	}
+}
+
 func TestPrintWarning(t *testing.T) {
 	var buf bytes.Buffer
 	u := New(&buf, ColorNever)

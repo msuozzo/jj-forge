@@ -7,9 +7,10 @@ import (
 
 // UserError is an error with a user-facing message and optional hint.
 type UserError struct {
-	Msg    string
-	Hint   string
-	Source error
+	Msg     string
+	Details string
+	Hint    string
+	Source  error
 }
 
 func (e *UserError) Error() string {
@@ -76,11 +77,16 @@ func (u *UI) PrintError(err error) {
 		}
 	}
 
-	// Check for UserError hint
+	// Check for UserError details
 	var userErr *UserError
-	if errors.As(err, &userErr) && userErr.Hint != "" {
-		hintHeading := u.Styled("hint_heading", "Hint: ")
-		fmt.Fprintf(u.w, "%s%s\n", hintHeading, userErr.Hint)
+	if errors.As(err, &userErr) {
+		if userErr.Details != "" {
+			fmt.Fprintf(u.w, "%s\n", u.Styled("error_details", userErr.Details))
+		}
+		if userErr.Hint != "" {
+			hintHeading := u.Styled("hint_heading", "Hint: ")
+			fmt.Fprintf(u.w, "%s%s\n", hintHeading, userErr.Hint)
+		}
 	}
 }
 

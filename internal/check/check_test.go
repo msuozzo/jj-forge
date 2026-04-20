@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -253,13 +254,21 @@ func TestRunFailureOutput(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	want := `check command failed:
-c1 (abc123)
+	var userErr *ui.UserError
+	if !errors.As(err, &userErr) {
+		t.Fatalf("expected ui.UserError, got %T", err)
+	}
+
+	if userErr.Msg != "check command failed" {
+		t.Errorf("unexpected error message: got %q, want %q", userErr.Msg, "check command failed")
+	}
+
+	wantDetails := `c1 (abc123)
   stderr:
     assertion failed: expected 1, got 0
     stack trace...`
-	if err.Error() != want {
-		t.Errorf("unexpected error message:\ngot:  %q\nwant: %q", err.Error(), want)
+	if userErr.Details != wantDetails {
+		t.Errorf("unexpected error details:\ngot:  %q\nwant: %q", userErr.Details, wantDetails)
 	}
 }
 

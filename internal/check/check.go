@@ -256,7 +256,10 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	tracker.Finish()
 	watchCancel()
 	if len(failures) > 0 {
-		return fmt.Errorf("check command failed:\n%s", strings.Join(failures, "\n"))
+		return &ui.UserError{
+			Msg:     "check command failed",
+			Details: strings.Join(failures, "\n"),
+		}
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ var Styles = map[string]Style{
 	// Error/warning/hint (matching jj's error formatting labels)
 	"error_heading":        {Fg: Red, Bold: true},
 	"error":                {Bold: true},
+	"error_details":        {Fg: Red},
 	"error_source_heading": {Bold: true},
 	"error_source":         {},
 	"warning_heading":      {Fg: Yellow, Bold: true},
