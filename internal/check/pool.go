@@ -101,7 +101,6 @@ func (p *WorkPool) Materialize(ctx context.Context, wd *WorkDir, commitID string
 
 // incrementalUpdate applies the diff between the current and target commits.
 func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID string) error {
-	// Generate the diff
 	diffResult, err := p.runner(ctx, cmd.Opts{},
 		"git", "--git-dir", p.gitDir, "diff", wd.CommitID+".."+commitID)
 	if err != nil {
@@ -110,14 +109,12 @@ func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID 
 	if diffResult.Stdout == "" {
 		return nil // no changes
 	}
-	// Apply the diff. --batch prevents patch from prompting on /dev/tty
-	// when hunks fail to apply, which would hang in non-interactive contexts.
 	_, err = p.runner(ctx, cmd.Opts{
 		WorkDir: wd.Path,
 		Stdin:   strings.NewReader(diffResult.Stdout),
-	}, "patch", "-p1", "--batch")
+	}, "git", "apply")
 	if err != nil {
-		return fmt.Errorf("patch failed: %w", err)
+		return fmt.Errorf("git apply failed: %w", err)
 	}
 	return nil
 }
