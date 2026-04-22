@@ -110,11 +110,12 @@ func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID 
 	if diffResult.Stdout == "" {
 		return nil // no changes
 	}
-	// Apply the diff
+	// Apply the diff. --batch prevents patch from prompting on /dev/tty
+	// when hunks fail to apply, which would hang in non-interactive contexts.
 	_, err = p.runner(ctx, cmd.Opts{
 		WorkDir: wd.Path,
 		Stdin:   strings.NewReader(diffResult.Stdout),
-	}, "patch", "-p1")
+	}, "patch", "-p1", "--batch")
 	if err != nil {
 		return fmt.Errorf("patch failed: %w", err)
 	}
