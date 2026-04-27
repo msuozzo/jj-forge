@@ -138,6 +138,10 @@ func Merge(
 	if err := configMgr.RemoveCheckVerdicts([]string{rev.ID}); err != nil {
 		params.UI.PrintWarning("failed to clean up check verdict: %v", err)
 	}
+	// Prune open review records for changes that no longer exist (non-fatal)
+	if err := pruneStaleReviewRecords(ctx, jjClient, configMgr); err != nil {
+		params.UI.PrintWarning("failed to prune stale review records: %v", err)
+	}
 	// Clean up PR links on sibling reviews (non-fatal)
 	fmt.Fprintf(params.UI, "Updating PR links on sibling reviews...\n")
 	if err := cleanupLinksAfterMerge(ctx, jjClient, forgeClient, configMgr, rev.ID, upstreamRemoteURL); err != nil {
@@ -267,4 +271,52 @@ func cleanupLinksAfterMerge(
 	}
 
 	return nil
+}
+
+// pruneStaleReviewRecords removes review records whose changes no longer exist
+// in the jj repo (e.g., abandoned after a fetch).
+func pruneStaleReviewRecords(
+	ctx context.Context,
+	jjClient jj.Client,
+	configMgr *forge.ConfigManager,
+) error {
+	records, err := configMgr.GetReviewRecords()
+	if err != nil {
+		return fmt.Errorf("failed to get review records: %w", err)
+	}
+	var changeIDs []string
+	for _, rec := range records {
+		changeIDs = append(changeIDs, rec.ChangeID)
+	}
+	if len(changeIDs) == 0 {
+		return nil
+	}
+	// Resolve all changes, wrapping each in present() so missing ones are
+	// silently excluded rather than causing an error.
+	var revsetParts []string
+	for _, cid := range changeIDs {
+		revsetParts = append(revsetParts, fmt.Sprintf("present(%s)", cid))
+	}
+	revs, err := jjClient.Revs(ctx, strings.Join(revsetParts, "|"))
+	if err != nil {
+		return fmt.Errorf("failed to resolve revisions: %w", err)
+	}
+	presentIDs := make(map[string]bool, len(revs))
+	for _, rev := range revs {
+		presentIDs[rev.ID] = true
+	}
+	// Remove any missing records.
+	var newRecords []forge.ReviewRecord
+	changed := false
+	for _, rec := range records {
+		if presentIDs[rec.ChangeID] {
+			newRecords = append(newRecords, rec)
+		} else {
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return configMgr.SaveRecords(newRecords)
 }
