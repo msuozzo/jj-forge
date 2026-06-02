@@ -46,13 +46,36 @@ func DetectForgeByHeaders(ctx context.Context, host string, client HTTPDoer) (Fo
 	return ForgeTypeUnknown, nil
 }
 
+// ParseForgeType parses a forge type string into its corresponding ForgeType constant.
+func ParseForgeType(s string) ForgeType {
+	switch strings.ToLower(s) {
+	case "github":
+		return ForgeTypeGitHub
+	case "gitlab":
+		return ForgeTypeGitLab
+	case "ssm":
+		return ForgeTypeSSM
+	default:
+		return ForgeTypeUnknown
+	}
+}
+
 // DetectForge determines the forge type from a git remote URL.
-// It parses the URL once, then checks for SSM and github.com (fast path,
-// no HTTP) before falling back to HTTP header probing for unknown hosts.
-func DetectForge(ctx context.Context, url string, httpClient HTTPDoer) (ForgeType, error) {
+// It parses the URL, resolves custom host overrides, checks built-in fast
+// paths (SSM and github.com), before falling back to HTTP header probing
+// for unknown hosts.
+func DetectForge(ctx context.Context, url string, httpClient HTTPDoer, hosts map[string]string) (ForgeType, error) {
 	info, err := ParseGitURL(url)
 	if err != nil {
 		return ForgeTypeUnknown, fmt.Errorf("could not parse URL: %w", err)
+	}
+	// check overrides first
+	if hosts != nil {
+		if t, ok := hosts[info.Host]; ok {
+			if ft := ParseForgeType(t); ft != ForgeTypeUnknown {
+				return ft, nil
+			}
+		}
 	}
 	if strings.HasSuffix(info.Host, ".sourcemanager.dev") {
 		return ForgeTypeSSM, nil

@@ -52,7 +52,7 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 		},
 		// GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -157,7 +157,7 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 		},
 		// GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
 			},
@@ -285,7 +285,7 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`
 			},
@@ -397,7 +397,7 @@ func TestUpdate_ChangeWithoutReviewSkipped(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return "" // No review records
 			},
@@ -485,7 +485,7 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 		},
 		// GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
 			},
@@ -612,7 +612,7 @@ func TestUpdate_PartialStack_ChildNotUploaded_RetainsChildLink(t *testing.T) {
 		},
 		// GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`
 			},
@@ -749,7 +749,7 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa", "cccccccccccc", "eeeeeeeeeeee", "dddddddddddd"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["dddddddddddd\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "eeeeeeeeeeee\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen", "aaaaaaaaaaaa\npr/4\nhttps://github.com/owner/repo/pull/4\nopen", "bbbbbbbbbbbb\npr/5\nhttps://github.com/owner/repo/pull/5\nopen"]`
 			},
@@ -987,7 +987,7 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 		},
 		// GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
 			},

@@ -47,12 +47,12 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, erro
 
 	m.callLog = append(m.callLog, args)
 
-	if len(args) < 4 {
+	if len(args) < 3 {
 		return nil, fmt.Errorf("unexpected args: %v", args)
 	}
 
-	if args[0] == "config" && args[1] == "list" && args[2] == "--repo" {
-		key := args[3]
+	if args[0] == "config" && args[1] == "list" {
+		key := args[2]
 		if key == "forge" {
 			var result string
 			for k, v := range m.config {

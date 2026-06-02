@@ -38,7 +38,7 @@ func TestOpen_Success(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -62,7 +62,7 @@ func TestOpen_Success(t *testing.T) {
 		},
 		jjtest.Call{
 			// Verification: SaveRecords invalidated cache, so this re-reads
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -150,7 +150,7 @@ func TestOpen_StripsTrailers(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -223,7 +223,7 @@ func TestOpen_StackedReview(t *testing.T) {
 			Output: jjtest.LogOutput("bbbbbbbbbbbb"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -358,7 +358,7 @@ func TestOpen_AlreadyExists(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -371,7 +371,7 @@ func TestOpen_AlreadyExists(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/42\nhttps://github.com/owner/repo/pull/42\nopen"]`
 			},
@@ -429,7 +429,7 @@ func TestOpen_ForgeError(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -485,7 +485,7 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create closed review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -498,7 +498,7 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/42\nhttps://github.com/owner/repo/pull/42\nclosed"]`
 			},
@@ -577,7 +577,7 @@ func TestOpen_CrossRepo(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -653,7 +653,7 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		// Only one "git remote list" call: for FormatHeadBranch (fork remote).

@@ -41,7 +41,7 @@ func importRemoteListCall() jjtest.Call {
 
 func configListCall(records ...forge.ReviewRecord) jjtest.Call {
 	return jjtest.Call{
-		Args: []string{"config", "list", "--repo", "forge"},
+		Args: []string{"config", "list", "forge"},
 		Output: func(r *jjtest.FakeRepo) string {
 			if len(records) == 0 {
 				return ""

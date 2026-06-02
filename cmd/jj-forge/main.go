@@ -89,7 +89,12 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get remote URL for %s: %w", upstreamRemote, err)
 	}
-	forgeType, err := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
+	configMgr := forge.NewConfigManager(jjClient)
+	hosts, err := configMgr.GetHosts()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get host configuration: %w", err)
+	}
+	forgeType, err := forge.DetectForge(ctx, url, forge.DefaultHTTPClient(), hosts)
 	if err != nil {
 		return nil, "", &ui.UserError{
 			Msg: fmt.Sprintf("could not determine forge for remote %s: %s", upstreamRemote, url),
@@ -775,8 +780,11 @@ Examples:
 				NoFork:         cloneNoFork,
 				TrackBranches:  cloneTrackBranches,
 			}
+			jjClientForConfig := jj.NewClientWithExecutor("", newJJExecutor())
+			configMgr := forge.NewConfigManager(jjClientForConfig)
+			hosts, _ := configMgr.GetHosts()
 			// Dispatch to SSM clone flow for SSM URLs
-			forgeType, _ := forge.DetectForge(ctx, url, forge.DefaultHTTPClient())
+			forgeType, _ := forge.DetectForge(ctx, url, forge.DefaultHTTPClient(), hosts)
 			if forgeType == forge.ForgeTypeSSM {
 				var ssmRunner *repoclone.SSMRunner
 				if debugPrompt != "none" {
@@ -787,8 +795,6 @@ Examples:
 				_, err := ssmRunner.Run(ctx, params)
 				return err
 			}
-			jjClientForConfig := jj.NewClientWithExecutor("", newJJExecutor())
-			configMgr := forge.NewConfigManager(jjClientForConfig)
 			ghCmd, _ := configMgr.GetToolCommand("gh")
 			ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor())
 			if ghCmd != "" {
