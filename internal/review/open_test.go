@@ -712,3 +712,66 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 
 	scenario.Verify()
 }
+
+func TestOpen_CustomBaseBranch(t *testing.T) {
+	repo := jjtest.NewFakeRepo()
+	repo.AddCommits(jjtest.Commit{
+		ID:              "aaaaaaaaaaaa",
+		Parents:         []string{"root"},
+		Description:     "feat: test feature",
+		IsMutable:       true,
+		RemoteBookmarks: []string{"og/push-aaaaaaaaaaaa"},
+	})
+
+	fakeForge := github.NewFakeForge()
+
+	scenario := jjtest.NewScenario(t, repo,
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "@"},
+			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
+		},
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "og git@github.com:owner/repo.git\n"
+			},
+		},
+		jjtest.Call{
+			Args: []string{"git", "remote", "list"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return "og git@github.com:owner/repo.git\n"
+			},
+		},
+		// forge: create review
+		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
+		// AddReviewRecord
+		jjtest.Call{
+			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
+			Output: jjtest.EmptyOutput(),
+		},
+	)
+
+	configMgr := forge.NewConfigManager(scenario.Client())
+
+	wrappedForge := scenario.WrapForge(fakeForge)
+	result, err := Open(context.Background(), scenario.Client(), wrappedForge, configMgr, OpenParams{
+		Rev:            "@",
+		UpstreamRemote: testRemote,
+		ForkRemote:     testRemote,
+		TargetBranch:   "develop",
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	review, _ := fakeForge.GetTestReview(result.Number)
+	if review.Base != "develop" {
+		t.Errorf("expected base branch 'develop', got %q", review.Base)
+	}
+
+	scenario.Verify()
+}

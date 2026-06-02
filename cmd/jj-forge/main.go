@@ -352,6 +352,7 @@ use 'review open' and 'review submit' instead.`,
 	var openReviewers []string
 	var openUpstreamRemote, openForkRemote string
 	var openSkipCheck bool
+	var openTargetBranch string
 	openCmd := &cobra.Command{
 		Use:               "open [REVSET]",
 		Short:             "Create and assign a pull request",
@@ -447,6 +448,7 @@ use 'review open' and 'review submit' instead.`,
 					UpstreamRemote:    openUpstreamRemote,
 					UpstreamRemoteURL: upstreamRemoteURL,
 					ForkRemote:        openForkRemote,
+					TargetBranch:      openTargetBranch,
 				})
 				if err != nil {
 					if errors.Is(err, review.ErrReviewAlreadyExists) {
@@ -484,6 +486,7 @@ use 'review open' and 'review submit' instead.`,
 	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
 	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
 	openCmd.Flags().BoolVar(&openSkipCheck, "skip-check", false, "Skip the configured check command")
+	openCmd.Flags().StringVar(&openTargetBranch, "target-branch", "", "The target or base branch to create PR against (default is default branch)")
 
 	var mergeUpstreamRemote, mergeForkRemote string
 	var mergeNoCleanup, mergeSkipCheck bool
