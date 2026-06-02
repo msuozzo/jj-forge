@@ -13,6 +13,7 @@ import (
 // GitHubClient handles GitHub API operations for repository analysis.
 type GitHubClient struct {
 	executor cmd.Executor
+	ghCmd    string // Custom gh command binary name (defaults to "gh")
 }
 
 // NewGitHubClient creates a GitHubClient with the default executor.
@@ -22,9 +23,21 @@ func NewGitHubClient() *GitHubClient {
 	}
 }
 
-// run calls the executor with "gh" prepended to args.
+// WithGHCommand configures a custom command binary name (instead of "gh").
+func (c *GitHubClient) WithGHCommand(cmd string) *GitHubClient {
+	if cmd != "" {
+		c.ghCmd = cmd
+	}
+	return c
+}
+
+// run calls the executor with "gh" (or configured alternative) prepended to args.
 func (c *GitHubClient) run(ctx context.Context, args ...string) (string, error) {
-	result, err := c.executor(ctx, cmd.Opts{}, append([]string{"gh"}, args...)...)
+	ghBin := "gh"
+	if c.ghCmd != "" {
+		ghBin = c.ghCmd
+	}
+	result, err := c.executor(ctx, cmd.Opts{}, append([]string{ghBin}, args...)...)
 	if err != nil {
 		return "", err
 	}

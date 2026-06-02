@@ -44,10 +44,11 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 
 // ForgeConfig represents the [forge] section of the jj config.
 type ForgeConfig struct {
-	DefaultReviewer string   `toml:"default-reviewer,omitempty"`
-	Reviews         []string `toml:"reviews,omitempty"`
-	CheckCommand    string   `toml:"check-command,omitempty"`
-	Checks          []string `toml:"checks,omitempty"`
+	DefaultReviewer string            `toml:"default-reviewer,omitempty"`
+	Reviews         []string          `toml:"reviews,omitempty"`
+	CheckCommand    string            `toml:"check-command,omitempty"`
+	Checks          []string          `toml:"checks,omitempty"`
+	Tools           map[string]string `toml:"tools,omitempty"`
 }
 
 // Check verdict values.
@@ -247,6 +248,21 @@ func (m *ConfigManager) GetCheckCommand() (string, error) {
 		return "", err
 	}
 	return cfg.CheckCommand, nil
+}
+
+// GetToolCommand retrieves the configured command for a specific tool (e.g. "gh", "gcloud").
+// Returns the tool's name itself if no command is configured, serving as the default command binary name.
+func (m *ConfigManager) GetToolCommand(name string) (string, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return "", err
+	}
+	if cfg.Tools != nil {
+		if cmd, ok := cfg.Tools[name]; ok && cmd != "" {
+			return cmd, nil
+		}
+	}
+	return name, nil
 }
 
 // GetCheckVerdicts retrieves all stored check verdicts from the config.

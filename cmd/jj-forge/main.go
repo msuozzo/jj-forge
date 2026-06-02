@@ -104,7 +104,16 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to get git directory: %w", err)
 		}
-		return github.NewClientWithExecutor(gitDir, newGHExecutor()), url, nil
+		configMgr := forge.NewConfigManager(jjClient)
+		ghCmd, err := configMgr.GetToolCommand("gh")
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get gh command: %w", err)
+		}
+		ghClient := github.NewClientWithExecutor(gitDir, newGHExecutor())
+		if ghCmd != "" {
+			ghClient.WithGHCommand(ghCmd)
+		}
+		return ghClient, url, nil
 	case forge.ForgeTypeGitLab:
 		return nil, "", &ui.UserError{
 			Msg: "GitLab is not yet supported",
@@ -778,13 +787,14 @@ Examples:
 				_, err := ssmRunner.Run(ctx, params)
 				return err
 			}
-			var runner *repoclone.Runner
-			if debugPrompt != "none" {
-				ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor())
-				runner = repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, stdoutUI)
-			} else {
-				runner = repoclone.NewRunner(stdoutUI)
+			jjClientForConfig := jj.NewClientWithExecutor("", newJJExecutor())
+			configMgr := forge.NewConfigManager(jjClientForConfig)
+			ghCmd, _ := configMgr.GetToolCommand("gh")
+			ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor())
+			if ghCmd != "" {
+				ghClient.WithGHCommand(ghCmd)
 			}
+			runner := repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, stdoutUI)
 			_, err := runner.Run(ctx, params)
 			return err
 		},
