@@ -104,7 +104,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 		newDescription := forge.RemoveParentTrailer(rev.Description)
 		if newDescription != rev.Description {
 			fmt.Fprintf(u, "Removing forge-parent trailer from %s...\n", u.Styled("change_id", rev.ID))
-			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
+			_, err := client.Run(ctx, "metaedit", rev.ID, "-m", newDescription)
 			if err != nil {
 				return nil, fmt.Errorf("removing trailer from %s: %w", rev.ID, err)
 			}

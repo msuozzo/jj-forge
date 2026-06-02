@@ -112,7 +112,7 @@ func UpdateTrailers(ctx context.Context, client jj.Client, revset string, u *ui.
 			} else {
 				fmt.Fprintf(u, "Updating trailers for %s...\n", u.Styled("change_id", rev.ID))
 			}
-			_, err := client.Run(ctx, "describe", rev.ID, "--no-edit", "-m", newDescription)
+			_, err := client.Run(ctx, "metaedit", rev.ID, "-m", newDescription)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update trailers for %s: %w", rev.ID, err)
 			}
