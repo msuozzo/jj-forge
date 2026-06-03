@@ -202,8 +202,10 @@ Run `jj forge <command> --help` for flags and details.
 | ------------------------ | ------------------------------------------- |
 | `forge.check-command`    | Shell command to run for checks             |
 | `forge.default-reviewer` | Default reviewer username for `review open` |
+| `forge.tools`            | Map of forge CLI tool command overrides     |
 
 Set values with:
 
     jj config set --repo forge.check-command "go test ./..."
     jj config set --repo forge.default-reviewer "username"
+    jj config set --repo forge.tools.gh "custom-gh"

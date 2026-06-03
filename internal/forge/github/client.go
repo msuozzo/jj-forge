@@ -18,6 +18,7 @@ import (
 type Client struct {
 	gitDir   string       // Path to .git directory for GIT_DIR env var
 	executor cmd.Executor // Function to execute gh commands
+	ghCmd    string       // Custom gh command binary (defaults to "gh")
 }
 
 // NewClient creates a GitHub client with the default executor.
@@ -36,12 +37,24 @@ func NewClientWithExecutor(gitDir string, exec cmd.Executor) *Client {
 	}
 }
 
-// run calls the executor with "gh" prepended to args, injecting GIT_DIR if set.
+// WithGHCommand configures a custom GitHub CLI binary (instead of "gh").
+func (c *Client) WithGHCommand(cmd string) *Client {
+	if cmd != "" {
+		c.ghCmd = cmd
+	}
+	return c
+}
+
+// run calls the executor with "gh" (or custom ghCmd) prepended to args, injecting GIT_DIR if set.
 func (c *Client) run(ctx context.Context, opts cmd.Opts, args ...string) (string, error) {
 	if c.gitDir != "" {
 		opts.Env = append(opts.Env, fmt.Sprintf("GIT_DIR=%s", c.gitDir))
 	}
-	result, err := c.executor(ctx, opts, append([]string{"gh"}, args...)...)
+	ghBin := "gh"
+	if c.ghCmd != "" {
+		ghBin = c.ghCmd
+	}
+	result, err := c.executor(ctx, opts, append([]string{ghBin}, args...)...)
 	if err != nil {
 		return "", err
 	}

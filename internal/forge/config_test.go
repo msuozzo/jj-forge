@@ -254,6 +254,40 @@ func TestGetCheckCommand(t *testing.T) {
 	}
 }
 
+func TestGetToolCommand(t *testing.T) {
+	// Test: no config returns default name
+	mock1 := newMockClient()
+	mgr1 := NewConfigManager(mock1)
+	cmd, err := mgr1.GetToolCommand("gh")
+	if err != nil {
+		t.Fatalf("GetToolCommand failed: %v", err)
+	}
+	if cmd != "gh" {
+		t.Errorf("expected 'gh', got %q", cmd)
+	}
+
+	// Test: custom config returns custom command
+	mock2 := newMockClient()
+	mock2.config["tools"] = `{ gh = "gh-custom" }`
+	mgr2 := NewConfigManager(mock2)
+	cmd, err = mgr2.GetToolCommand("gh")
+	if err != nil {
+		t.Fatalf("GetToolCommand failed: %v", err)
+	}
+	if cmd != "gh-custom" {
+		t.Errorf("expected 'gh-custom', got %q", cmd)
+	}
+
+	// Test: unconfigured tool returns default name
+	cmd, err = mgr2.GetToolCommand("unconfigured")
+	if err != nil {
+		t.Fatalf("GetToolCommand failed: %v", err)
+	}
+	if cmd != "unconfigured" {
+		t.Errorf("expected 'unconfigured', got %q", cmd)
+	}
+}
+
 func TestCheckVerdictCRUD(t *testing.T) {
 	mock := newMockClient()
 	mgr := NewConfigManager(mock)

@@ -329,3 +329,23 @@ func TestSetupRuleset_AlreadyExists(t *testing.T) {
 		t.Errorf("expected 1 API call (list only), got %d", callCount)
 	}
 }
+
+func TestGitHubClient_WithGHCommand(t *testing.T) {
+	var gotBin string
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		if len(args) > 0 {
+			gotBin = args[0]
+		}
+		return &cmd.Result{Stdout: "main"}, nil
+	}
+
+	client := NewClientWithExecutor("/git", executor).WithGHCommand("gh-custom")
+	_, err := client.DefaultBranch(context.Background(), "github.com/owner/repo")
+	if err != nil {
+		t.Fatalf("DefaultBranch() failed = %v", err)
+	}
+
+	if gotBin != "gh-custom" {
+		t.Errorf("expected bin name 'gh-custom', got %q", gotBin)
+	}
+}
