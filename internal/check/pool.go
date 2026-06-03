@@ -82,13 +82,20 @@ func (p *WorkPool) Release(wd *WorkDir) {
 // If the directory already has a commit materialized, it attempts an
 // incremental update via `git diff | git apply`. On failure (or if fresh),
 // it falls back to full materialization via `git archive | tar -x`.
+//
+// The on-disk state file is invalidated before any mutation and rewritten
+// only after the mutation succeeds, so a crash mid-update leaves the slot
+// marked fresh and the next call falls into fullMaterialize.
 func (p *WorkPool) Materialize(ctx context.Context, wd *WorkDir, commitID string) error {
 	if wd.CommitID == commitID {
 		return nil // already up to date
 	}
-	if wd.CommitID != "" {
-		// Try incremental update
-		if err := p.incrementalUpdate(ctx, wd, commitID); err == nil {
+	prevCommit := wd.CommitID
+	if err := p.invalidate(wd); err != nil {
+		return err
+	}
+	if prevCommit != "" {
+		if err := p.incrementalUpdate(ctx, wd, prevCommit, commitID); err == nil {
 			return p.writeState(wd, commitID)
 		}
 		// Incremental failed, fall through to full materialization
@@ -99,10 +106,10 @@ func (p *WorkPool) Materialize(ctx context.Context, wd *WorkDir, commitID string
 	return p.writeState(wd, commitID)
 }
 
-// incrementalUpdate applies the diff between the current and target commits.
-func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, commitID string) error {
+// incrementalUpdate applies the diff between fromCommit and toCommit.
+func (p *WorkPool) incrementalUpdate(ctx context.Context, wd *WorkDir, fromCommit, toCommit string) error {
 	diffResult, err := p.runner(ctx, cmd.Opts{},
-		"git", "--git-dir", p.gitDir, "diff", wd.CommitID+".."+commitID)
+		"git", "--git-dir", p.gitDir, "diff", fromCommit+".."+toCommit)
 	if err != nil {
 		return fmt.Errorf("git diff failed: %w", err)
 	}
@@ -150,12 +157,30 @@ func (p *WorkPool) fullMaterialize(ctx context.Context, wd *WorkDir, commitID st
 	return nil
 }
 
-// writeState records the current commit ID in the working directory.
+// writeState records the current commit ID in the working directory. Uses
+// tmp + rename so a crash mid-write cannot leave a torn state file.
 func (p *WorkPool) writeState(wd *WorkDir, commitID string) error {
 	stateFile := filepath.Join(wd.Path, stateFileName)
-	if err := os.WriteFile(stateFile, []byte(commitID+"\n"), 0o644); err != nil {
-		return fmt.Errorf("failed to write state file: %w", err)
+	tmp := stateFile + ".tmp"
+	if err := os.WriteFile(tmp, []byte(commitID+"\n"), 0o644); err != nil {
+		return fmt.Errorf("failed to write tmp state file: %w", err)
+	}
+	if err := os.Rename(tmp, stateFile); err != nil {
+		return fmt.Errorf("failed to rename state file: %w", err)
 	}
 	wd.CommitID = commitID
+	return nil
+}
+
+// invalidate removes the on-disk state file and clears wd.CommitID. Called
+// before any mutation so that a crash before writeState records the new
+// commit leaves the slot marked fresh; the next Materialize call then
+// takes the fullMaterialize path, wiping any partial mutation.
+func (p *WorkPool) invalidate(wd *WorkDir) error {
+	stateFile := filepath.Join(wd.Path, stateFileName)
+	if err := os.Remove(stateFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to invalidate state: %w", err)
+	}
+	wd.CommitID = ""
 	return nil
 }

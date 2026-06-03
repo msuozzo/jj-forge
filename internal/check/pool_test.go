@@ -324,6 +324,59 @@ func TestMaterialize_IncrementalFallback(t *testing.T) {
 	}
 }
 
+// TestMaterialize_InvalidatesStateBeforeMutation verifies the journaling
+// contract: the state file is removed before any git command runs, and a
+// failed mutation leaves the slot in the "fresh" state (no state file,
+// empty wd.CommitID) so the next call falls into fullMaterialize.
+func TestMaterialize_InvalidatesStateBeforeMutation(t *testing.T) {
+	t.Parallel()
+	baseDir := t.TempDir()
+	dir0 := filepath.Join(baseDir, "0")
+	if err := os.MkdirAll(dir0, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stateFile := filepath.Join(dir0, stateFileName)
+	if err := os.WriteFile(stateFile, []byte("commit1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mr := &mockRunner{
+		handlers: []func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error){
+			// git diff: assert state already invalidated, then "crash".
+			func(_ context.Context, _ cmd.Opts, _ ...string) (*cmd.Result, error) {
+				if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+					t.Errorf("expected state file removed before git diff, stat err=%v", err)
+				}
+				return nil, fmt.Errorf("simulated crash during diff")
+			},
+			// fullMaterialize archive: also fail so the mutation never completes.
+			func(_ context.Context, _ cmd.Opts, _ ...string) (*cmd.Result, error) {
+				return nil, fmt.Errorf("simulated crash during archive")
+			},
+		},
+	}
+
+	pool, err := NewWorkPool("/fake/git", baseDir, 1, mr.run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pool.dirs[0].CommitID != "commit1" {
+		t.Fatalf("expected initial CommitID 'commit1', got %q", pool.dirs[0].CommitID)
+	}
+
+	ctx := context.Background()
+	wd, _ := pool.Acquire(ctx)
+	if err := pool.Materialize(ctx, wd, "commit2"); err == nil {
+		t.Error("expected Materialize to fail when all mutations fail")
+	}
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Errorf("expected state file still missing after failed materialize, stat err=%v", err)
+	}
+	if wd.CommitID != "" {
+		t.Errorf("expected wd.CommitID cleared, got %q", wd.CommitID)
+	}
+}
+
 func contains(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
