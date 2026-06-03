@@ -49,6 +49,7 @@ type ForgeConfig struct {
 	CheckCommand    string            `toml:"check-command,omitempty"`
 	Checks          []string          `toml:"checks,omitempty"`
 	Tools           map[string]string `toml:"tools,omitempty"`
+	Hosts           map[string]string `toml:"hosts,omitempty"`
 }
 
 // Check verdict values.
@@ -104,7 +105,7 @@ func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
 	if m.cachedConfig != nil {
 		return m.cachedConfig, nil
 	}
-	result, err := m.client.Run(context.Background(), "config", "list", "--repo", "forge")
+	result, err := m.client.Run(context.Background(), "config", "list", "forge")
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +239,16 @@ func (m *ConfigManager) GetDefaultReviewer() (string, error) {
 		return "", err
 	}
 	return cfg.DefaultReviewer, nil
+}
+
+// GetHosts retrieves the configured host overrides map from the config.
+// Returns nil if no host overrides are configured.
+func (m *ConfigManager) GetHosts() (map[string]string, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return nil, err
+	}
+	return cfg.Hosts, nil
 }
 
 // GetCheckCommand retrieves the configured check command.

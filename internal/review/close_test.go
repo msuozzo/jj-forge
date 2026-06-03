@@ -28,7 +28,7 @@ func TestClose_Success(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -41,7 +41,7 @@ func TestClose_Success(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -168,7 +168,7 @@ func TestClose_StatusErrors(t *testing.T) {
 			if tt.status != "" {
 				calls = append(calls,
 					jjtest.Call{
-						Args:   []string{"config", "list", "--repo", "forge"},
+						Args:   []string{"config", "list", "forge"},
 						Output: jjtest.EmptyOutput(),
 					},
 					jjtest.Call{
@@ -183,7 +183,7 @@ func TestClose_StatusErrors(t *testing.T) {
 					Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 				},
 				jjtest.Call{
-					Args: []string{"config", "list", "--repo", "forge"},
+					Args: []string{"config", "list", "forge"},
 					Output: func(r *jjtest.FakeRepo) string {
 						if tt.status == "" {
 							return ""
@@ -243,7 +243,7 @@ func TestClose_ForgeError(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -256,7 +256,7 @@ func TestClose_ForgeError(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -319,7 +319,7 @@ func TestClose_AbandonFailure(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -332,7 +332,7 @@ func TestClose_AbandonFailure(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},

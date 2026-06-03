@@ -91,6 +91,7 @@ func TestDetectForge(t *testing.T) {
 		headers  http.Header
 		httpErr  error
 		noHTTP   bool // if true, use panicHTTPDoer
+		hosts    map[string]string
 		wantType ForgeType
 		wantErr  bool
 	}{
@@ -148,6 +149,20 @@ func TestDetectForge(t *testing.T) {
 			httpErr: errors.New("connection refused"),
 			wantErr: true,
 		},
+		{
+			name:     "override github.example.com to github via hosts map",
+			url:      "https://github.example.com/owner/repo",
+			noHTTP:   true,
+			hosts:    map[string]string{"github.example.com": "github"},
+			wantType: ForgeTypeGitHub,
+		},
+		{
+			name:     "override github.com to gitlab via hosts map",
+			url:      "https://github.com/owner/repo",
+			noHTTP:   true,
+			hosts:    map[string]string{"github.com": "gitlab"},
+			wantType: ForgeTypeGitLab,
+		},
 	}
 
 	for _, tt := range tests {
@@ -170,7 +185,7 @@ func TestDetectForge(t *testing.T) {
 				doer = m
 			}
 
-			got, err := DetectForge(context.Background(), tt.url, doer)
+			got, err := DetectForge(context.Background(), tt.url, doer, tt.hosts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DetectForge() error = %v, wantErr %v", err, tt.wantErr)
 				return

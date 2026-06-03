@@ -28,7 +28,7 @@ func TestMerge_Success(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -41,7 +41,7 @@ func TestMerge_Success(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -83,7 +83,7 @@ func TestMerge_Success(t *testing.T) {
 		},
 		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
@@ -177,7 +177,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -190,7 +190,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -212,7 +212,7 @@ func TestMerge_NoCleanup(t *testing.T) {
 		},
 		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
@@ -294,7 +294,7 @@ func TestMerge_StatusErrors(t *testing.T) {
 			if tt.status != "" {
 				calls = append(calls,
 					jjtest.Call{
-						Args:   []string{"config", "list", "--repo", "forge"},
+						Args:   []string{"config", "list", "forge"},
 						Output: jjtest.EmptyOutput(),
 					},
 					jjtest.Call{
@@ -309,7 +309,7 @@ func TestMerge_StatusErrors(t *testing.T) {
 					Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 				},
 				jjtest.Call{
-					Args: []string{"config", "list", "--repo", "forge"},
+					Args: []string{"config", "list", "forge"},
 					Output: func(r *jjtest.FakeRepo) string {
 						if tt.status == "" {
 							return ""
@@ -368,7 +368,7 @@ func TestMerge_NotUploaded(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -381,7 +381,7 @@ func TestMerge_NotUploaded(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -433,7 +433,7 @@ func TestMerge_HasParentTrailer(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -446,7 +446,7 @@ func TestMerge_HasParentTrailer(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -502,7 +502,7 @@ func TestMerge_ForgeError(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -515,7 +515,7 @@ func TestMerge_ForgeError(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -599,7 +599,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review records (3 calls: list, set, list, set, list, set)
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -607,7 +607,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -617,7 +617,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`
 			},
@@ -633,7 +633,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		},
 		// GetReviewByChangeID → GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return reviewsConfig
 			},
@@ -677,7 +677,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		},
 		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return mergedConfig
 			},
@@ -808,7 +808,7 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review records
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -816,7 +816,7 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -832,7 +832,7 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 		},
 		// GetReviewByChangeID → GetReviewRecords
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return reviewsConfig
 			},
@@ -875,7 +875,7 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 		},
 		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return mergedConfig
 			},
@@ -893,7 +893,7 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 		},
 		// cleanupLinksAfterMerge: cache invalidated by pruneStaleReviewRecords SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return prunedConfig
 			},
@@ -959,7 +959,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 	scenario := jjtest.NewScenario(t, repo,
 		// Pre-create review record
 		jjtest.Call{
-			Args:   []string{"config", "list", "--repo", "forge"},
+			Args:   []string{"config", "list", "forge"},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
@@ -972,7 +972,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
 			},
@@ -989,7 +989,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 		},
 		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
 		jjtest.Call{
-			Args: []string{"config", "list", "--repo", "forge"},
+			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},

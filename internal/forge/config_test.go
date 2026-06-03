@@ -30,12 +30,12 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, erro
 
 	m.callLog = append(m.callLog, args)
 
-	if len(args) < 4 {
+	if len(args) < 3 {
 		return nil, fmt.Errorf("unexpected args: %v", args)
 	}
 
-	if args[0] == "config" && args[1] == "list" && args[2] == "--repo" {
-		key := args[3]
+	if args[0] == "config" && args[1] == "list" {
+		key := args[2]
 
 		// If requesting "forge", return all forge.* keys
 		if key == "forge" {
@@ -633,4 +633,33 @@ func TestConfigCaching(t *testing.T) {
 			t.Errorf("expected 2 config list calls (cache invalidated by write), got %d", listCalls)
 		}
 	})
+}
+
+func TestGetHosts(t *testing.T) {
+	// Test: no config
+	mock1 := newMockClient()
+	mgr1 := NewConfigManager(mock1)
+	hosts, err := mgr1.GetHosts()
+	if err != nil {
+		t.Fatalf("GetHosts failed: %v", err)
+	}
+	if hosts != nil {
+		t.Errorf("expected nil hosts map, got %v", hosts)
+	}
+
+	// Test: config with custom host mapping
+	mock2 := newMockClient()
+	mock2.config["hosts"] = `{ "github.example.com" = "github", "gitlab.example.com" = "gitlab" }`
+	mgr2 := NewConfigManager(mock2)
+	hosts, err = mgr2.GetHosts()
+	if err != nil {
+		t.Fatalf("GetHosts failed: %v", err)
+	}
+	expected := map[string]string{
+		"github.example.com": "github",
+		"gitlab.example.com": "gitlab",
+	}
+	if diff := cmp.Diff(expected, hosts); diff != "" {
+		t.Errorf("GetHosts() mismatch (-want +got):\n%s", diff)
+	}
 }
