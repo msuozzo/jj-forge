@@ -42,6 +42,7 @@ var (
 
 var jjConfirmOps = [][]string{
 	{"describe"},
+	{"metaedit"},
 	{"git", "push"},
 	{"bookmark", "set"},
 	{"bookmark", "delete"},

@@ -76,7 +76,7 @@ func TestUpload_TwoCommitStack(t *testing.T) {
 		// A: no trailer change (parent is immutable)
 		// B: needs forge-parent trailer
 		jjtest.Call{
-			Args:       []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "feat: B\n\nforge-parent: aaaaaaaaaaaa\n"},
+			Args:       []string{"metaedit", "bbbbbbbbbbbb", "-m", "feat: B\n\nforge-parent: aaaaaaaaaaaa\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("bbbbbbbbbbbb", "feat: B\n\nforge-parent: aaaaaaaaaaaa\n"),
 		},
@@ -131,13 +131,13 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 		// A: no trailer change (parent is immutable)
 		// B: needs forge-parent trailer
 		jjtest.Call{
-			Args:       []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
+			Args:       []string{"metaedit", "bbbbbbbbbbbb", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("bbbbbbbbbbbb", "B\n\nforge-parent: aaaaaaaaaaaa\n"),
 		},
 		// C: needs forge-parent trailer
 		jjtest.Call{
-			Args:       []string{"describe", "cccccccccccc", "--no-edit", "-m", "C\n\nforge-parent: bbbbbbbbbbbb\n"},
+			Args:       []string{"metaedit", "cccccccccccc", "-m", "C\n\nforge-parent: bbbbbbbbbbbb\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("cccccccccccc", "C\n\nforge-parent: bbbbbbbbbbbb\n"),
 		},
@@ -197,7 +197,7 @@ func TestUpload_MultipleParents(t *testing.T) {
 		// B: no trailer (parent is immutable root)
 		// C: gets two forge-parent trailers
 		jjtest.Call{
-			Args:       []string{"describe", "cccccccccccc", "--no-edit", "-m", "C\n\nforge-parent: aaaaaaaaaaaa\nforge-parent: bbbbbbbbbbbb\n"},
+			Args:       []string{"metaedit", "cccccccccccc", "-m", "C\n\nforge-parent: aaaaaaaaaaaa\nforge-parent: bbbbbbbbbbbb\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("cccccccccccc", "C\n\nforge-parent: aaaaaaaaaaaa\nforge-parent: bbbbbbbbbbbb\n"),
 		},
@@ -299,7 +299,7 @@ func TestUpload_TrailerRemoval(t *testing.T) {
 			Output: jjtest.LogOutput("root"),
 		},
 		jjtest.Call{
-			Args:       []string{"describe", "aaaaaaaaaaaa", "--no-edit", "-m", "A\n"},
+			Args:       []string{"metaedit", "aaaaaaaaaaaa", "-m", "A\n"},
 			Output:     jjtest.EmptyOutput(),
 			SideEffect: jjtest.UpdateDescription("aaaaaaaaaaaa", "A\n"),
 		},
@@ -517,7 +517,7 @@ func TestUpload_PushWhenTrailerChangedEvenIfSynced(t *testing.T) {
 		},
 		// Trailer update for B - describe changes the commit, clearing remote bookmark
 		jjtest.Call{
-			Args:   []string{"describe", "bbbbbbbbbbbb", "--no-edit", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
+			Args:   []string{"metaedit", "bbbbbbbbbbbb", "-m", "B\n\nforge-parent: aaaaaaaaaaaa\n"},
 			Output: jjtest.EmptyOutput(),
 			SideEffect: func(r *jjtest.FakeRepo) {
 				jjtest.UpdateDescription("bbbbbbbbbbbb", "B\n\nforge-parent: aaaaaaaaaaaa\n")(r)
