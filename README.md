@@ -24,7 +24,7 @@ A translation layer between [Jujutsu (jj)](https://github.com/jj-vcs/jj) and cod
 
 ## Prerequisites
 
-- [jj](https://github.com/jj-vcs/jj) (Jujutsu VCS)
+- [jj](https://github.com/jj-vcs/jj) (Jujutsu VCS) 0.38.0+
 - [Go](https://go.dev/) 1.24+
 - [gh](https://cli.github.com/) (GitHub CLI, authenticated) -- required for the GitHub forge
 

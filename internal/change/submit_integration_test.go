@@ -106,7 +106,7 @@ func TestSubmitIntegration_SingleCommit(t *testing.T) {
 
 	// Create main bookmark and push it to remote
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 
 	// 4. Create test commit on top of remote main
 	writeFile(t, filepath.Join(repoDir, "file1.txt"), "content1")
@@ -154,7 +154,7 @@ func TestSubmitIntegration_ThreeCommitStack(t *testing.T) {
 	writeFile(t, filepath.Join(repoDir, "initial.txt"), "initial content")
 	runCmd(t, repoDir, "jj", "commit", "-m", "Initial commit")
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 
 	// Create 3 commits in stack
 	writeFile(t, filepath.Join(repoDir, "file1.txt"), "content1")
@@ -208,7 +208,7 @@ func TestSubmitIntegration_WithTrailers(t *testing.T) {
 	writeFile(t, filepath.Join(repoDir, "initial.txt"), "initial content")
 	runCmd(t, repoDir, "jj", "commit", "-m", "Initial commit")
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 
 	// Create 2 commits with forge-parent trailers
 	createCommitWithTrailer(t, repoDir, "feat: add feature A", "forge-parent: someParentID")
@@ -270,7 +270,7 @@ func TestSubmitIntegration_EmptyRevset(t *testing.T) {
 	runCmd(t, repoDir, "jj", "commit", "-m", "Initial commit")
 	_ = getChangeIDs(t, repoDir) // Verify commit created
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 
 	// Execute Submit with empty revset (no mutable commits)
 	client := jj.NewClient(repoDir)
@@ -306,7 +306,7 @@ func TestSubmitIntegration_NonLinearStackFails(t *testing.T) {
 	runCmd(t, repoDir, "jj", "commit", "-m", "Initial commit")
 	_ = getChangeIDs(t, repoDir) // Verify commit created
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 	runCmd(t, repoDir, "jj", "git", "fetch", "--remote", "og")
 	runCmd(t, repoDir, "jj", "git", "import")
 
@@ -364,7 +364,7 @@ func TestSubmitIntegration_NotBasedOnRemoteHeadFails(t *testing.T) {
 	changeIDsInitial := getChangeIDs(t, repoDir)
 	commitX := changeIDsInitial[0]
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--bookmark", "main")
 
 	// Create commit A based on current remote head
 	writeFile(t, filepath.Join(repoDir, "fileA.txt"), "contentA")
