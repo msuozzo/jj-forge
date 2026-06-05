@@ -183,7 +183,7 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 	for _, item := range toPush {
 		tr.SetMessageByName(item.rev.ID, "pushing")
 		tr.SetStatusByName(item.rev.ID, ui.TaskRunning)
-		if _, err := client.Run(ctx, "git", "push", "--change", item.rev.ID, "--remote", remote, "--allow-new"); err != nil {
+		if _, err := client.Run(ctx, "git", "push", "--change", item.rev.ID, "--remote", remote); err != nil {
 			tr.SetStatusByName(item.rev.ID, ui.TaskFailed)
 			return nil, fmt.Errorf("failed to push %s: %w", item.rev.ID, err)
 		}

@@ -89,13 +89,13 @@ func setupPushedBookmark(t *testing.T, remoteDir, repoDir string) (changeID, boo
 	writeFile(t, filepath.Join(repoDir, "init.txt"), "init")
 	runCmd(t, repoDir, "jj", "commit", "-m", "initial")
 	runCmd(t, repoDir, "jj", "bookmark", "create", "main", "-r", "@-")
-	runCmd(t, repoDir, "jj", "git", "push", "--remote", "og", "--bookmark", "main", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--remote", "og", "--bookmark", "main")
 
 	// Create feature commit and push via --change (mirrors real upload flow)
 	writeFile(t, filepath.Join(repoDir, "feature.txt"), "feature")
 	runCmd(t, repoDir, "jj", "commit", "-m", "feat: new feature")
 	changeID = strings.TrimSpace(runCmdOutput(t, repoDir, "jj", "log", "--no-graph", "-r", "@-", "-T", "change_id.short()"))
-	runCmd(t, repoDir, "jj", "git", "push", "--change", changeID, "--remote", "og", "--allow-new")
+	runCmd(t, repoDir, "jj", "git", "push", "--change", changeID, "--remote", "og")
 	bookmarkName = "push-" + changeID
 
 	// Fetch to establish tracking

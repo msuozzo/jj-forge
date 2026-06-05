@@ -37,7 +37,7 @@ func TestUpload_SingleMutableCommit(t *testing.T) {
 		},
 		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -86,11 +86,11 @@ func TestUpload_TwoCommitStack(t *testing.T) {
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -147,15 +147,15 @@ func TestUpload_ThreeCommitStack(t *testing.T) {
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -207,15 +207,15 @@ func TestUpload_MultipleParents(t *testing.T) {
 			Output: jjtest.LogOutput("cccccccccccc", "bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "cccccccccccc", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -256,11 +256,11 @@ func TestUpload_TrailerAlreadyCorrect(t *testing.T) {
 		// No describe call - trailer already correct
 		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -309,7 +309,7 @@ func TestUpload_TrailerRemoval(t *testing.T) {
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -344,7 +344,7 @@ func TestUpload_PushFailure(t *testing.T) {
 		},
 		// Push phase: no re-resolve (trailers unchanged, revs reused)
 		jjtest.Call{
-			Args: []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args: []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Err:  pushErr,
 		},
 	)
@@ -531,11 +531,11 @@ func TestUpload_PushWhenTrailerChangedEvenIfSynced(t *testing.T) {
 			Output: jjtest.LogOutput("bbbbbbbbbbbb", "aaaaaaaaaaaa"),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "aaaaaaaaaaaa", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "bbbbbbbbbbbb", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 	)
@@ -584,7 +584,7 @@ func TestUpload_MixedSkipAndPush(t *testing.T) {
 		// emptyyyy: silently skipped (empty)
 		// needspsh: pushed
 		jjtest.Call{
-			Args:   []string{"git", "push", "--change", "needspsh", "--remote", testRemote, "--allow-new"},
+			Args:   []string{"git", "push", "--change", "needspsh", "--remote", testRemote},
 			Output: jjtest.EmptyOutput(),
 		},
 		// synced00: skipped (synced)

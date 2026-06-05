@@ -37,7 +37,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 				Msg: fmt.Sprintf("branch %q does not exist on remote %q", branch, remote),
 				Hint: fmt.Sprintf("If this is a new repository, bootstrap it by pushing your first commit:\n"+
 					"  jj bookmark set %s -r 'latest(%s)'\n"+
-					"  jj git push --bookmark %s --remote %s --allow-new", branch, revset, branch, remote),
+					"  jj git push --bookmark %s --remote %s", branch, revset, branch, remote),
 			}
 		}
 		return nil, fmt.Errorf("querying remote bookmark %s: %w", remoteBookmark, err)
