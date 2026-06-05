@@ -20,6 +20,7 @@ type OpenParams struct {
 	UpstreamRemote    string   // Remote to create PR against
 	UpstreamRemoteURL string   // Pre-resolved upstream remote URL (optional; resolved if empty)
 	ForkRemote        string   // Remote where the branch is pushed
+	TargetBranch      string   // Base branch to create PR against (optional; default branch used if empty)
 }
 
 // OpenResult contains the result of the open command.
@@ -70,9 +71,15 @@ func Open(
 			return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
 		}
 	}
-	upstreamBranch, err := forgeClient.DefaultBranch(ctx, upstreamRemoteURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default branch: %w", err)
+	var upstreamBranch string
+	if params.TargetBranch != "" {
+		upstreamBranch = params.TargetBranch
+	} else {
+		var err error
+		upstreamBranch, err = forgeClient.DefaultBranch(ctx, upstreamRemoteURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get default branch: %w", err)
+		}
 	}
 	// Determine fork branch
 	forkBranch, err := forgeClient.FormatHeadBranch(ctx, jjClient, params.ForkRemote, rev.ID)
