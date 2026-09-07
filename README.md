@@ -1,6 +1,6 @@
 # jj-forge
 
-A translation layer between [Jujutsu (jj)](https://github.com/jj-vcs/jj) and code forges like GitHub.
+A translation layer between [Jujutsu (jj)](https://github.com/jj-vcs/jj) and code forges like GitHub and Tangled.
 
 ## Highlights
 
@@ -16,8 +16,8 @@ A translation layer between [Jujutsu (jj)](https://github.com/jj-vcs/jj) and cod
   merges of stacked reviews.
 
 - **Forge-independent model** -- Commands and APIs not specific to a forge.
-  While GitHub is the first supported platform, the underlying design is
-  generic.
+  GitHub, [Tangled](https://tangled.org), and Google Secure Source Manager are
+  supported.
 
 - **Familiar jj UX** -- Uses revsets to target changes and jj's clap-style cli
   look and feel.
@@ -27,6 +27,7 @@ A translation layer between [Jujutsu (jj)](https://github.com/jj-vcs/jj) and cod
 - [jj](https://github.com/jj-vcs/jj) (Jujutsu VCS) 0.38.0+
 - [Go](https://go.dev/) 1.24+
 - [gh](https://cli.github.com/) (GitHub CLI, authenticated) -- required for the GitHub forge
+- [tg](https://tangled.org/aly.codes/tg) (Tangled CLI, authenticated) -- required for the Tangled forge
 
 ## Installation
 
@@ -52,7 +53,8 @@ Workflow is detected based on ownership:
 
 - **Your non-fork repo** -- develop-on-main workflow
 - **Your fork** -- PR-based workflow
-- **External repo** -- forks automatically, then PR-based workflow
+- **External repo** -- forks automatically where the forge supports it, then
+  PR-based workflow
 
 ### Develop-on-main workflow
 
@@ -181,33 +183,35 @@ finalization.
 
 ## Commands
 
-| Command                   | Description                                                  |
-| ------------------------- | ------------------------------------------------------------ |
-| `change check [REVSET]`   | Run the configured check command against changes             |
-| `change submit REVSET`    | Land changes directly by fast-forwarding the target branch   |
-| `review open [REVSET]`    | Create a pull request                                        |
-| `review update [REVSET]`  | Upload content and update PR descriptions with links         |
-| `review merge [REV]`      | Merge a pull request                                         |
-| `review close [REV]`      | Close a pull request and abandon the change                  |
-| `review import [REV]`     | Find and import existing pull requests                       |
-| `repo clone <url> [path]` | Clone repository with automatic workflow detection           |
-| `repo setup-ruleset`      | Add a GitHub ruleset to prevent merging forge-parent commits |
-| `repo setup-templates`    | Set template-aliases in jj config for forge visualization    |
+| Command                   | Description                                                                |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `change check [REVSET]`   | Run the configured check command against changes                           |
+| `change submit REVSET`    | Land changes directly by fast-forwarding the target branch                 |
+| `review open [REVSET]`    | Create a pull request                                                      |
+| `review update [REVSET]`  | Upload content and update PR descriptions with links                       |
+| `review merge [REV]`      | Merge a pull request                                                       |
+| `review close [REV]`      | Close a pull request and abandon the change                                |
+| `review import [REV]`     | Find and import existing pull requests                                     |
+| `repo clone <url> [path]` | Clone repository with automatic workflow detection                         |
+| `repo setup-ruleset`      | Add a GitHub ruleset to prevent merging forge-parent commits (GitHub only) |
+| `repo setup-templates`    | Set template-aliases in jj config for forge visualization                  |
 
 Run `jj forge <command> --help` for flags and details.
 
 ## Configuration
 
-| Key                      | Description                                 |
-| ------------------------ | ------------------------------------------- |
-| `forge.check-command`    | Shell command to run for checks             |
-| `forge.default-reviewer` | Default reviewer username for `review open` |
-| `forge.hosts`            | Map of custom git hosts to forge types      |
-| `forge.tools`            | Map of forge CLI tool command overrides     |
+| Key                      | Description                                          |
+| ------------------------ | ---------------------------------------------------- |
+| `forge.check-command`    | Shell command to run for checks                      |
+| `forge.default-reviewer` | Default reviewer username for `review open`          |
+| `forge.hosts`            | Map of custom git hosts to forge types               |
+| `forge.tools`            | Map of forge CLI tool command overrides (`gh`, `tg`) |
 
 Set values with:
 
     jj config set --repo forge.check-command "go test ./..."
     jj config set --repo forge.default-reviewer "username"
     jj config set --user 'forge.hosts."github.example.com"' "github"
+    jj config set --user 'forge.hosts."knot.example.com"' "tangled"
     jj config set --repo forge.tools.gh "custom-gh"
+    jj config set --repo forge.tools.tg "/path/to/tg"

@@ -26,8 +26,9 @@ type UpdateParams struct {
 
 // UpdateResult contains the result of the update command.
 type UpdateResult struct {
-	UploadResult *change.UploadResult
-	PRsUpdated   int
+	UploadResult  *change.UploadResult
+	PRsUpdated    int
+	ReviewsSynced int // Reviews whose content was re-submitted (forge.ReviewSyncer forges only)
 }
 
 // Update uploads content and updates PR descriptions with parent/child links.
@@ -87,11 +88,28 @@ func Update(
 		TrailersUpdated:  trailerResult.TrailersUpdated,
 	}
 
+	// Phase 3b: Re-submit review content on forges that snapshot patches
+	// (e.g. Tangled rounds). Branch-tracking forges skip this entirely.
+	upstreamRemoteURL := params.UpstreamRemoteURL
+	var reviewsSynced int
+	if _, ok := forgeClient.(forge.ReviewSyncer); ok && len(pushResult.PushedIDs) > 0 {
+		if upstreamRemoteURL == "" {
+			upstreamRemoteURL, err = jjClient.RemoteURL(ctx, params.UpstreamRemote)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
+			}
+		}
+		reviewsSynced, err = SyncReviews(ctx, forgeClient, configMgr, upstreamRemoteURL, pushResult.PushedIDs, tracker)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Phase 4: Update PR descriptions with links
 	prsUpdated, err := UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, UpdatePRLinksParams{
 		Revset:            params.Revset,
 		UpstreamRemote:    params.UpstreamRemote,
-		UpstreamRemoteURL: params.UpstreamRemoteURL,
+		UpstreamRemoteURL: upstreamRemoteURL,
 		Tracker:           tracker,
 		Ordered:           params.Ordered,
 	})
@@ -104,8 +122,9 @@ func Update(
 	}
 
 	return &UpdateResult{
-		UploadResult: uploadResult,
-		PRsUpdated:   prsUpdated,
+		UploadResult:  uploadResult,
+		PRsUpdated:    prsUpdated,
+		ReviewsSynced: reviewsSynced,
 	}, nil
 }
 

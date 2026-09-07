@@ -16,6 +16,7 @@ const (
 	ForgeTypeGitHub
 	ForgeTypeGitLab
 	ForgeTypeSSM
+	ForgeTypeTangled
 )
 
 // HTTPDoer abstracts *http.Client for test mock injection.
@@ -55,6 +56,8 @@ func ParseForgeType(s string) ForgeType {
 		return ForgeTypeGitLab
 	case "ssm":
 		return ForgeTypeSSM
+	case "tangled":
+		return ForgeTypeTangled
 	default:
 		return ForgeTypeUnknown
 	}
@@ -62,8 +65,9 @@ func ParseForgeType(s string) ForgeType {
 
 // DetectForge determines the forge type from a git remote URL.
 // It parses the URL, resolves custom host overrides, checks built-in fast
-// paths (SSM and github.com), before falling back to HTTP header probing
-// for unknown hosts.
+// paths (SSM, Tangled, and github.com), before falling back to HTTP header
+// probing for unknown hosts. Self-hosted Tangled knots emit no identifying
+// headers, so they must be mapped via the forge.hosts config.
 func DetectForge(ctx context.Context, url string, httpClient HTTPDoer, hosts map[string]string) (ForgeType, error) {
 	info, err := ParseGitURL(url)
 	if err != nil {
@@ -80,10 +84,21 @@ func DetectForge(ctx context.Context, url string, httpClient HTTPDoer, hosts map
 	if strings.HasSuffix(info.Host, ".sourcemanager.dev") {
 		return ForgeTypeSSM, nil
 	}
+	if isTangledHost(info.Host) {
+		return ForgeTypeTangled, nil
+	}
 	if info.Host == "github.com" {
 		return ForgeTypeGitHub, nil
 	}
 	return DetectForgeByHeaders(ctx, info.Host, httpClient)
+}
+
+// isTangledHost reports whether host is Tangled's hosted git endpoint
+// (tangled.org) or one of the tangled.sh knots.
+func isTangledHost(host string) bool {
+	host = strings.ToLower(host)
+	return host == "tangled.org" || host == "tangled.sh" ||
+		strings.HasSuffix(host, ".tangled.org") || strings.HasSuffix(host, ".tangled.sh")
 }
 
 // DefaultHTTPClient returns an *http.Client with a 5-second timeout for forge detection probes.

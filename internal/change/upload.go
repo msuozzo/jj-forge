@@ -35,6 +35,7 @@ type UpdateTrailersResult struct {
 type PushResult struct {
 	Pushed        int
 	SkippedSynced int
+	PushedIDs     []string // Change IDs that were pushed, in parent-to-child order
 }
 
 // UpdateTrailers updates forge-parent trailers for a stack of revisions.
@@ -193,6 +194,7 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 			tr.SetStatusByName(item.rev.ID, ui.TaskDone)
 		}
 		result.Pushed++
+		result.PushedIDs = append(result.PushedIDs, item.rev.ID)
 	}
 	return result, nil
 }

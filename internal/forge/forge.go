@@ -17,7 +17,7 @@ type ReviewCreateParams struct {
 
 // ReviewCreateResult contains the result of creating a code review.
 type ReviewCreateResult struct {
-	ID  string // Forge-native review identifier (e.g. "123" for GitHub)
+	ID  string // Forge-native review identifier (e.g. "123" for GitHub, a record key for Tangled)
 	URL string // URL to the review (e.g., https://github.com/owner/repo/pull/123)
 }
 
@@ -42,8 +42,9 @@ type ReviewDetails struct {
 // Forge defines the interface for interacting with code forges.
 //
 // Reviews are identified by a forge-native string ID. For GitHub and SSM this
-// is the decimal PR number. FormatID and ParseID convert between the bare ID
-// and the prefixed form stored in the jj config (e.g. "pr/123").
+// is the decimal PR number. For Tangled it is the pull record key. FormatID
+// and ParseID convert between the bare ID and the prefixed form stored in the
+// jj config (e.g. "pr/123").
 type Forge interface {
 	// CreateReview creates a new code review.
 	CreateReview(ctx context.Context, repoURI string, params ReviewCreateParams) (*ReviewCreateResult, error)
@@ -77,7 +78,7 @@ type Forge interface {
 
 	// FormatHeadBranch returns the head/source branch reference for creating a review.
 	// GitHub: "owner:push-{changeID}" (fork-qualified ref)
-	// SSM: "push-{changeID}" (bare branch name)
+	// SSM/Tangled: "push-{changeID}" (bare branch name)
 	FormatHeadBranch(ctx context.Context, jjClient jj.Client, forkRemote, changeID string) (string, error)
 
 	// NormalizeRepoURL converts a remote URL to this forge's canonical format.
@@ -85,4 +86,15 @@ type Forge interface {
 
 	// SupportsForks returns whether the forge uses a fork-based workflow.
 	SupportsForks() bool
+}
+
+// ReviewSyncer is implemented by forges whose reviews capture a snapshot of
+// the change content at submission time (e.g. Tangled's patch rounds) rather
+// than tracking the head branch. After a change's branch has been pushed,
+// SyncReview refreshes the review so that it reflects the pushed content.
+//
+// Forges that track branches directly (GitHub, SSM) do not implement this.
+type ReviewSyncer interface {
+	// SyncReview submits the current content of the review's head branch.
+	SyncReview(ctx context.Context, repoURI string, reviewID string) error
 }

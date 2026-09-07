@@ -18,6 +18,7 @@ type cloneSteps struct {
 	ForkRemote     string   // Name for the cloned remote (origin is renamed to this)
 	UpstreamRemote string   // Name for the upstream remote, or empty for none
 	UpstreamURL    string   // URL for the upstream remote
+	FetchUpstream  bool     // Fetch from the upstream remote after adding it
 	TrackBranches  []string // Glob patterns to track from the fork remote
 	DefaultBranch  string   // Default branch for the trunk() alias
 	TrunkRemote    string   // Remote for the trunk() alias
@@ -80,6 +81,11 @@ func runCloneSteps(ctx context.Context, jjExecutor cmd.Executor, u *ui.UI, s clo
 	if needsUpstream {
 		if err := jj("git", "remote", "add", s.UpstreamRemote, s.UpstreamURL); err != nil {
 			return fail(taskRemotes, fmt.Errorf("failed to add upstream remote: %w", err))
+		}
+		if s.FetchUpstream {
+			if err := jj("git", "fetch", "--remote", s.UpstreamRemote); err != nil {
+				return fail(taskRemotes, fmt.Errorf("failed to fetch from upstream: %w", err))
+			}
 		}
 	}
 	if needsUpstream {

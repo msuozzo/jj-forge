@@ -108,6 +108,31 @@ func TestDetectForge(t *testing.T) {
 			wantType: ForgeTypeSSM,
 		},
 		{
+			name:     "Tangled SSH",
+			url:      "git@tangled.org:alice.example.com/repo",
+			noHTTP:   true,
+			wantType: ForgeTypeTangled,
+		},
+		{
+			name:     "Tangled HTTPS with DID owner",
+			url:      "https://tangled.org/did:plc:abc123/repo",
+			noHTTP:   true,
+			wantType: ForgeTypeTangled,
+		},
+		{
+			name:     "Tangled knot subdomain",
+			url:      "ssh://git@knot1.tangled.sh/alice.example.com/repo",
+			noHTTP:   true,
+			wantType: ForgeTypeTangled,
+		},
+		{
+			name:     "self-hosted knot via hosts map",
+			url:      "git@knot.example.com:alice.example.com/repo",
+			noHTTP:   true,
+			hosts:    map[string]string{"knot.example.com": "tangled"},
+			wantType: ForgeTypeTangled,
+		},
+		{
 			name:     "github.com SSH",
 			url:      "git@github.com:owner/repo.git",
 			noHTTP:   true,
@@ -203,5 +228,23 @@ func TestDetectForgeByHeaders_ContextCancellation(t *testing.T) {
 	_, err := DetectForgeByHeaders(ctx, "example.com", DefaultHTTPClient())
 	if err == nil {
 		t.Error("expected error for cancelled context")
+	}
+}
+
+func TestParseForgeType(t *testing.T) {
+	tests := map[string]ForgeType{
+		"github":  ForgeTypeGitHub,
+		"GitHub":  ForgeTypeGitHub,
+		"gitlab":  ForgeTypeGitLab,
+		"ssm":     ForgeTypeSSM,
+		"tangled": ForgeTypeTangled,
+		"Tangled": ForgeTypeTangled,
+		"other":   ForgeTypeUnknown,
+		"":        ForgeTypeUnknown,
+	}
+	for in, want := range tests {
+		if got := ParseForgeType(in); got != want {
+			t.Errorf("ParseForgeType(%q) = %v, want %v", in, got, want)
+		}
 	}
 }

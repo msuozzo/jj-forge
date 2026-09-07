@@ -19,6 +19,7 @@ import (
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/github"
 	"github.com/msuozzo/jj-forge/internal/forge/ssm"
+	"github.com/msuozzo/jj-forge/internal/forge/tangled"
 	"github.com/msuozzo/jj-forge/internal/help"
 	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/repoclone"
@@ -50,16 +51,6 @@ var jjConfirmOps = [][]string{
 	{"util", "exec"},
 }
 
-var ghConfirmOps = [][]string{
-	{"pr", "create"},
-	{"pr", "merge"},
-	{"pr", "close"},
-	{"pr", "edit"},
-	{"repo", "fork"},
-	{"repo", "create"},
-	{"api", "--method"},
-}
-
 func newJJExecutor() cmdpkg.Executor {
 	switch debugPrompt {
 	case "all":
@@ -71,12 +62,43 @@ func newJJExecutor() cmdpkg.Executor {
 	}
 }
 
+var ghConfirmOps = [][]string{
+	{"pr", "create"},
+	{"pr", "merge"},
+	{"pr", "close"},
+	{"pr", "edit"},
+	{"repo", "fork"},
+	{"repo", "create"},
+	{"api", "--method"},
+}
+
 func newGHExecutor() cmdpkg.Executor {
 	switch debugPrompt {
 	case "all":
 		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, nil)
 	case "writes":
 		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, ghConfirmOps)
+	default:
+		return cmdpkg.DefaultExecutor
+	}
+}
+
+var tgConfirmOps = [][]string{
+	{"pr", "create"},
+	{"pr", "merge"},
+	{"pr", "close"},
+	{"pr", "edit"},
+	{"pr", "update"},
+	{"repo", "fork"},
+	{"repo", "create"},
+}
+
+func newTGExecutor() cmdpkg.Executor {
+	switch debugPrompt {
+	case "all":
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, nil)
+	case "writes":
+		return cmdpkg.NewPromptingExecutor(cmdpkg.DefaultExecutor, &cmdpkg.DefaultPrompter{}, tgConfirmOps)
 	default:
 		return cmdpkg.DefaultExecutor
 	}
@@ -104,6 +126,17 @@ func getForge(ctx context.Context, jjClient jj.Client, upstreamRemote string) (f
 	case forge.ForgeTypeSSM:
 		client, err := ssm.NewClientFromURL(ctx, url, cmdpkg.DefaultExecutor)
 		return client, url, err
+	case forge.ForgeTypeTangled:
+		gitDir, err := jjClient.GitDir(ctx)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get git directory: %w", err)
+		}
+		tgCmd, err := configMgr.GetToolCommand("tg")
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get tg command: %w", err)
+		}
+		client := tangled.NewClient(gitDir, upstreamRemote, jjClient, newTGExecutor()).WithTGCommand(tgCmd)
+		return client, url, nil
 	case forge.ForgeTypeGitHub:
 		gitDir, err := jjClient.GitDir(ctx)
 		if err != nil {
@@ -136,7 +169,7 @@ func main() {
 
 	rootCmd := &cobra.Command{
 		Use:   "jj-forge",
-		Short: "jj-forge is a translation layer between jj and code forges like GitHub",
+		Short: "jj-forge is a translation layer between jj and code forges like GitHub and Tangled",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			var mode ui.ColorMode
 			switch colorFlag {
@@ -400,6 +433,15 @@ use 'review open' and 'review submit' instead.`,
 			if err != nil {
 				return err
 			}
+			// Re-submit content for changes that already have open reviews on
+			// forges that snapshot patches (no-op for branch-tracking forges).
+			synced, err := review.SyncReviews(ctx, forgeClient, configMgr, upstreamRemoteURL, pushResult.PushedIDs, nil)
+			if err != nil {
+				return err
+			}
+			if synced > 0 {
+				fmt.Fprintf(stdoutUI, "Synced content for %d existing review(s)\n", synced)
+			}
 			// Print upload summary
 			skipped := trailerResult.SkippedEmpty + trailerResult.SkippedAnonymous + trailerResult.SkippedImmutable + pushResult.SkippedSynced
 			if pushResult.Pushed > 0 || trailerResult.TrailersUpdated > 0 {
@@ -658,8 +700,13 @@ use 'review open' and 'review submit' instead.`,
 	var updateUpstreamRemote, updateForkRemote string
 	var updateSkipCheck bool
 	updateCmd := &cobra.Command{
-		Use:               "update [REVSET]",
-		Short:             "Upload content and update PR descriptions with parent/child links",
+		Use:   "update [REVSET]",
+		Short: "Upload content and update PR descriptions with parent/child links",
+		Long: `Upload content and update PR descriptions with parent/child links.
+
+On Tangled, where a pull request holds a snapshot of the patch rather than
+tracking its branch, update also submits a new round for each open review
+whose branch it pushed. Pushing by other means leaves those reviews stale.`,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -707,6 +754,9 @@ use 'review open' and 'review submit' instead.`,
 			if ur.Skipped > 0 {
 				fmt.Fprintf(stdoutUI, "Skipped %d change(s) (empty: %d, anonymous: %d, immutable: %d, synced: %d)\n",
 					ur.Skipped, ur.SkippedEmpty, ur.SkippedAnonymous, ur.SkippedImmutable, ur.SkippedSynced)
+			}
+			if result.ReviewsSynced > 0 {
+				fmt.Fprintf(stdoutUI, "Synced content for %d review(s)\n", result.ReviewsSynced)
 			}
 			if result.PRsUpdated > 0 {
 				fmt.Fprintf(stdoutUI, "Updated %d PR description(s)\n", result.PRsUpdated)
@@ -760,10 +810,15 @@ The command will:
   - Configure appropriate remotes (og/up)
   - Set up workflow preferences
 
+Tangled repositories (tangled.org) are detected automatically. Ownership is
+checked against the tg login. Repositories you do not own are configured for
+branch-based PRs in the same repository (fork-based PRs are not supported).
+
 Examples:
   jj-forge repo clone git@github.com:me/my-project.git
   jj-forge repo clone https://github.com/external/project.git
-  jj-forge repo clone git@github.com:owner/repo.git custom-dir`,
+  jj-forge repo clone git@github.com:owner/repo.git custom-dir
+  jj-forge repo clone git@tangled.org:me.example.com/my-project`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url := args[0]
@@ -795,6 +850,14 @@ Examples:
 				_, err := ssmRunner.Run(ctx, params)
 				return err
 			}
+			// Dispatch to Tangled clone flow for Tangled URLs
+			if forgeType == forge.ForgeTypeTangled {
+				tgCmd, _ := configMgr.GetToolCommand("tg")
+				cli := tangled.NewCLI(newTGExecutor()).WithCommand(tgCmd)
+				runner := repoclone.NewTangledRunnerWithDeps(cli, cmdpkg.DefaultExecutor, newJJExecutor(), stdoutUI)
+				_, err := runner.Run(ctx, params)
+				return err
+			}
 			ghCmd, _ := configMgr.GetToolCommand("gh")
 			ghClient := repoclone.NewGitHubClientWithExecutor(newGHExecutor())
 			if ghCmd != "" {
@@ -814,7 +877,7 @@ Examples:
 	var rulesetUpstreamRemote string
 	setupRulesetCmd := &cobra.Command{
 		Use:               "setup-ruleset",
-		Short:             "Add a GitHub ruleset to prevent merging forge-parent commits",
+		Short:             "Add a GitHub ruleset to prevent merging forge-parent commits (GitHub only)",
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
