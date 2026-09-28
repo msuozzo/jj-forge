@@ -33,6 +33,19 @@ func TestPrintError_SingleSource(t *testing.T) {
 	}
 }
 
+func TestPrintError_ExitError(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorNever)
+
+	inner := errors.New("connection refused")
+	u.PrintError(&ExitError{Err: fmt.Errorf("failed to connect: %w", inner), Code: 2})
+
+	want := "Error: failed to connect\nCaused by: connection refused\n"
+	if buf.String() != want {
+		t.Errorf("PrintError() =\n%q\nwant:\n%q", buf.String(), want)
+	}
+}
+
 func TestPrintError_MultipleSource(t *testing.T) {
 	var buf bytes.Buffer
 	u := New(&buf, ColorNever)

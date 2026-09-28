@@ -7,11 +7,13 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"errors"
 	"slices"
 
 	jjforge "github.com/msuozzo/jj-forge"
+	"github.com/msuozzo/jj-forge/internal/actionsstatus"
 	"github.com/msuozzo/jj-forge/internal/change"
 	"github.com/msuozzo/jj-forge/internal/check"
 	cmdpkg "github.com/msuozzo/jj-forge/internal/cmd"
@@ -925,6 +927,122 @@ Examples:
 	repoCmd.AddCommand(setupTemplatesCmd)
 	rootCmd.AddCommand(repoCmd)
 
+	// Util command group
+	utilCmd := &cobra.Command{
+		Use:   "util",
+		Short: "Building blocks for scripts and check commands",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
+	// Exit statuses of util actions-status, besides 0 when the checks passed
+	// or none run.
+	const (
+		actionsStatusFailed      = 1
+		actionsStatusError       = 2
+		actionsStatusPending     = 75 // EX_TEMPFAIL
+		actionsStatusInterrupted = 130
+	)
+	var actionsStatusForkRemote, actionsStatusUpstreamRemote string
+	var actionsStatusWait bool
+	var actionsStatusTimeout time.Duration
+	actionsStatusCmd := &cobra.Command{
+		Use:   "actions-status [REV]",
+		Short: "Report whether GitHub Actions passed on a change's pushed commit",
+		Long: `Report whether GitHub Actions passed on the pushed commit of a change's pull request.
+
+Exit status:
+  0    the workflows and any other checks passed, or no workflow runs for the
+       push and no other check reports
+  1    a workflow or other check failed
+  2    the checks could not be read, for example because the change is not
+       pushed, the pull request has merge conflicts or its branch has moved
+  75   the checks have not finished, which includes the time before GitHub
+       registers the latest push
+  130  interrupted
+
+GitHub records nothing for a push that every workflow's filters skip, so the
+workflow files are evaluated to tell which runs the push starts: their
+pull_request, pull_request_target and push triggers, activity types, branch
+and path filters, and skip instructions such as [skip ci] in the commit
+message. The checks have not finished until each of those runs has started.
+When in doubt, a workflow is expected to run.
+
+With --wait, polls until the checks pass, fail or are found not to run, for
+at most --timeout.`,
+		Args:              withExitCode(actionsStatusError, cobra.MaximumNArgs(1)),
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: withExitCode(actionsStatusError, func(cmd *cobra.Command, args []string) error {
+			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
+			var rev string
+			if len(args) > 0 {
+				rev = args[0]
+			} else {
+				var err error
+				rev, err = resolveDefaultRev(ctx, jjClient)
+				if err != nil {
+					return err
+				}
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, actionsStatusUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			gh, ok := forgeClient.(*github.Client)
+			if !ok {
+				return &ui.UserError{Msg: "actions-status only works with GitHub"}
+			}
+			switch {
+			case actionsStatusTimeout < 0:
+				return &ui.UserError{Msg: "--timeout must not be negative"}
+			case cmd.Flags().Changed("timeout") && !actionsStatusWait:
+				return &ui.UserError{Msg: "--timeout only applies with --wait"}
+			}
+			pushed, err := review.FindPushedReview(ctx, jjClient, forgeClient, forge.NewConfigManager(jjClient), rev, actionsStatusForkRemote)
+			if err != nil {
+				return err
+			}
+			var poll time.Duration
+			if actionsStatusWait {
+				poll = 15 * time.Second
+			}
+			status, err := actionsstatus.Wait(ctx, gh, upstreamRemoteURL, pushed.ReviewID, pushed.CommitID, poll, actionsStatusTimeout, stderrUI)
+			if errors.Is(err, context.Canceled) {
+				return &ui.ExitError{Err: errors.New("interrupted while waiting for checks"), Code: actionsStatusInterrupted}
+			}
+			if err != nil {
+				return err
+			}
+			switch status.Verdict {
+			case actionsstatus.Failed:
+				return &ui.UserError{Msg: "checks failed", Details: status.Detail, ExitCode: actionsStatusFailed}
+			case actionsstatus.Running:
+				return &ui.UserError{Msg: "checks have not finished", Details: status.Detail, ExitCode: actionsStatusPending}
+			}
+			msg := "Checks passed"
+			if status.Verdict == actionsstatus.NoChecks {
+				msg = "No checks run on this push"
+			}
+			if status.Detail != "" {
+				msg += ": " + status.Detail
+			}
+			fmt.Fprintln(stdoutUI, msg)
+			return nil
+		}),
+	}
+	actionsStatusCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &ui.ExitError{Err: err, Code: actionsStatusError}
+	})
+	actionsStatusCmd.Flags().StringVar(&actionsStatusForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
+	actionsStatusCmd.Flags().StringVar(&actionsStatusUpstreamRemote, "upstream-remote", "up", "Remote the review is on")
+	actionsStatusCmd.Flags().BoolVar(&actionsStatusWait, "wait", false, "Poll until the checks pass, fail or are found not to run")
+	actionsStatusCmd.Flags().DurationVar(&actionsStatusTimeout, "timeout", 15*time.Minute, "With --wait, give up after this long (0 waits forever)")
+
+	utilCmd.AddCommand(actionsStatusCmd)
+	rootCmd.AddCommand(utilCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		if stderrUI == nil {
 			stderrUI = ui.New(os.Stderr, ui.ColorAuto)
@@ -932,7 +1050,29 @@ Examples:
 		if !printUnknownCommandError(stderrUI, err) {
 			stderrUI.PrintError(err)
 		}
+		var exitErr *ui.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Code)
+		}
+		var userErr *ui.UserError
+		if errors.As(err, &userErr) && userErr.ExitCode != 0 {
+			os.Exit(userErr.ExitCode)
+		}
 		os.Exit(1)
+	}
+}
+
+// withExitCode wraps a cobra RunE or Args function so that its errors exit
+// with code, unless they carry an exit status of their own.
+func withExitCode(code int, f func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		err := f(cmd, args)
+		var exitErr *ui.ExitError
+		var userErr *ui.UserError
+		if err == nil || errors.As(err, &exitErr) || (errors.As(err, &userErr) && userErr.ExitCode != 0) {
+			return err
+		}
+		return &ui.ExitError{Err: err, Code: code}
 	}
 }
 

@@ -350,3 +350,19 @@ func TestGitHubClient_WithGHCommand(t *testing.T) {
 		t.Errorf("expected bin name 'gh-custom', got %q", gotBin)
 	}
 }
+
+func TestAPI(t *testing.T) {
+	var got []string
+	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		got = args
+		return &cmd.Result{Stdout: "out"}, nil
+	}
+	client := NewClientWithExecutor("", executor).WithGHCommand("my-gh")
+	out, err := client.API(context.Background(), "graphql", "-f", "query=q")
+	if err != nil || out != "out" {
+		t.Fatalf("API() = %q, %v", out, err)
+	}
+	if diff := cmp.Diff([]string{"my-gh", "api", "graphql", "-f", "query=q"}, got); diff != "" {
+		t.Errorf("args mismatch (-want +got):\n%s", diff)
+	}
+}

@@ -7,10 +7,11 @@ import (
 
 // UserError is an error with a user-facing message and optional hint.
 type UserError struct {
-	Msg     string
-	Details string
-	Hint    string
-	Source  error
+	Msg      string
+	Details  string
+	Hint     string
+	Source   error
+	ExitCode int // Process exit status, where 0 means the default of 1
 }
 
 func (e *UserError) Error() string {
@@ -23,6 +24,17 @@ func (e *UserError) Error() string {
 func (e *UserError) Unwrap() error {
 	return e.Source
 }
+
+// ExitError sets the process exit status for an error without changing how it
+// prints.
+type ExitError struct {
+	Err  error
+	Code int
+}
+
+func (e *ExitError) Error() string { return e.Err.Error() }
+
+func (e *ExitError) Unwrap() error { return e.Err }
 
 // PrintError writes a jj-style error message to the UI's writer.
 // It walks the error chain to produce:
@@ -37,6 +49,9 @@ func (e *UserError) Unwrap() error {
 //	  1: <source 1>
 //	  2: <source 2>
 func (u *UI) PrintError(err error) {
+	if exitErr, ok := err.(*ExitError); ok {
+		err = exitErr.Err
+	}
 	heading := u.Styled("error_heading", "Error: ")
 	msg := u.Styled("error", err.Error())
 

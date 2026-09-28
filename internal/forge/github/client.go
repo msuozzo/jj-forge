@@ -159,6 +159,11 @@ func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewID strin
 	return nil
 }
 
+// API runs a gh api request, such as a GraphQL query, and returns its output.
+func (c *Client) API(ctx context.Context, args ...string) (string, error) {
+	return c.run(ctx, cmd.Opts{}, append([]string{"api"}, args...)...)
+}
+
 // DefaultBranch returns the default branch name of the repository.
 func (c *Client) DefaultBranch(ctx context.Context, repoURI string) (string, error) {
 	// Normalize the repo URI to HTTPS format
