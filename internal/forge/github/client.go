@@ -119,8 +119,8 @@ func (c *Client) ParseID(id string) (string, error) {
 	return strconv.Itoa(number), nil
 }
 
-// MergeReview merges a pull request with squash merge.
-func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
+// MergeReview squash-merges a pull request, refusing if its head is not commitID.
+func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID string, commitID string) error {
 	// Normalize the repo URI to HTTPS format
 	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
 	if err != nil {
@@ -131,6 +131,7 @@ func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID strin
 		reviewID,
 		"--repo", normalizedURI,
 		"--squash",
+		"--match-head-commit", commitID,
 	}
 	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {

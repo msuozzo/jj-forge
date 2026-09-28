@@ -71,8 +71,12 @@ func Merge(
 			return nil, fmt.Errorf("failed to get remote URL for %s: %w", params.UpstreamRemote, err)
 		}
 	}
+	commitID, err := fullCommitID(ctx, jjClient, rev.CommitID)
+	if err != nil {
+		return nil, err
+	}
 	// Merge review via forge
-	if err := forgeClient.MergeReview(ctx, upstreamRemoteURL, reviewID); err != nil {
+	if err := forgeClient.MergeReview(ctx, upstreamRemoteURL, reviewID, commitID); err != nil {
 		return nil, fmt.Errorf("failed to merge review: %w", err)
 	}
 	// Strip managed links section from the merged PR (non-fatal)

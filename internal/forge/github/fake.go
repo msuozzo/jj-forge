@@ -81,7 +81,7 @@ func (f *FakeForge) CreateReview(ctx context.Context, repoURI string, params for
 }
 
 // MergeReview marks a fake pull request as merged.
-func (f *FakeForge) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
+func (f *FakeForge) MergeReview(ctx context.Context, repoURI string, reviewID string, commitID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

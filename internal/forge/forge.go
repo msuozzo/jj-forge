@@ -49,8 +49,10 @@ type Forge interface {
 	// CreateReview creates a new code review.
 	CreateReview(ctx context.Context, repoURI string, params ReviewCreateParams) (*ReviewCreateResult, error)
 
-	// MergeReview merges an open code review.
-	MergeReview(ctx context.Context, repoURI string, reviewID string) error
+	// MergeReview merges an open code review whose head is commitID, a full
+	// commit ID. Forges that can pin a merge to a commit refuse it when the
+	// head has moved.
+	MergeReview(ctx context.Context, repoURI string, reviewID string, commitID string) error
 
 	// CloseReview closes a code review without merging.
 	CloseReview(ctx context.Context, repoURI string, reviewID string) error

@@ -196,7 +196,7 @@ func (c *Client) CreateReview(ctx context.Context, repoURI string, params forge.
 }
 
 // MergeReview applies the PR's latest round on the knot and records it merged.
-func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
+func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID string, _ string) error {
 	ref, err := repoRef(repoURI)
 	if err != nil {
 		return err

@@ -173,9 +173,9 @@ func (sf *ScenarioForge) UpdateReview(ctx context.Context, repoURI string, revie
 	return sf.Forge.UpdateReview(ctx, repoURI, reviewID, body)
 }
 
-func (sf *ScenarioForge) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
-	sf.scenario.Record("forge:MergeReview", reviewID)
-	return sf.Forge.MergeReview(ctx, repoURI, reviewID)
+func (sf *ScenarioForge) MergeReview(ctx context.Context, repoURI string, reviewID string, commitID string) error {
+	sf.scenario.Record("forge:MergeReview", reviewID, commitID)
+	return sf.Forge.MergeReview(ctx, repoURI, reviewID, commitID)
 }
 
 func (sf *ScenarioForge) CreateReview(ctx context.Context, repoURI string, params forge.ReviewCreateParams) (*forge.ReviewCreateResult, error) {

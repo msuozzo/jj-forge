@@ -173,7 +173,7 @@ func TestMergeReview(t *testing.T) {
 			"tg pr merge 3abc --repo alice.example.com/repo --json": `{"rkey":"3abc","merged":true,"statusRecorded":true}`,
 		}, &calls)
 		client := NewClient("", "up", nil, exec)
-		if err := client.MergeReview(context.Background(), testRepoURL, "3abc"); err != nil {
+		if err := client.MergeReview(context.Background(), testRepoURL, "3abc", "c0ffee"); err != nil {
 			t.Fatalf("MergeReview() error = %v", err)
 		}
 	})
@@ -183,7 +183,7 @@ func TestMergeReview(t *testing.T) {
 			"tg pr merge 3abc --repo alice.example.com/repo --json": `{"rkey":"3abc","merged":true,"statusRecorded":false,"warnings":["could not record merged pull request status"]}`,
 		}, &calls)
 		client := NewClient("", "up", nil, exec)
-		if err := client.MergeReview(context.Background(), testRepoURL, "3abc"); err != nil {
+		if err := client.MergeReview(context.Background(), testRepoURL, "3abc", "c0ffee"); err != nil {
 			t.Fatalf("MergeReview() error = %v", err)
 		}
 	})
@@ -193,7 +193,7 @@ func TestMergeReview(t *testing.T) {
 			"tg pr merge 3abc --repo alice.example.com/repo --json": `{"rkey":"3abc","merged":false,"warnings":["conflict"]}`,
 		}, &calls)
 		client := NewClient("", "up", nil, exec)
-		err := client.MergeReview(context.Background(), testRepoURL, "3abc")
+		err := client.MergeReview(context.Background(), testRepoURL, "3abc", "c0ffee")
 		if err == nil || !strings.Contains(err.Error(), "conflict") {
 			t.Fatalf("expected not-merged error, got %v", err)
 		}
@@ -203,7 +203,7 @@ func TestMergeReview(t *testing.T) {
 			return nil, errors.New("boom")
 		}
 		client := NewClient("", "up", nil, exec)
-		err := client.MergeReview(context.Background(), testRepoURL, "3abc")
+		err := client.MergeReview(context.Background(), testRepoURL, "3abc", "c0ffee")
 		if err == nil || !strings.Contains(err.Error(), "failed to merge PR #3abc") {
 			t.Fatalf("expected merge error, got %v", err)
 		}

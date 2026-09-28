@@ -258,7 +258,7 @@ func (c *Client) CreateReview(ctx context.Context, _ string, params forge.Review
 }
 
 // MergeReview merges an open pull request on SSM.
-func (c *Client) MergeReview(ctx context.Context, _ string, reviewID string) error {
+func (c *Client) MergeReview(ctx context.Context, _ string, reviewID string, _ string) error {
 	path := c.prName(reviewID) + ":merge"
 	_, err := c.doLRO(ctx, http.MethodPost, path, strings.NewReader("{}"))
 	if err != nil {

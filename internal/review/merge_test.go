@@ -17,6 +17,7 @@ func TestMerge_Success(t *testing.T) {
 	repo := jjtest.NewFakeRepo()
 	repo.AddCommits(jjtest.Commit{
 		ID:              "aaaaaaaaaaaa",
+		CommitID:        "c0ffeec0ffee",
 		Parents:         []string{"root"},
 		Description:     "feat: test\n",
 		IsMutable:       true,
@@ -53,7 +54,11 @@ func TestMerge_Success(t *testing.T) {
 			},
 		},
 		// forge: merge + strip links from merged PR
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "c0ffeec0ffee", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "c0ffeec0ffee0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "c0ffeec0ffee0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// No forge:UpdateReview — review has no body/links to strip
 		jjtest.Call{
@@ -202,7 +207,11 @@ func TestMerge_NoCleanup(t *testing.T) {
 			},
 		},
 		// forge: merge + strip links from merged PR
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "aaaaaaaaaaaa", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "aaaaaaaaaaaa0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// No cleanup commands (NoCleanup=true)
 		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
@@ -527,7 +536,11 @@ func TestMerge_ForgeError(t *testing.T) {
 			},
 		},
 		// forge: MergeReview returns error
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "aaaaaaaaaaaa", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "aaaaaaaaaaaa0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -646,7 +659,11 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			},
 		},
 		// forge: merge + strip links from merged PR A
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "aaaaaaaaaaaa", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "aaaaaaaaaaaa0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		jjtest.Call{Args: []string{"forge:UpdateReview", "1"}},
 		// Cleanup: fetch fork + bookmark delete + push + fetch upstream
@@ -845,7 +862,11 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 			},
 		},
 		// forge: merge + strip links from merged PR A
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "aaaaaaaaaaaa", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "aaaaaaaaaaaa0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// Cleanup: fetch fork + bookmark delete + push + fetch upstream
 		jjtest.Call{
@@ -979,7 +1000,11 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 		},
 		// No "git remote list" call: UpstreamRemoteURL is pre-resolved
 		// forge: merge + strip links from merged PR
-		jjtest.Call{Args: []string{"forge:MergeReview", "1"}},
+		jjtest.Call{
+			Args:   []string{"log", "--no-graph", "-r", "aaaaaaaaaaaa", "-T", "commit_id"},
+			Output: func(*jjtest.FakeRepo) string { return "aaaaaaaaaaaa0000000000000000000000000000" },
+		},
+		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// No cleanup commands (NoCleanup=true)
 		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID

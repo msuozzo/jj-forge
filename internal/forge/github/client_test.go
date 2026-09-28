@@ -169,6 +169,7 @@ func TestMergeReview_Success(t *testing.T) {
 		"42",
 		"--repo", "https://github.com/owner/repo",
 		"--squash",
+		"--match-head-commit", "c0ffee",
 	}
 
 	executor := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
@@ -181,7 +182,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42")
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42", "c0ffee")
 	if err != nil {
 		t.Fatalf("MergeReview failed: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestMergeReview_Error(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42")
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42", "c0ffee")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

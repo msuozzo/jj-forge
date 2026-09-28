@@ -371,7 +371,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", "42")
+	err := client.MergeReview(context.Background(), "", "42", "c0ffee")
 	if err != nil {
 		t.Fatalf("MergeReview() error = %v", err)
 	}
@@ -464,7 +464,7 @@ func TestLROPolling(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", "42")
+	err := client.MergeReview(context.Background(), "", "42", "c0ffee")
 	if err != nil {
 		t.Fatalf("MergeReview() with polling error = %v", err)
 	}
@@ -486,7 +486,7 @@ func TestLROError(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", "42")
+	err := client.MergeReview(context.Background(), "", "42", "c0ffee")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

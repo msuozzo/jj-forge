@@ -34,7 +34,7 @@ func createTangledReview(t *testing.T, f *tangled.FakeForge, changeID string, st
 	}
 	switch status {
 	case forge.ReviewStateMerged:
-		if err := f.MergeReview(context.Background(), tangledRepoURL, res.ID); err != nil {
+		if err := f.MergeReview(context.Background(), tangledRepoURL, res.ID, "c0ffee"); err != nil {
 			t.Fatal(err)
 		}
 	case forge.ReviewStateClosed:

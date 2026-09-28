@@ -83,7 +83,7 @@ func TestImport_UpdateExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create review: %v", err)
 	}
-	fakeForge.MergeReview(context.Background(), "github.com/owner/repo", prResult.ID)
+	fakeForge.MergeReview(context.Background(), "github.com/owner/repo", prResult.ID, "c0ffee")
 
 	openRec := makeRecord("aaaaaaaaaaaa", prResult.ID, forge.ReviewStateOpen)
 	mergedRec := makeRecord("aaaaaaaaaaaa", prResult.ID, forge.ReviewStateMerged)
