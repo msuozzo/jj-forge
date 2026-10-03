@@ -195,10 +195,10 @@ func UpdatePRLinks(
 
 	// Pre-compute link data and identify PRs to update (serial, local-only).
 	type prUpdate struct {
-		changeID     string
-		reviewNumber int
-		parentLinks  []PRLink
-		childLinks   []PRLink
+		changeID    string
+		reviewID    string
+		parentLinks []PRLink
+		childLinks  []PRLink
 	}
 	var updates []prUpdate
 	for _, rev := range stack {
@@ -209,7 +209,7 @@ func UpdatePRLinks(
 		if !ok {
 			continue // No open review for this change
 		}
-		reviewNumber, err := forgeClient.ParseID(rec.ForgeID)
+		reviewID, err := forgeClient.ParseID(rec.ForgeID)
 		if err != nil {
 			return 0, fmt.Errorf("invalid review ID %s: %w", rec.ForgeID, err)
 		}
@@ -217,9 +217,9 @@ func UpdatePRLinks(
 		var parentLinks []PRLink
 		for _, pID := range parentOf[rev.ID] {
 			if pRec, ok := reviewByChange[pID]; ok {
-				pNum, err := forgeClient.ParseID(pRec.ForgeID)
+				parentID, err := forgeClient.ParseID(pRec.ForgeID)
 				if err == nil {
-					parentLinks = append(parentLinks, PRLink{Number: pNum, URL: pRec.URL})
+					parentLinks = append(parentLinks, PRLink{ID: parentID, URL: pRec.URL})
 				}
 			}
 		}
@@ -227,17 +227,17 @@ func UpdatePRLinks(
 		var childLinks []PRLink
 		for _, cID := range childrenOf[rev.ID] {
 			if cRec, ok := reviewByChange[cID]; ok {
-				cNum, err := forgeClient.ParseID(cRec.ForgeID)
+				childID, err := forgeClient.ParseID(cRec.ForgeID)
 				if err == nil {
-					childLinks = append(childLinks, PRLink{Number: cNum, URL: cRec.URL})
+					childLinks = append(childLinks, PRLink{ID: childID, URL: cRec.URL})
 				}
 			}
 		}
 		updates = append(updates, prUpdate{
-			changeID:     rev.ID,
-			reviewNumber: reviewNumber,
-			parentLinks:  parentLinks,
-			childLinks:   childLinks,
+			changeID:    rev.ID,
+			reviewID:    reviewID,
+			parentLinks: parentLinks,
+			childLinks:  childLinks,
 		})
 	}
 	if len(updates) == 0 {
@@ -246,14 +246,14 @@ func UpdatePRLinks(
 
 	var prsUpdated atomic.Int32
 	updateOne := func(u prUpdate) error {
-		details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewNumber)
+		details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewID)
 		if err != nil {
-			return fmt.Errorf("failed to get review #%d: %w", u.reviewNumber, err)
+			return fmt.Errorf("failed to get review #%s: %w", u.reviewID, err)
 		}
 		newBody := SetPRLinks(details.Body, u.parentLinks, u.childLinks)
 		if newBody != details.Body {
-			if err := forgeClient.UpdateReview(ctx, upstreamURL, u.reviewNumber, newBody); err != nil {
-				return fmt.Errorf("failed to update review #%d: %w", u.reviewNumber, err)
+			if err := forgeClient.UpdateReview(ctx, upstreamURL, u.reviewID, newBody); err != nil {
+				return fmt.Errorf("failed to update review #%s: %w", u.reviewID, err)
 			}
 			prsUpdated.Add(1)
 		}

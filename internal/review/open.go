@@ -25,7 +25,7 @@ type OpenParams struct {
 // OpenResult contains the result of the open command.
 type OpenResult struct {
 	ChangeID string
-	Number   int
+	ID       string
 	URL      string
 }
 
@@ -96,7 +96,7 @@ func Open(
 	// Store review in config
 	record := forge.ReviewRecord{
 		ChangeID: rev.ID,
-		ForgeID:  forgeClient.FormatID(result.Number),
+		ForgeID:  forgeClient.FormatID(result.ID),
 		URL:      result.URL,
 		Status:   forge.ReviewStateOpen,
 	}
@@ -105,7 +105,7 @@ func Open(
 	}
 	return &OpenResult{
 		ChangeID: rev.ID,
-		Number:   result.Number,
+		ID:       result.ID,
 		URL:      result.URL,
 	}, nil
 }

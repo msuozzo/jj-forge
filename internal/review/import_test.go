@@ -13,11 +13,11 @@ import (
 
 // Test helpers for import tests.
 
-func makeRecord(changeID string, number int, status forge.ReviewState) forge.ReviewRecord {
+func makeRecord(changeID string, id string, status forge.ReviewState) forge.ReviewRecord {
 	return forge.ReviewRecord{
 		ChangeID: changeID,
-		ForgeID:  fmt.Sprintf("pr/%d", number),
-		URL:      fmt.Sprintf("https://github.com/owner/repo/pull/%d", number),
+		ForgeID:  "pr/" + id,
+		URL:      "https://github.com/owner/repo/pull/" + id,
 		Status:   status,
 	}
 }
@@ -83,10 +83,10 @@ func TestImport_UpdateExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create review: %v", err)
 	}
-	fakeForge.MergeReview(context.Background(), "github.com/owner/repo", prResult.Number)
+	fakeForge.MergeReview(context.Background(), "github.com/owner/repo", prResult.ID)
 
-	openRec := makeRecord("aaaaaaaaaaaa", prResult.Number, forge.ReviewStateOpen)
-	mergedRec := makeRecord("aaaaaaaaaaaa", prResult.Number, forge.ReviewStateMerged)
+	openRec := makeRecord("aaaaaaaaaaaa", prResult.ID, forge.ReviewStateOpen)
+	mergedRec := makeRecord("aaaaaaaaaaaa", prResult.ID, forge.ReviewStateMerged)
 
 	scenario := jjtest.NewScenario(t, repo,
 		importRemoteListCall(),
@@ -153,7 +153,7 @@ func TestImport_DiscoverNew(t *testing.T) {
 				t.Fatalf("failed to create review: %v", err)
 			}
 
-			newRec := makeRecord(changeID, prResult.Number, forge.ReviewStateOpen)
+			newRec := makeRecord(changeID, prResult.ID, forge.ReviewStateOpen)
 			scenario := jjtest.NewScenario(t, repo,
 				importRemoteListCall(),
 				configListCall(),
@@ -197,7 +197,7 @@ func TestImport_NoChange(t *testing.T) {
 		t.Fatalf("failed to create review: %v", err)
 	}
 
-	rec := makeRecord(changeID, 1, forge.ReviewStateOpen)
+	rec := makeRecord(changeID, "1", forge.ReviewStateOpen)
 	scenario := jjtest.NewScenario(t, repo,
 		importRemoteListCall(),
 		configListCall(rec),

@@ -458,7 +458,7 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 				fmt.Fprintf(stdoutUI, "Created review %s for change %s\n",
-					stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+					stdoutUI.Styled("review_number", "#"+result.ID),
 					stdoutUI.Styled("change_id", result.ChangeID))
 				fmt.Fprintf(stdoutUI, "URL: %s\n", stdoutUI.Styled("url", result.URL))
 				opened++
@@ -551,7 +551,7 @@ use 'review open' and 'review submit' instead.`,
 				return err
 			}
 			fmt.Fprintf(stdoutUI, "Merged review %s for change %s\n",
-				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+				stdoutUI.Styled("review_number", "#"+result.ID),
 				stdoutUI.Styled("change_id", result.ChangeID))
 			return nil
 		},
@@ -602,7 +602,7 @@ use 'review open' and 'review submit' instead.`,
 				return err
 			}
 			fmt.Fprintf(stdoutUI, "Closed review %s and abandoned change %s\n",
-				stdoutUI.Styled("review_number", fmt.Sprintf("#%d", result.Number)),
+				stdoutUI.Styled("review_number", "#"+result.ID),
 				stdoutUI.Styled("change_id", result.ChangeID))
 			return nil
 		},

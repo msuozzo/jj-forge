@@ -13,7 +13,7 @@ import (
 
 // Review represents a pull request in the fake SSM implementation.
 type Review struct {
-	Number int
+	ID     string
 	Title  string
 	Body   string
 	Head   string
@@ -25,7 +25,7 @@ type Review struct {
 // FakeForge implements forge.Forge for testing SSM flows.
 type FakeForge struct {
 	mu            sync.Mutex
-	reviews       map[int]*Review
+	reviews       map[string]*Review
 	nextNumber    int
 	createError   error
 	mergeError    error
@@ -36,7 +36,7 @@ type FakeForge struct {
 // NewFakeForge creates a new fake SSM forge for testing.
 func NewFakeForge() *FakeForge {
 	return &FakeForge{
-		reviews:       make(map[int]*Review),
+		reviews:       make(map[string]*Review),
 		nextNumber:    1,
 		defaultBranch: "main",
 	}
@@ -50,13 +50,13 @@ func (f *FakeForge) CreateReview(_ context.Context, repoURI string, params forge
 	if f.createError != nil {
 		return nil, f.createError
 	}
-	number := f.nextNumber
+	id := strconv.Itoa(f.nextNumber)
 	f.nextNumber++
 
-	url := fmt.Sprintf("%s/pulls/%d", repoURI, number)
+	url := fmt.Sprintf("%s/pulls/%s", repoURI, id)
 
 	review := &Review{
-		Number: number,
+		ID:     id,
 		Title:  params.Title,
 		Body:   params.Body,
 		Head:   params.FromBranch,
@@ -64,44 +64,44 @@ func (f *FakeForge) CreateReview(_ context.Context, repoURI string, params forge
 		Status: "open",
 		URL:    url,
 	}
-	f.reviews[number] = review
+	f.reviews[id] = review
 
 	return &forge.ReviewCreateResult{
-		Number: number,
-		URL:    url,
+		ID:  id,
+		URL: url,
 	}, nil
 }
 
 // MergeReview marks a fake pull request as merged.
-func (f *FakeForge) MergeReview(_ context.Context, _ string, reviewNumber int) error {
+func (f *FakeForge) MergeReview(_ context.Context, _ string, reviewID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if f.mergeError != nil {
 		return f.mergeError
 	}
-	review, exists := f.reviews[reviewNumber]
+	review, exists := f.reviews[reviewID]
 	if !exists {
-		return fmt.Errorf("review #%d not found", reviewNumber)
+		return fmt.Errorf("review #%s not found", reviewID)
 	}
 	if review.Status != "open" {
-		return fmt.Errorf("review #%d is not open (status: %s)", reviewNumber, review.Status)
+		return fmt.Errorf("review #%s is not open (status: %s)", reviewID, review.Status)
 	}
 	review.Status = "merged"
 	return nil
 }
 
 // CloseReview marks a fake pull request as closed.
-func (f *FakeForge) CloseReview(_ context.Context, _ string, reviewNumber int) error {
+func (f *FakeForge) CloseReview(_ context.Context, _ string, reviewID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if f.closeError != nil {
 		return f.closeError
 	}
-	review, exists := f.reviews[reviewNumber]
+	review, exists := f.reviews[reviewID]
 	if !exists {
-		return fmt.Errorf("review #%d not found", reviewNumber)
+		return fmt.Errorf("review #%s not found", reviewID)
 	}
 	review.Status = "closed"
 	return nil
@@ -115,9 +115,9 @@ func (f *FakeForge) FindReview(_ context.Context, _ string, branch string) (*for
 	for _, r := range f.reviews {
 		if r.Head == branch {
 			return &forge.ReviewDetails{
-				Number: r.Number,
-				URL:    r.URL,
-				State:  forge.ReviewState(r.Status),
+				ID:    r.ID,
+				URL:   r.URL,
+				State: forge.ReviewState(r.Status),
 			}, nil
 		}
 	}
@@ -125,31 +125,31 @@ func (f *FakeForge) FindReview(_ context.Context, _ string, branch string) (*for
 }
 
 // GetReview retrieves details of a specific review.
-func (f *FakeForge) GetReview(_ context.Context, _ string, number int) (*forge.ReviewDetails, error) {
+func (f *FakeForge) GetReview(_ context.Context, _ string, reviewID string) (*forge.ReviewDetails, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	r, exists := f.reviews[number]
+	r, exists := f.reviews[reviewID]
 	if !exists {
-		return nil, fmt.Errorf("review #%d not found", number)
+		return nil, fmt.Errorf("review #%s not found", reviewID)
 	}
 	return &forge.ReviewDetails{
-		Number: r.Number,
-		URL:    r.URL,
-		State:  forge.ReviewState(r.Status),
-		Title:  r.Title,
-		Body:   r.Body,
+		ID:    r.ID,
+		URL:   r.URL,
+		State: forge.ReviewState(r.Status),
+		Title: r.Title,
+		Body:  r.Body,
 	}, nil
 }
 
 // UpdateReview updates the body of a review.
-func (f *FakeForge) UpdateReview(_ context.Context, _ string, reviewNumber int, body string) error {
+func (f *FakeForge) UpdateReview(_ context.Context, _ string, reviewID string, body string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	r, exists := f.reviews[reviewNumber]
+	r, exists := f.reviews[reviewID]
 	if !exists {
-		return fmt.Errorf("review #%d not found", reviewNumber)
+		return fmt.Errorf("review #%s not found", reviewID)
 	}
 	r.Body = body
 	return nil
@@ -167,17 +167,19 @@ func (f *FakeForge) SetupRuleset(_ context.Context, _ string) error {
 	return nil
 }
 
-// FormatID formats a review number into a string ID (e.g. "pr/123").
-func (f *FakeForge) FormatID(number int) string {
-	return fmt.Sprintf("pr/%d", number)
+// FormatID formats a PR number into the stored ID form (e.g. "pr/123").
+func (f *FakeForge) FormatID(reviewID string) string {
+	return "pr/" + reviewID
 }
 
-// ParseID parses a string ID (e.g. "pr/123") into a review number.
-func (f *FakeForge) ParseID(id string) (int, error) {
-	if strings.HasPrefix(id, "pr/") {
-		id = strings.TrimPrefix(id, "pr/")
+// ParseID parses a stored ID (e.g. "pr/123") into a PR number string.
+func (f *FakeForge) ParseID(id string) (string, error) {
+	id = strings.TrimPrefix(id, "pr/")
+	number, err := strconv.Atoi(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid PR number %q: %w", id, err)
 	}
-	return strconv.Atoi(id)
+	return strconv.Itoa(number), nil
 }
 
 // FormatHeadBranch returns the head branch for SSM (no owner prefix).
@@ -202,12 +204,12 @@ func (f *FakeForge) SetDefaultBranch(branch string) {
 	f.defaultBranch = branch
 }
 
-// GetTestReview returns a review by number (for testing assertions).
-func (f *FakeForge) GetTestReview(number int) (*Review, bool) {
+// GetTestReview returns a review by ID (for testing assertions).
+func (f *FakeForge) GetTestReview(reviewID string) (*Review, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	review, exists := f.reviews[number]
+	review, exists := f.reviews[reviewID]
 	return review, exists
 }
 

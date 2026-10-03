@@ -155,11 +155,11 @@ type processResult struct {
 
 func processChange(ctx context.Context, changeID string, record *forge.ReviewRecord, rev *jj.Rev, forgeClient forge.Forge, repoURI string) processResult {
 	if record != nil {
-		number, err := forgeClient.ParseID(record.ForgeID)
+		reviewID, err := forgeClient.ParseID(record.ForgeID)
 		if err != nil {
 			return processResult{Err: err}
 		}
-		details, err := forgeClient.GetReview(ctx, repoURI, number)
+		details, err := forgeClient.GetReview(ctx, repoURI, reviewID)
 		if err != nil {
 			return processResult{Err: err}
 		}
@@ -193,7 +193,7 @@ func processChange(ctx context.Context, changeID string, record *forge.ReviewRec
 				return processResult{
 					Record: &forge.ReviewRecord{
 						ChangeID: rev.ID,
-						ForgeID:  forgeClient.FormatID(details.Number),
+						ForgeID:  forgeClient.FormatID(details.ID),
 						URL:      details.URL,
 						Status:   details.State,
 					},

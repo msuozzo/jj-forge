@@ -70,23 +70,27 @@ func newClientForTest(doer httpDoer, repoName, htmlURL string) *Client {
 }
 
 // prName builds a pull request resource name from the repo name and PR number.
-func (c *Client) prName(number int) string {
-	return fmt.Sprintf("%s/pullRequests/%d", c.repoName, number)
+func (c *Client) prName(reviewID string) string {
+	return fmt.Sprintf("%s/pullRequests/%s", c.repoName, reviewID)
 }
 
 // prURL builds the web UI URL for a pull request.
-func (c *Client) prURL(number int) string {
-	return fmt.Sprintf("%s/pulls/%d", c.htmlURL, number)
+func (c *Client) prURL(reviewID string) string {
+	return fmt.Sprintf("%s/pulls/%s", c.htmlURL, reviewID)
 }
 
-// parsePRNumber extracts the PR number from a resource name.
+// parsePRID extracts the PR number (as a string) from a resource name.
 // Format: projects/P/locations/L/repositories/R/pullRequests/N
-func parsePRNumber(name string) (int, error) {
+func parsePRID(name string) (string, error) {
 	parts := strings.Split(name, "/")
 	if len(parts) < 2 {
-		return 0, fmt.Errorf("invalid PR resource name: %s", name)
+		return "", fmt.Errorf("invalid PR resource name: %s", name)
 	}
-	return strconv.Atoi(parts[len(parts)-1])
+	id := parts[len(parts)-1]
+	if _, err := strconv.Atoi(id); err != nil {
+		return "", fmt.Errorf("invalid PR resource name: %s", name)
+	}
+	return id, nil
 }
 
 // getToken retrieves an access token, caching it for the process lifetime.
@@ -243,32 +247,32 @@ func (c *Client) CreateReview(ctx context.Context, _ string, params forge.Review
 		return nil, fmt.Errorf("failed to decode PR response: %w", err)
 	}
 
-	number, err := parsePRNumber(pr.Name)
+	id, err := parsePRID(pr.Name)
 	if err != nil {
 		return nil, err
 	}
 	return &forge.ReviewCreateResult{
-		Number: number,
-		URL:    c.prURL(number),
+		ID:  id,
+		URL: c.prURL(id),
 	}, nil
 }
 
 // MergeReview merges an open pull request on SSM.
-func (c *Client) MergeReview(ctx context.Context, _ string, reviewNumber int) error {
-	path := fmt.Sprintf("%s/pullRequests/%d:merge", c.repoName, reviewNumber)
+func (c *Client) MergeReview(ctx context.Context, _ string, reviewID string) error {
+	path := c.prName(reviewID) + ":merge"
 	_, err := c.doLRO(ctx, http.MethodPost, path, strings.NewReader("{}"))
 	if err != nil {
-		return fmt.Errorf("failed to merge PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to merge PR #%s: %w", reviewID, err)
 	}
 	return nil
 }
 
 // CloseReview closes a pull request without merging on SSM.
-func (c *Client) CloseReview(ctx context.Context, _ string, reviewNumber int) error {
-	path := fmt.Sprintf("%s/pullRequests/%d:close", c.repoName, reviewNumber)
+func (c *Client) CloseReview(ctx context.Context, _ string, reviewID string) error {
+	path := c.prName(reviewID) + ":close"
 	_, err := c.doLRO(ctx, http.MethodPost, path, strings.NewReader("{}"))
 	if err != nil {
-		return fmt.Errorf("failed to close PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to close PR #%s: %w", reviewID, err)
 	}
 	return nil
 }
@@ -290,16 +294,16 @@ func (c *Client) FindReview(ctx context.Context, _ string, branch string) (*forg
 		}
 		for _, pr := range resp.PullRequests {
 			if pr.Head.Ref == branch {
-				number, err := parsePRNumber(pr.Name)
+				id, err := parsePRID(pr.Name)
 				if err != nil {
 					return nil, err
 				}
 				return &forge.ReviewDetails{
-					Number: number,
-					URL:    c.prURL(number),
-					State:  mapSSMState(pr.State),
-					Title:  pr.Title,
-					Body:   pr.Body,
+					ID:    id,
+					URL:   c.prURL(id),
+					State: mapSSMState(pr.State),
+					Title: pr.Title,
+					Body:  pr.Body,
 				}, nil
 			}
 		}
@@ -312,22 +316,22 @@ func (c *Client) FindReview(ctx context.Context, _ string, branch string) (*forg
 }
 
 // GetReview retrieves details of a specific pull request.
-func (c *Client) GetReview(ctx context.Context, _ string, number int) (*forge.ReviewDetails, error) {
+func (c *Client) GetReview(ctx context.Context, _ string, reviewID string) (*forge.ReviewDetails, error) {
 	var pr pullRequestJSON
-	if err := c.doJSON(ctx, http.MethodGet, c.prName(number), nil, &pr); err != nil {
-		return nil, fmt.Errorf("failed to get PR #%d: %w", number, err)
+	if err := c.doJSON(ctx, http.MethodGet, c.prName(reviewID), nil, &pr); err != nil {
+		return nil, fmt.Errorf("failed to get PR #%s: %w", reviewID, err)
 	}
 	return &forge.ReviewDetails{
-		Number: number,
-		URL:    c.prURL(number),
-		State:  mapSSMState(pr.State),
-		Title:  pr.Title,
-		Body:   pr.Body,
+		ID:    reviewID,
+		URL:   c.prURL(reviewID),
+		State: mapSSMState(pr.State),
+		Title: pr.Title,
+		Body:  pr.Body,
 	}, nil
 }
 
 // UpdateReview updates the body/description of an existing pull request.
-func (c *Client) UpdateReview(ctx context.Context, _ string, reviewNumber int, body string) error {
+func (c *Client) UpdateReview(ctx context.Context, _ string, reviewID string, body string) error {
 	reqBody := struct {
 		Body string `json:"body"`
 	}{Body: body}
@@ -336,10 +340,10 @@ func (c *Client) UpdateReview(ctx context.Context, _ string, reviewNumber int, b
 		return fmt.Errorf("failed to marshal update request: %w", err)
 	}
 
-	path := fmt.Sprintf("%s/pullRequests/%d?updateMask=body", c.repoName, reviewNumber)
+	path := c.prName(reviewID) + "?updateMask=body"
 	_, err = c.doLRO(ctx, http.MethodPatch, path, strings.NewReader(string(payload)))
 	if err != nil {
-		return fmt.Errorf("failed to update PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to update PR #%s: %w", reviewID, err)
 	}
 	return nil
 }
@@ -370,17 +374,19 @@ func (c *Client) SetupRuleset(_ context.Context, _ string) error {
 	return nil
 }
 
-// FormatID formats a review number into a string ID (e.g. "pr/123").
-func (c *Client) FormatID(number int) string {
-	return fmt.Sprintf("pr/%d", number)
+// FormatID formats a PR number into the stored ID form (e.g. "pr/123").
+func (c *Client) FormatID(reviewID string) string {
+	return "pr/" + reviewID
 }
 
-// ParseID parses a string ID (e.g. "pr/123") into a review number.
-func (c *Client) ParseID(id string) (int, error) {
-	if strings.HasPrefix(id, "pr/") {
-		id = strings.TrimPrefix(id, "pr/")
+// ParseID parses a stored ID (e.g. "pr/123") into a PR number string.
+func (c *Client) ParseID(id string) (string, error) {
+	id = strings.TrimPrefix(id, "pr/")
+	number, err := strconv.Atoi(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid SSM PR number %q: %w", id, err)
 	}
-	return strconv.Atoi(id)
+	return strconv.Itoa(number), nil
 }
 
 // FormatHeadBranch returns the head branch reference for SSM PRs.

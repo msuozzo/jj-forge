@@ -95,31 +95,32 @@ func (c *Client) CreateReview(ctx context.Context, repoURI string, params forge.
 		return nil, fmt.Errorf("invalid PR URL format: %s", url)
 	}
 	numberStr := parts[len(parts)-1]
-	number, err := strconv.Atoi(numberStr)
-	if err != nil {
+	if _, err := strconv.Atoi(numberStr); err != nil {
 		return nil, fmt.Errorf("failed to parse PR number from URL %s: %w", url, err)
 	}
 	return &forge.ReviewCreateResult{
-		Number: number,
-		URL:    url,
+		ID:  numberStr,
+		URL: url,
 	}, nil
 }
 
-// FormatID formats a review number into a string ID (e.g. "pr/123").
-func (c *Client) FormatID(number int) string {
-	return fmt.Sprintf("pr/%d", number)
+// FormatID formats a PR number into the stored ID form (e.g. "pr/123").
+func (c *Client) FormatID(reviewID string) string {
+	return "pr/" + reviewID
 }
 
-// ParseID parses a string ID (e.g. "pr/123") into a review number.
-func (c *Client) ParseID(id string) (int, error) {
-	if strings.HasPrefix(id, "pr/") {
-		id = strings.TrimPrefix(id, "pr/")
+// ParseID parses a stored ID (e.g. "pr/123") into a PR number string.
+func (c *Client) ParseID(id string) (string, error) {
+	id = strings.TrimPrefix(id, "pr/")
+	number, err := strconv.Atoi(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid GitHub PR number %q: %w", id, err)
 	}
-	return strconv.Atoi(id)
+	return strconv.Itoa(number), nil
 }
 
 // MergeReview merges a pull request with squash merge.
-func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber int) error {
+func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
 	// Normalize the repo URI to HTTPS format
 	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
 	if err != nil {
@@ -127,19 +128,19 @@ func (c *Client) MergeReview(ctx context.Context, repoURI string, reviewNumber i
 	}
 	args := []string{
 		"pr", "merge",
-		fmt.Sprintf("%d", reviewNumber),
+		reviewID,
 		"--repo", normalizedURI,
 		"--squash",
 	}
 	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
-		return fmt.Errorf("failed to merge PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to merge PR #%s: %w", reviewID, err)
 	}
 	return nil
 }
 
 // CloseReview closes a pull request without merging.
-func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewNumber int) error {
+func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewID string) error {
 	// Normalize the repo URI to HTTPS format
 	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
 	if err != nil {
@@ -147,12 +148,12 @@ func (c *Client) CloseReview(ctx context.Context, repoURI string, reviewNumber i
 	}
 	args := []string{
 		"pr", "close",
-		fmt.Sprintf("%d", reviewNumber),
+		reviewID,
 		"--repo", normalizedURI,
 	}
 	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
-		return fmt.Errorf("failed to close PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to close PR #%s: %w", reviewID, err)
 	}
 	return nil
 }
@@ -216,14 +217,14 @@ func (c *Client) FindReview(ctx context.Context, repoURI, branch string) (*forge
 	}
 
 	return &forge.ReviewDetails{
-		Number: reviews[0].Number,
-		URL:    reviews[0].URL,
-		State:  mapState(reviews[0].State),
+		ID:    strconv.Itoa(reviews[0].Number),
+		URL:   reviews[0].URL,
+		State: mapState(reviews[0].State),
 	}, nil
 }
 
 // GetReview retrieves details of a specific review.
-func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*forge.ReviewDetails, error) {
+func (c *Client) GetReview(ctx context.Context, repoURI string, reviewID string) (*forge.ReviewDetails, error) {
 	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
 	if err != nil {
 		return nil, fmt.Errorf("invalid repository URI: %w", err)
@@ -231,13 +232,13 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 
 	args := []string{
 		"pr", "view",
-		fmt.Sprintf("%d", number),
+		reviewID,
 		"--repo", normalizedURI,
 		"--json", "number,url,state,title,body",
 	}
 	output, err := c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get PR #%d: %w", number, err)
+		return nil, fmt.Errorf("failed to get PR #%s: %w", reviewID, err)
 	}
 
 	var review struct {
@@ -252,29 +253,29 @@ func (c *Client) GetReview(ctx context.Context, repoURI string, number int) (*fo
 	}
 
 	return &forge.ReviewDetails{
-		Number: review.Number,
-		URL:    review.URL,
-		State:  mapState(review.State),
-		Title:  review.Title,
-		Body:   review.Body,
+		ID:    strconv.Itoa(review.Number),
+		URL:   review.URL,
+		State: mapState(review.State),
+		Title: review.Title,
+		Body:  review.Body,
 	}, nil
 }
 
 // UpdateReview updates the body of a pull request.
-func (c *Client) UpdateReview(ctx context.Context, repoURI string, reviewNumber int, body string) error {
+func (c *Client) UpdateReview(ctx context.Context, repoURI string, reviewID string, body string) error {
 	normalizedURI, err := forge.NormalizeRepoURL(repoURI)
 	if err != nil {
 		return fmt.Errorf("invalid repository URI: %w", err)
 	}
 	args := []string{
 		"pr", "edit",
-		fmt.Sprintf("%d", reviewNumber),
+		reviewID,
 		"--repo", normalizedURI,
 		"--body", body,
 	}
 	_, err = c.run(ctx, cmd.Opts{}, args...)
 	if err != nil {
-		return fmt.Errorf("failed to update PR #%d: %w", reviewNumber, err)
+		return fmt.Errorf("failed to update PR #%s: %w", reviewID, err)
 	}
 	return nil
 }

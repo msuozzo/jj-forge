@@ -7,8 +7,8 @@ import (
 
 // PRLink represents a link to a related pull request.
 type PRLink struct {
-	Number int
-	URL    string
+	ID  string
+	URL string
 }
 
 // linkDisplayURL rewrites GitHub PR URLs to use redirect.github.com so that
@@ -29,14 +29,14 @@ func FormatPRLinks(parents, children []PRLink) string {
 	if len(parents) > 0 {
 		var refs []string
 		for _, p := range parents {
-			refs = append(refs, fmt.Sprintf("[#%d](%s)", p.Number, linkDisplayURL(p.URL)))
+			refs = append(refs, fmt.Sprintf("[#%s](%s)", p.ID, linkDisplayURL(p.URL)))
 		}
 		lines = append(lines, "> Parents: "+strings.Join(refs, ", "))
 	}
 	if len(children) > 0 {
 		var refs []string
 		for _, c := range children {
-			refs = append(refs, fmt.Sprintf("[#%d](%s)", c.Number, linkDisplayURL(c.URL)))
+			refs = append(refs, fmt.Sprintf("[#%s](%s)", c.ID, linkDisplayURL(c.URL)))
 		}
 		lines = append(lines, "> Children: "+strings.Join(refs, ", "))
 	}

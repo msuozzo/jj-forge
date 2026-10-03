@@ -13,20 +13,20 @@ func TestFormatPRLinks(t *testing.T) {
 	}{
 		{
 			name:    "parents only",
-			parents: []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
+			parents: []PRLink{{ID: "1", URL: "https://github.com/owner/repo/pull/1"}},
 			want:    "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)",
 		},
 		{
 			name:     "children only",
-			children: []PRLink{{Number: 2, URL: "https://github.com/owner/repo/pull/2"}},
+			children: []PRLink{{ID: "2", URL: "https://github.com/owner/repo/pull/2"}},
 			want:     "> Children: [#2](https://redirect.github.com/owner/repo/pull/2)",
 		},
 		{
 			name:    "both parents and children",
-			parents: []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}},
+			parents: []PRLink{{ID: "1", URL: "https://github.com/owner/repo/pull/1"}},
 			children: []PRLink{
-				{Number: 3, URL: "https://github.com/owner/repo/pull/3"},
-				{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
+				{ID: "3", URL: "https://github.com/owner/repo/pull/3"},
+				{ID: "4", URL: "https://github.com/owner/repo/pull/4"},
 			},
 			want: "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)",
 		},
@@ -131,8 +131,8 @@ func TestStripPRLinks(t *testing.T) {
 
 func TestSetPRLinks_RoundTrip(t *testing.T) {
 	original := "My PR description\n\nSome details"
-	parents := []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}}
-	children := []PRLink{{Number: 3, URL: "https://github.com/owner/repo/pull/3"}}
+	parents := []PRLink{{ID: "1", URL: "https://github.com/owner/repo/pull/1"}}
+	children := []PRLink{{ID: "3", URL: "https://github.com/owner/repo/pull/3"}}
 
 	// Set links
 	withLinks := SetPRLinks(original, parents, children)
@@ -143,8 +143,8 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 
 	// Update links (strip old, add new)
 	newChildren := []PRLink{
-		{Number: 3, URL: "https://github.com/owner/repo/pull/3"},
-		{Number: 4, URL: "https://github.com/owner/repo/pull/4"},
+		{ID: "3", URL: "https://github.com/owner/repo/pull/3"},
+		{ID: "4", URL: "https://github.com/owner/repo/pull/4"},
 	}
 	updated := SetPRLinks(withLinks, parents, newChildren)
 	want2 := "My PR description\n\nSome details\n\n> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)\n> Children: [#3](https://redirect.github.com/owner/repo/pull/3), [#4](https://redirect.github.com/owner/repo/pull/4)"
@@ -160,7 +160,7 @@ func TestSetPRLinks_RoundTrip(t *testing.T) {
 }
 
 func TestSetPRLinks_EmptyBody(t *testing.T) {
-	got := SetPRLinks("", []PRLink{{Number: 1, URL: "https://github.com/owner/repo/pull/1"}}, nil)
+	got := SetPRLinks("", []PRLink{{ID: "1", URL: "https://github.com/owner/repo/pull/1"}}, nil)
 	want := "> Parents: [#1](https://redirect.github.com/owner/repo/pull/1)"
 	if got != want {
 		t.Errorf("SetPRLinks() = %q, want %q", got, want)

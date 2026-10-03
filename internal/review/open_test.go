@@ -86,18 +86,18 @@ func TestOpen_Success(t *testing.T) {
 		t.Errorf("expected ChangeID aaaaaaaaaaaa, got %s", result.ChangeID)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	// Verify review was created in forge
-	review, exists := fakeForge.GetTestReview(1)
+	review, exists := fakeForge.GetTestReview("1")
 	if !exists {
 		t.Fatal("review not created in forge")
 	}
 
 	wantReview := &github.Review{
-		Number:    1,
+		ID:        "1",
 		Title:     "feat: test feature",
 		Body:      "This is the body",
 		Head:      "owner:push-aaaaaaaaaaaa",
@@ -187,7 +187,7 @@ func TestOpen_StripsTrailers(t *testing.T) {
 	}
 
 	// Verify review was created in forge WITHOUT the internal trailer
-	review, _ := fakeForge.GetTestReview(result.Number)
+	review, _ := fakeForge.GetTestReview(result.ID)
 	if review.Body != "This is the body" {
 		t.Errorf("expected body 'This is the body', got %q", review.Body)
 	}
@@ -550,8 +550,8 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 	}
 
 	// Should create a new review
-	if result.Number != 1 {
-		t.Errorf("expected new review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected new review number 1, got %s", result.ID)
 	}
 
 	scenario.Verify()
@@ -617,7 +617,7 @@ func TestOpen_CrossRepo(t *testing.T) {
 	}
 
 	// Verify review was created with fork-owner:push-aaaaaaaaaaaa as head
-	review, exists := fakeForge.GetTestReview(result.Number)
+	review, exists := fakeForge.GetTestReview(result.ID)
 	if !exists {
 		t.Fatal("review not created in forge")
 	}
@@ -692,7 +692,7 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 	}
 
 	wantReview := &github.Review{
-		Number:    1,
+		ID:        "1",
 		Title:     "feat: test feature",
 		Body:      "This is the body",
 		Head:      "owner:push-aaaaaaaaaaaa",
@@ -702,7 +702,7 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 		URL:       "https://github.com/owner/repo/pull/1",
 	}
 
-	review, exists := fakeForge.GetTestReview(1)
+	review, exists := fakeForge.GetTestReview("1")
 	if !exists {
 		t.Fatal("review not created in forge")
 	}

@@ -55,12 +55,12 @@ func TestGetReview_Success(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	review, err := client.GetReview(context.Background(), "", 42)
+	review, err := client.GetReview(context.Background(), "", "42")
 	if err != nil {
 		t.Fatalf("GetReview() error = %v", err)
 	}
-	if review.Number != 42 {
-		t.Errorf("expected number 42, got %d", review.Number)
+	if review.ID != "42" {
+		t.Errorf("expected number 42, got %s", review.ID)
 	}
 	if review.Title != "Test PR" {
 		t.Errorf("expected title 'Test PR', got %q", review.Title)
@@ -85,7 +85,7 @@ func TestGetReview_Error(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	_, err := client.GetReview(context.Background(), "", 42)
+	_, err := client.GetReview(context.Background(), "", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -141,7 +141,7 @@ func TestDefaultBranch_FallbackToMain(t *testing.T) {
 func TestFormatID(t *testing.T) {
 	client := newClientForTest(nil, testRepoName, testHTMLURL)
 
-	id := client.FormatID(42)
+	id := client.FormatID("42")
 	if id != "pr/42" {
 		t.Errorf("FormatID(42) = %q, want %q", id, "pr/42")
 	}
@@ -152,13 +152,13 @@ func TestParseID(t *testing.T) {
 
 	tests := []struct {
 		id      string
-		want    int
+		want    string
 		wantErr bool
 	}{
-		{"pr/42", 42, false},
-		{"42", 42, false},
-		{"pr/0", 0, false},
-		{"abc", 0, true},
+		{"pr/42", "42", false},
+		{"42", "42", false},
+		{"pr/0", "0", false},
+		{"abc", "", true},
 	}
 
 	for _, tt := range tests {
@@ -168,7 +168,7 @@ func TestParseID(t *testing.T) {
 			continue
 		}
 		if got != tt.want {
-			t.Errorf("ParseID(%q) = %d, want %d", tt.id, got, tt.want)
+			t.Errorf("ParseID(%q) = %q, want %q", tt.id, got, tt.want)
 		}
 	}
 }
@@ -225,26 +225,27 @@ func TestMapSSMState(t *testing.T) {
 	}
 }
 
-func TestParsePRNumber(t *testing.T) {
+func TestParsePRID(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    int
+		want    string
 		wantErr bool
 	}{
-		{"valid", "projects/p/locations/l/repositories/r/pullRequests/42", 42, false},
-		{"zero", "projects/p/locations/l/repositories/r/pullRequests/0", 0, false},
-		{"invalid", "invalid", 0, true},
+		{"valid", "projects/p/locations/l/repositories/r/pullRequests/42", "42", false},
+		{"zero", "projects/p/locations/l/repositories/r/pullRequests/0", "0", false},
+		{"non-numeric", "projects/p/locations/l/repositories/r/pullRequests/abc", "", true},
+		{"invalid", "invalid", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parsePRNumber(tt.input)
+			got, err := parsePRID(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("parsePRNumber(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				t.Fatalf("parsePRID(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 			}
 			if got != tt.want {
-				t.Errorf("parsePRNumber(%q) = %d, want %d", tt.input, got, tt.want)
+				t.Errorf("parsePRID(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -282,8 +283,8 @@ func TestFindReview_Found(t *testing.T) {
 	if review == nil {
 		t.Fatal("expected review, got nil")
 	}
-	if review.Number != 10 {
-		t.Errorf("expected number 10, got %d", review.Number)
+	if review.ID != "10" {
+		t.Errorf("expected number 10, got %s", review.ID)
 	}
 	if review.Title != "Target PR" {
 		t.Errorf("expected title 'Target PR', got %q", review.Title)
@@ -344,8 +345,8 @@ func TestCreateReview_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateReview() error = %v", err)
 	}
-	if result.Number != 99 {
-		t.Errorf("expected number 99, got %d", result.Number)
+	if result.ID != "99" {
+		t.Errorf("expected number 99, got %s", result.ID)
 	}
 	if result.URL != testHTMLURL+"/pulls/99" {
 		t.Errorf("expected URL %s, got %s", testHTMLURL+"/pulls/99", result.URL)
@@ -370,7 +371,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", 42)
+	err := client.MergeReview(context.Background(), "", "42")
 	if err != nil {
 		t.Fatalf("MergeReview() error = %v", err)
 	}
@@ -394,7 +395,7 @@ func TestCloseReview_Success(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.CloseReview(context.Background(), "", 42)
+	err := client.CloseReview(context.Background(), "", "42")
 	if err != nil {
 		t.Fatalf("CloseReview() error = %v", err)
 	}
@@ -426,7 +427,7 @@ func TestUpdateReview_Success(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.UpdateReview(context.Background(), "", 42, "updated body")
+	err := client.UpdateReview(context.Background(), "", "42", "updated body")
 	if err != nil {
 		t.Fatalf("UpdateReview() error = %v", err)
 	}
@@ -463,7 +464,7 @@ func TestLROPolling(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", 42)
+	err := client.MergeReview(context.Background(), "", "42")
 	if err != nil {
 		t.Fatalf("MergeReview() with polling error = %v", err)
 	}
@@ -485,7 +486,7 @@ func TestLROError(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	err := client.MergeReview(context.Background(), "", 42)
+	err := client.MergeReview(context.Background(), "", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -513,7 +514,7 @@ func TestHTTPError_Structured(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	_, err := client.GetReview(context.Background(), "", 42)
+	_, err := client.GetReview(context.Background(), "", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -538,7 +539,7 @@ func TestHTTPError_Unstructured(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	_, err := client.GetReview(context.Background(), "", 42)
+	_, err := client.GetReview(context.Background(), "", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -556,7 +557,7 @@ func TestNetworkError(t *testing.T) {
 
 	client := newClientForTest(mock, testRepoName, testHTMLURL)
 
-	_, err := client.GetReview(context.Background(), "", 42)
+	_, err := client.GetReview(context.Background(), "", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

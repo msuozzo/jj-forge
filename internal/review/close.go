@@ -26,7 +26,7 @@ type CloseParams struct {
 // CloseResult contains the result of the close command.
 type CloseResult struct {
 	ChangeID string
-	Number   int
+	ID       string
 }
 
 // Close closes a code review and abandons the local change.
@@ -53,13 +53,13 @@ func Close(
 	); err != nil {
 		return nil, err
 	}
-	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
+	reviewID, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid review number in config: %s", reviewRecord.ForgeID)
+		return nil, fmt.Errorf("invalid review ID in config: %s", reviewRecord.ForgeID)
 	}
 	// Prompt for confirmation (unless --force)
 	if !params.Force {
-		fmt.Printf("This will close review #%d and abandon change %s. Continue? [y/N] ", reviewNumber, rev.ID)
+		fmt.Printf("This will close review #%s and abandon change %s. Continue? [y/N] ", reviewID, rev.ID)
 		reader := bufio.NewReader(os.Stdin)
 		response, err := reader.ReadString('\n')
 		if err != nil {
@@ -79,7 +79,7 @@ func Close(
 		}
 	}
 	// Close review via forge
-	if err := forgeClient.CloseReview(ctx, upstreamRemoteURL, reviewNumber); err != nil {
+	if err := forgeClient.CloseReview(ctx, upstreamRemoteURL, reviewID); err != nil {
 		return nil, fmt.Errorf("failed to close review: %w", err)
 	}
 	// Cleanup (unless --no-cleanup)
@@ -123,6 +123,6 @@ func Close(
 	}
 	return &CloseResult{
 		ChangeID: rev.ID,
-		Number:   reviewNumber,
+		ID:       reviewID,
 	}, nil
 }

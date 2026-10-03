@@ -98,7 +98,7 @@ func TestUpdate_SinglePR_NoLinks(t *testing.T) {
 	}
 
 	// Verify body unchanged
-	review, _ := fakeForge.GetTestReview(1)
+	review, _ := fakeForge.GetTestReview("1")
 	if review.Body != "Original body" {
 		t.Errorf("expected body unchanged, got %q", review.Body)
 	}
@@ -215,13 +215,13 @@ func TestUpdate_TwoStackedPRs(t *testing.T) {
 	}
 
 	// Verify parent PR got children link
-	parentReview, _ := fakeForge.GetTestReview(1)
+	parentReview, _ := fakeForge.GetTestReview("1")
 	if !strings.Contains(parentReview.Body, "Children: [#2]") {
 		t.Errorf("expected parent PR to have children link, got body %q", parentReview.Body)
 	}
 
 	// Verify child PR got parent link
-	childReview, _ := fakeForge.GetTestReview(2)
+	childReview, _ := fakeForge.GetTestReview("2")
 	if !strings.Contains(childReview.Body, "Parents: [#1]") {
 		t.Errorf("expected child PR to have parent link, got body %q", childReview.Body)
 	}
@@ -335,13 +335,13 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 	}
 
 	// A: has child B
-	aReview, _ := fakeForge.GetTestReview(1)
+	aReview, _ := fakeForge.GetTestReview("1")
 	if !strings.Contains(aReview.Body, "Children: [#2]") {
 		t.Errorf("expected A to have child #2 link, got body %q", aReview.Body)
 	}
 
 	// B: has parent A and child C
-	bReview, _ := fakeForge.GetTestReview(2)
+	bReview, _ := fakeForge.GetTestReview("2")
 	if !strings.Contains(bReview.Body, "Parents: [#1]") {
 		t.Errorf("expected B to have parent #1 link, got body %q", bReview.Body)
 	}
@@ -350,7 +350,7 @@ func TestUpdate_ThreeStackedPRs_MiddleGetsBoth(t *testing.T) {
 	}
 
 	// C: has parent B
-	cReview, _ := fakeForge.GetTestReview(3)
+	cReview, _ := fakeForge.GetTestReview("3")
 	if !strings.Contains(cReview.Body, "Parents: [#2]") {
 		t.Errorf("expected C to have parent #2 link, got body %q", cReview.Body)
 	}
@@ -541,7 +541,7 @@ func TestUpdate_PartialStack_ParentGetsChildLink(t *testing.T) {
 	}
 
 	// Verify child PR (B) got parent link to A
-	childReview, _ := fakeForge.GetTestReview(2)
+	childReview, _ := fakeForge.GetTestReview("2")
 	if !strings.Contains(childReview.Body, "Parents: [#1]") {
 		t.Errorf("expected child PR to have parent link, got body %q", childReview.Body)
 	}
@@ -661,7 +661,7 @@ func TestUpdate_PartialStack_ChildNotUploaded_RetainsChildLink(t *testing.T) {
 	}
 
 	// B: should have parent link to A AND child link to C
-	bReview, _ := fakeForge.GetTestReview(2)
+	bReview, _ := fakeForge.GetTestReview("2")
 	if !strings.Contains(bReview.Body, "Parents: [#1]") {
 		t.Errorf("expected B PR to have parent link to A, got body %q", bReview.Body)
 	}
@@ -807,35 +807,35 @@ func TestUpdate_MultipleParentsAndChildren(t *testing.T) {
 	rURL := "https://redirect.github.com/owner/repo/pull"
 
 	// D (#1): no parents, child C (#3)
-	dReview, _ := fakeForge.GetTestReview(1)
+	dReview, _ := fakeForge.GetTestReview("1")
 	wantD := fmt.Sprintf("Left root body\n\n> Children: [#3](%s/3)", rURL)
 	if dReview.Body != wantD {
 		t.Errorf("PR #1 (D) body mismatch\n got: %q\nwant: %q", dReview.Body, wantD)
 	}
 
 	// E (#2): no parents, child C (#3)
-	eReview, _ := fakeForge.GetTestReview(2)
+	eReview, _ := fakeForge.GetTestReview("2")
 	wantE := fmt.Sprintf("Right root body\n\n> Children: [#3](%s/3)", rURL)
 	if eReview.Body != wantE {
 		t.Errorf("PR #2 (E) body mismatch\n got: %q\nwant: %q", eReview.Body, wantE)
 	}
 
 	// C (#3): parents D (#1) and E (#2), children A (#4) and B (#5)
-	cReview, _ := fakeForge.GetTestReview(3)
+	cReview, _ := fakeForge.GetTestReview("3")
 	wantC := fmt.Sprintf("Merge body\n\n> Parents: [#1](%s/1), [#2](%s/2)\n> Children: [#4](%s/4), [#5](%s/5)", rURL, rURL, rURL, rURL)
 	if cReview.Body != wantC {
 		t.Errorf("PR #3 (C) body mismatch\n got: %q\nwant: %q", cReview.Body, wantC)
 	}
 
 	// A (#4): parent C (#3), no children
-	aReview, _ := fakeForge.GetTestReview(4)
+	aReview, _ := fakeForge.GetTestReview("4")
 	wantA := fmt.Sprintf("Left leaf body\n\n> Parents: [#3](%s/3)", rURL)
 	if aReview.Body != wantA {
 		t.Errorf("PR #4 (A) body mismatch\n got: %q\nwant: %q", aReview.Body, wantA)
 	}
 
 	// B (#5): parent C (#3), no children
-	bReview, _ := fakeForge.GetTestReview(5)
+	bReview, _ := fakeForge.GetTestReview("5")
 	wantB := fmt.Sprintf("Right leaf body\n\n> Parents: [#3](%s/3)", rURL)
 	if bReview.Body != wantB {
 		t.Errorf("PR #5 (B) body mismatch\n got: %q\nwant: %q", bReview.Body, wantB)
@@ -1040,13 +1040,13 @@ func TestUpdate_PreResolvedUpstreamURL(t *testing.T) {
 	}
 
 	// Verify parent PR got children link
-	parentReview, _ := fakeForge.GetTestReview(1)
+	parentReview, _ := fakeForge.GetTestReview("1")
 	if !strings.Contains(parentReview.Body, "Children: [#2]") {
 		t.Errorf("expected parent PR to have children link, got body %q", parentReview.Body)
 	}
 
 	// Verify child PR got parent link
-	childReview, _ := fakeForge.GetTestReview(2)
+	childReview, _ := fakeForge.GetTestReview("2")
 	if !strings.Contains(childReview.Body, "Parents: [#1]") {
 		t.Errorf("expected child PR to have parent link, got body %q", childReview.Body)
 	}

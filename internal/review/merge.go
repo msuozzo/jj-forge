@@ -32,7 +32,7 @@ type MergeParams struct {
 // MergeResult contains the result of the merge command.
 type MergeResult struct {
 	ChangeID string
-	Number   int
+	ID       string
 }
 
 // Merge merges a code review and optionally cleans up local state.
@@ -60,9 +60,9 @@ func Merge(
 	); err != nil {
 		return nil, err
 	}
-	reviewNumber, err := forgeClient.ParseID(reviewRecord.ForgeID)
+	reviewID, err := forgeClient.ParseID(reviewRecord.ForgeID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid review number in config: %s", reviewRecord.ForgeID)
+		return nil, fmt.Errorf("invalid review ID in config: %s", reviewRecord.ForgeID)
 	}
 	upstreamRemoteURL := params.UpstreamRemoteURL
 	if upstreamRemoteURL == "" {
@@ -72,13 +72,13 @@ func Merge(
 		}
 	}
 	// Merge review via forge
-	if err := forgeClient.MergeReview(ctx, upstreamRemoteURL, reviewNumber); err != nil {
+	if err := forgeClient.MergeReview(ctx, upstreamRemoteURL, reviewID); err != nil {
 		return nil, fmt.Errorf("failed to merge review: %w", err)
 	}
 	// Strip managed links section from the merged PR (non-fatal)
-	if details, err := forgeClient.GetReview(ctx, upstreamRemoteURL, reviewNumber); err == nil {
+	if details, err := forgeClient.GetReview(ctx, upstreamRemoteURL, reviewID); err == nil {
 		if stripped := StripPRLinks(details.Body); stripped != details.Body {
-			if err := forgeClient.UpdateReview(ctx, upstreamRemoteURL, reviewNumber, stripped); err != nil {
+			if err := forgeClient.UpdateReview(ctx, upstreamRemoteURL, reviewID, stripped); err != nil {
 				params.UI.PrintWarning("failed to remove PR links from merged review: %v", err)
 			}
 		}
@@ -149,7 +149,7 @@ func Merge(
 	}
 	return &MergeResult{
 		ChangeID: rev.ID,
-		Number:   reviewNumber,
+		ID:       reviewID,
 	}, nil
 }
 
@@ -231,7 +231,7 @@ func cleanupLinksAfterMerge(
 	// Update PR descriptions only for affected reviews.
 	for changeID := range affectedIDs {
 		rec := reviewByChange[changeID]
-		reviewNumber, err := forgeClient.ParseID(rec.ForgeID)
+		reviewID, err := forgeClient.ParseID(rec.ForgeID)
 		if err != nil {
 			continue
 		}
@@ -240,9 +240,9 @@ func cleanupLinksAfterMerge(
 		var parentLinks []PRLink
 		if pID, ok := parentOf[changeID]; ok {
 			if pRec, ok := reviewByChange[pID]; ok {
-				pNum, err := forgeClient.ParseID(pRec.ForgeID)
+				parentID, err := forgeClient.ParseID(pRec.ForgeID)
 				if err == nil {
-					parentLinks = append(parentLinks, PRLink{Number: pNum, URL: pRec.URL})
+					parentLinks = append(parentLinks, PRLink{ID: parentID, URL: pRec.URL})
 				}
 			}
 		}
@@ -251,20 +251,20 @@ func cleanupLinksAfterMerge(
 		var childLinks []PRLink
 		for _, cID := range childrenOf[changeID] {
 			if cRec, ok := reviewByChange[cID]; ok {
-				cNum, err := forgeClient.ParseID(cRec.ForgeID)
+				childID, err := forgeClient.ParseID(cRec.ForgeID)
 				if err == nil {
-					childLinks = append(childLinks, PRLink{Number: cNum, URL: cRec.URL})
+					childLinks = append(childLinks, PRLink{ID: childID, URL: cRec.URL})
 				}
 			}
 		}
 
-		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewNumber)
+		details, err := forgeClient.GetReview(ctx, upstreamURL, reviewID)
 		if err != nil {
 			continue
 		}
 		newBody := SetPRLinks(details.Body, parentLinks, childLinks)
 		if newBody != details.Body {
-			if err := forgeClient.UpdateReview(ctx, upstreamURL, reviewNumber, newBody); err != nil {
+			if err := forgeClient.UpdateReview(ctx, upstreamURL, reviewID, newBody); err != nil {
 				continue // Non-fatal per PR
 			}
 		}

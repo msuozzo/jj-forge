@@ -116,18 +116,18 @@ func TestClose_Success(t *testing.T) {
 		t.Errorf("expected ChangeID aaaaaaaaaaaa, got %s", result.ChangeID)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	// Verify review was closed in forge
-	review, exists := fakeForge.GetTestReview(result.Number)
+	review, exists := fakeForge.GetTestReview(result.ID)
 	if !exists {
 		t.Fatal("review not found in forge")
 	}
 
 	wantReview := &github.Review{
-		Number: 1,
+		ID:     "1",
 		Title:  "feat: test",
 		Head:   "push-aaaaaaaaaaaa",
 		Base:   "main",

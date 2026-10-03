@@ -136,18 +136,18 @@ func TestMerge_Success(t *testing.T) {
 		t.Errorf("expected ChangeID aaaaaaaaaaaa, got %s", result.ChangeID)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	// Verify review was merged in forge
-	review, exists := fakeForge.GetTestReview(result.Number)
+	review, exists := fakeForge.GetTestReview(result.ID)
 	if !exists {
 		t.Fatal("review not found in forge")
 	}
 
 	wantReview := &github.Review{
-		Number: 1,
+		ID:     "1",
 		Title:  "feat: test",
 		Head:   "push-aaaaaaaaaaaa",
 		Base:   "main",
@@ -261,8 +261,8 @@ func TestMerge_NoCleanup(t *testing.T) {
 		t.Fatalf("Merge() error = %v", err)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	scenario.Verify()
@@ -754,12 +754,12 @@ func TestMerge_LinkCleanup(t *testing.T) {
 		t.Fatalf("Merge() error = %v", err)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	// Verify A's links were stripped after merge
-	aReview, _ := fakeForge.GetTestReview(1)
+	aReview, _ := fakeForge.GetTestReview("1")
 	if strings.Contains(aReview.Body, "> Children:") {
 		t.Errorf("expected A's links stripped after merge, got body %q", aReview.Body)
 	}
@@ -768,7 +768,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	}
 
 	// Verify B's links: parent (A) was merged, so parent link removed. Child (C) still exists.
-	bReview, _ := fakeForge.GetTestReview(2)
+	bReview, _ := fakeForge.GetTestReview("2")
 	if strings.Contains(bReview.Body, "> Parents:") {
 		t.Errorf("expected B's parent link removed after merge, got body %q", bReview.Body)
 	}
@@ -777,7 +777,7 @@ func TestMerge_LinkCleanup(t *testing.T) {
 	}
 
 	// Verify C's links: parent is B (still open), so parent link preserved.
-	cReview, _ := fakeForge.GetTestReview(3)
+	cReview, _ := fakeForge.GetTestReview("3")
 	if !strings.Contains(cReview.Body, "> Parents: [#2]") {
 		t.Errorf("expected C to still have parent #2 link, got body %q", cReview.Body)
 	}
@@ -936,8 +936,8 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 		t.Fatalf("Merge() error = %v", err)
 	}
 
-	if result.Number != 1 {
-		t.Errorf("expected review number 1, got %d", result.Number)
+	if result.ID != "1" {
+		t.Errorf("expected review number 1, got %s", result.ID)
 	}
 
 	scenario.Verify()
@@ -1040,7 +1040,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 	}
 
 	wantReview := &github.Review{
-		Number: 1,
+		ID:     "1",
 		Title:  "feat: test",
 		Head:   "push-aaaaaaaaaaaa",
 		Base:   "main",
@@ -1048,7 +1048,7 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 		URL:    "https://github.com/owner/repo/pull/1",
 	}
 
-	review, exists := fakeForge.GetTestReview(result.Number)
+	review, exists := fakeForge.GetTestReview(result.ID)
 	if !exists {
 		t.Fatal("review not found in forge")
 	}

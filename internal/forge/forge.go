@@ -17,8 +17,8 @@ type ReviewCreateParams struct {
 
 // ReviewCreateResult contains the result of creating a code review.
 type ReviewCreateResult struct {
-	Number int    // Review number (e.g., PR number for GitHub)
-	URL    string // URL to the review (e.g., https://github.com/owner/repo/pull/123)
+	ID  string // Forge-native review identifier (e.g. "123" for GitHub)
+	URL string // URL to the review (e.g., https://github.com/owner/repo/pull/123)
 }
 
 // ReviewState represents the state of a code review.
@@ -32,41 +32,45 @@ const (
 
 // ReviewDetails contains details about a code review.
 type ReviewDetails struct {
-	Number int
-	URL    string
-	State  ReviewState
-	Title  string
-	Body   string
+	ID    string
+	URL   string
+	State ReviewState
+	Title string
+	Body  string
 }
 
 // Forge defines the interface for interacting with code forges.
+//
+// Reviews are identified by a forge-native string ID. For GitHub and SSM this
+// is the decimal PR number. FormatID and ParseID convert between the bare ID
+// and the prefixed form stored in the jj config (e.g. "pr/123").
 type Forge interface {
 	// CreateReview creates a new code review.
 	CreateReview(ctx context.Context, repoURI string, params ReviewCreateParams) (*ReviewCreateResult, error)
 
 	// MergeReview merges an open code review.
-	MergeReview(ctx context.Context, repoURI string, reviewNumber int) error
+	MergeReview(ctx context.Context, repoURI string, reviewID string) error
 
 	// CloseReview closes a code review without merging.
-	CloseReview(ctx context.Context, repoURI string, reviewNumber int) error
+	CloseReview(ctx context.Context, repoURI string, reviewID string) error
 
 	// FindReview searches for a review by branch name.
 	FindReview(ctx context.Context, repoURI, branch string) (*ReviewDetails, error)
 
 	// GetReview retrieves details of a specific review.
-	GetReview(ctx context.Context, repoURI string, number int) (*ReviewDetails, error)
+	GetReview(ctx context.Context, repoURI string, reviewID string) (*ReviewDetails, error)
 
-	// FormatID formats a review number into a string ID (e.g. "pr/123").
-	FormatID(number int) string
+	// FormatID formats a review ID into the string stored in config (e.g. "pr/123").
+	FormatID(reviewID string) string
 
-	// ParseID parses a string ID (e.g. "pr/123") into a review number.
-	ParseID(id string) (int, error)
+	// ParseID parses a stored ID (e.g. "pr/123") into the bare review ID.
+	ParseID(id string) (string, error)
 
 	// DefaultBranch returns the default branch name of the repository.
 	DefaultBranch(ctx context.Context, repoURI string) (string, error)
 
 	// UpdateReview updates the body of an existing code review.
-	UpdateReview(ctx context.Context, repoURI string, reviewNumber int, body string) error
+	UpdateReview(ctx context.Context, repoURI string, reviewID string, body string) error
 
 	// SetupRuleset configures a ruleset on the forge to prevent merging commits with forge-parent.
 	SetupRuleset(ctx context.Context, repoURI string) error

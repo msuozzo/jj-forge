@@ -45,8 +45,8 @@ func TestCreateReview_Success(t *testing.T) {
 		t.Fatalf("CreateReview failed: %v", err)
 	}
 
-	if result.Number != 42 {
-		t.Errorf("expected PR number 42, got %d", result.Number)
+	if result.ID != "42" {
+		t.Errorf("expected PR number 42, got %s", result.ID)
 	}
 
 	if result.URL != "https://github.com/owner/repo/pull/42" {
@@ -181,7 +181,7 @@ func TestMergeReview_Success(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.MergeReview(context.Background(), "github.com/owner/repo", 42)
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42")
 	if err != nil {
 		t.Fatalf("MergeReview failed: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestMergeReview_Error(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.MergeReview(context.Background(), "github.com/owner/repo", 42)
+	err := client.MergeReview(context.Background(), "github.com/owner/repo", "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -222,7 +222,7 @@ func TestCloseReview_Success(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.CloseReview(context.Background(), "github.com/owner/repo", 123)
+	err := client.CloseReview(context.Background(), "github.com/owner/repo", "123")
 	if err != nil {
 		t.Fatalf("CloseReview failed: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestCloseReview_Error(t *testing.T) {
 
 	client := NewClientWithExecutor("/git", executor)
 
-	err := client.CloseReview(context.Background(), "github.com/owner/repo", 123)
+	err := client.CloseReview(context.Background(), "github.com/owner/repo", "123")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

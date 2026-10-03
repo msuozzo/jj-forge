@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -164,19 +163,19 @@ func (s *Scenario) WrapForge(f forge.Forge) *ScenarioForge {
 	return &ScenarioForge{Forge: f, scenario: s}
 }
 
-func (sf *ScenarioForge) GetReview(ctx context.Context, repoURI string, number int) (*forge.ReviewDetails, error) {
-	sf.scenario.Record("forge:GetReview", strconv.Itoa(number))
-	return sf.Forge.GetReview(ctx, repoURI, number)
+func (sf *ScenarioForge) GetReview(ctx context.Context, repoURI string, reviewID string) (*forge.ReviewDetails, error) {
+	sf.scenario.Record("forge:GetReview", reviewID)
+	return sf.Forge.GetReview(ctx, repoURI, reviewID)
 }
 
-func (sf *ScenarioForge) UpdateReview(ctx context.Context, repoURI string, number int, body string) error {
-	sf.scenario.Record("forge:UpdateReview", strconv.Itoa(number))
-	return sf.Forge.UpdateReview(ctx, repoURI, number, body)
+func (sf *ScenarioForge) UpdateReview(ctx context.Context, repoURI string, reviewID string, body string) error {
+	sf.scenario.Record("forge:UpdateReview", reviewID)
+	return sf.Forge.UpdateReview(ctx, repoURI, reviewID, body)
 }
 
-func (sf *ScenarioForge) MergeReview(ctx context.Context, repoURI string, number int) error {
-	sf.scenario.Record("forge:MergeReview", strconv.Itoa(number))
-	return sf.Forge.MergeReview(ctx, repoURI, number)
+func (sf *ScenarioForge) MergeReview(ctx context.Context, repoURI string, reviewID string) error {
+	sf.scenario.Record("forge:MergeReview", reviewID)
+	return sf.Forge.MergeReview(ctx, repoURI, reviewID)
 }
 
 func (sf *ScenarioForge) CreateReview(ctx context.Context, repoURI string, params forge.ReviewCreateParams) (*forge.ReviewCreateResult, error) {
@@ -184,9 +183,9 @@ func (sf *ScenarioForge) CreateReview(ctx context.Context, repoURI string, param
 	return sf.Forge.CreateReview(ctx, repoURI, params)
 }
 
-func (sf *ScenarioForge) CloseReview(ctx context.Context, repoURI string, number int) error {
-	sf.scenario.Record("forge:CloseReview", strconv.Itoa(number))
-	return sf.Forge.CloseReview(ctx, repoURI, number)
+func (sf *ScenarioForge) CloseReview(ctx context.Context, repoURI string, reviewID string) error {
+	sf.scenario.Record("forge:CloseReview", reviewID)
+	return sf.Forge.CloseReview(ctx, repoURI, reviewID)
 }
 
 func (sf *ScenarioForge) FindReview(ctx context.Context, repoURI, branch string) (*forge.ReviewDetails, error) {
