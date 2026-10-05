@@ -1,6 +1,7 @@
 package change
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"regexp"
@@ -21,27 +22,27 @@ type SubmitResult struct {
 // both names in jj's unquoted symbol syntax.
 var remoteBookmarkRegex = regexp.MustCompile(`^([\w/]+(?:[.+-][\w/]+)*)@([\w/]+(?:[.+-][\w/]+)*)$`)
 
-// trunkBranch returns the branch named by the trunk() revset alias if the
-// alias is a plain <branch>@<remote> on remote, and "" otherwise.
-func trunkBranch(ctx context.Context, client jj.Client, remote string) (string, error) {
+// trunkTarget returns the branch and remote the trunk() revset alias names
+// if the alias is a plain <branch>@<remote>, and "" for both otherwise.
+func trunkTarget(ctx context.Context, client jj.Client) (branch, remote string, err error) {
 	result, err := client.Run(ctx, "config", "get", `revset-aliases."trunk()"`)
 	if err != nil {
-		// An unset alias names no branch, but other failures are reported.
+		// An unset alias names no bookmark, but other failures are reported.
 		if strings.Contains(err.Error(), "Value not found") {
-			return "", nil
+			return "", "", nil
 		}
-		return "", fmt.Errorf("reading trunk() alias: %w", err)
+		return "", "", fmt.Errorf("reading trunk() alias: %w", err)
 	}
 	m := remoteBookmarkRegex.FindStringSubmatch(strings.TrimSpace(result.Stdout))
-	if m == nil || m[2] != remote {
-		return "", nil
+	if m == nil {
+		return "", "", nil
 	}
-	return m[1], nil
+	return m[1], m[2], nil
 }
 
 // Submit adds changes directly to the target branch without PR review.
-// If branch is empty, it targets the branch trunk() names on remote, or
-// "main" if trunk() names none.
+// An empty remote defaults to the one trunk() names, or "og". An empty
+// branch defaults to the one trunk() names on that remote, or "main".
 // For each revision:
 //   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
@@ -50,17 +51,22 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 	result := &SubmitResult{}
 	// Where a defaulted branch came from, for the hint if it does not exist.
 	var branchNote string
-	if branch == "" {
-		trunk, err := trunkBranch(ctx, client, remote)
+	if remote == "" || branch == "" {
+		trunkBranch, trunkRemote, err := trunkTarget(ctx, client)
 		if err != nil {
 			return nil, err
 		}
-		if trunk != "" {
-			branch = trunk
-			branchNote = fmt.Sprintf("The branch comes from trunk() (%s@%s).\n", branch, remote)
-		} else {
-			branch = "main"
-			branchNote = fmt.Sprintf("trunk() names no branch on %q, so the default %s was used. Pass --branch to choose another.\n", remote, branch)
+		if remote == "" {
+			remote = cmp.Or(trunkRemote, "og")
+		}
+		if branch == "" {
+			if trunkRemote == remote {
+				branch = trunkBranch
+				branchNote = fmt.Sprintf("The branch comes from trunk() (%s@%s).\n", branch, remote)
+			} else {
+				branch = "main"
+				branchNote = fmt.Sprintf("trunk() names no branch on %q, so the default %s was used. Pass --branch to choose another.\n", remote, branch)
+			}
 		}
 	}
 	// PHASE 1: Fetch and load remote bookmark

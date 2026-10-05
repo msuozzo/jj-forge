@@ -333,9 +333,10 @@ func main() {
 		Short: "Land changes directly to the trunk branch without PR review",
 		Long: `Submit lands commits directly by fast-forwarding the target branch.
 
-The target branch defaults to the one the trunk() revset alias names on
---remote (e.g. master@og, as set by 'repo clone'), and to main if trunk()
-names no branch there.
+The target defaults to the bookmark the trunk() revset alias names (e.g.
+master@og, as set by 'repo clone' and 'jj git clone'), and to main@og if
+trunk() is not a plain <branch>@<remote>. With only --remote, the branch
+comes from trunk() when it is on that remote, and is main otherwise.
 
 This is suitable for solo projects or develop-on-main workflows where
 PR-based review is not required. For team workflows with code review,
@@ -369,7 +370,7 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	submitCmd.Flags().StringVar(&submitRemote, "remote", "og", "Remote to push to")
+	submitCmd.Flags().StringVar(&submitRemote, "remote", "", "Remote to push to (default: the trunk() remote, else og)")
 	submitCmd.Flags().StringVar(&submitBranch, "branch", "", "Target branch to fast-forward (default: the trunk() branch, else main)")
 	submitCmd.Flags().BoolVar(&submitSkipCheck, "skip-check", false, "Skip the configured check command")
 
