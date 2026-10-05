@@ -330,8 +330,12 @@ func main() {
 	var submitSkipCheck bool
 	submitCmd := &cobra.Command{
 		Use:   "submit [REVSET]",
-		Short: "Land changes directly to main without PR review",
+		Short: "Land changes directly to the trunk branch without PR review",
 		Long: `Submit lands commits directly by fast-forwarding the target branch.
+
+The target branch defaults to the one the trunk() revset alias names on
+--remote (e.g. master@og, as set by 'repo clone'), and to main if trunk()
+names no branch there.
 
 This is suitable for solo projects or develop-on-main workflows where
 PR-based review is not required. For team workflows with code review,
@@ -366,7 +370,7 @@ use 'review open' and 'review submit' instead.`,
 		},
 	}
 	submitCmd.Flags().StringVar(&submitRemote, "remote", "og", "Remote to push to")
-	submitCmd.Flags().StringVar(&submitBranch, "branch", "main", "Target branch to fast-forward")
+	submitCmd.Flags().StringVar(&submitBranch, "branch", "", "Target branch to fast-forward (default: the trunk() branch, else main)")
 	submitCmd.Flags().BoolVar(&submitSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	changeCmd.AddCommand(checkCmd)

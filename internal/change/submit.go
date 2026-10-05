@@ -3,6 +3,7 @@ package change
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -16,13 +17,52 @@ type SubmitResult struct {
 	Submitted int // Number of changes submitted
 }
 
+// remoteBookmarkRegex matches a revset that is only <branch>@<remote>, with
+// both names in jj's unquoted symbol syntax.
+var remoteBookmarkRegex = regexp.MustCompile(`^([\w/]+(?:[.+-][\w/]+)*)@([\w/]+(?:[.+-][\w/]+)*)$`)
+
+// trunkBranch returns the branch named by the trunk() revset alias if the
+// alias is a plain <branch>@<remote> on remote, and "" otherwise.
+func trunkBranch(ctx context.Context, client jj.Client, remote string) (string, error) {
+	result, err := client.Run(ctx, "config", "get", `revset-aliases."trunk()"`)
+	if err != nil {
+		// An unset alias names no branch, but other failures are reported.
+		if strings.Contains(err.Error(), "Value not found") {
+			return "", nil
+		}
+		return "", fmt.Errorf("reading trunk() alias: %w", err)
+	}
+	m := remoteBookmarkRegex.FindStringSubmatch(strings.TrimSpace(result.Stdout))
+	if m == nil || m[2] != remote {
+		return "", nil
+	}
+	return m[1], nil
+}
+
 // Submit adds changes directly to the target branch without PR review.
+// If branch is empty, it targets the branch trunk() names on remote, or
+// "main" if trunk() names none.
 // For each revision:
 //   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
 //   - verifies the push succeeded
 func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, revset, remote, branch string, u *ui.UI) (*SubmitResult, error) {
 	result := &SubmitResult{}
+	// Where a defaulted branch came from, for the hint if it does not exist.
+	var branchNote string
+	if branch == "" {
+		trunk, err := trunkBranch(ctx, client, remote)
+		if err != nil {
+			return nil, err
+		}
+		if trunk != "" {
+			branch = trunk
+			branchNote = fmt.Sprintf("The branch comes from trunk() (%s@%s).\n", branch, remote)
+		} else {
+			branch = "main"
+			branchNote = fmt.Sprintf("trunk() names no branch on %q, so the default %s was used. Pass --branch to choose another.\n", remote, branch)
+		}
+	}
 	// PHASE 1: Fetch and load remote bookmark
 	fmt.Fprintf(u, "Fetching from %s to get current state...\n", u.Styled("remote", remote))
 	_, err := client.Run(ctx, "git", "fetch", "--remote", remote)
@@ -35,7 +75,7 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 		if strings.Contains(err.Error(), fmt.Sprintf("Revision `%s` doesn't exist", remoteBookmark)) {
 			return nil, &ui.UserError{
 				Msg: fmt.Sprintf("branch %q does not exist on remote %q", branch, remote),
-				Hint: fmt.Sprintf("If this is a new repository, bootstrap it by pushing your first commit:\n"+
+				Hint: branchNote + fmt.Sprintf("If this is a new repository, bootstrap it by pushing your first commit:\n"+
 					"  jj bookmark set %s -r 'latest(%s)'\n"+
 					"  jj git push --bookmark %s --remote %s", branch, revset, branch, remote),
 			}
