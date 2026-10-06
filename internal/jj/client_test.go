@@ -3,6 +3,8 @@ package jj
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
@@ -114,6 +116,34 @@ func TestGitDir(t *testing.T) {
 			}
 			if got != tt.wantPath {
 				t.Errorf("GitDir() = %v, want %v", got, tt.wantPath)
+			}
+		})
+	}
+}
+
+func TestRemotes(t *testing.T) {
+	tests := []struct {
+		name       string
+		listOutput string
+		want       []string
+	}{
+		{name: "two remotes", listOutput: "og git@github.com:me/repo.git\nup https://github.com/them/repo\n", want: []string{"og", "up"}},
+		{name: "none", listOutput: "", want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := func(ctx context.Context, _ cmd.Opts, args ...string) (*cmd.Result, error) {
+				if strings.Join(args[1:], " ") != "git remote list" {
+					return nil, errors.New("unexpected command")
+				}
+				return &cmd.Result{Stdout: tt.listOutput}, nil
+			}
+			got, err := NewClientWithExecutor("", executor).Remotes(context.Background())
+			if err != nil {
+				t.Fatalf("Remotes() error = %v", err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Remotes() = %v, want %v", got, tt.want)
 			}
 		})
 	}

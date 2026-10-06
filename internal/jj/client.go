@@ -29,6 +29,7 @@ type Client interface {
 	Root(context.Context) (string, error)
 	Revs(context.Context, string) ([]*Rev, error)
 	Rev(context.Context, string) (*Rev, error)
+	Remotes(context.Context) ([]string, error)
 	RemoteURL(context.Context, string) (string, error)
 	GitDir(context.Context) (string, error)
 }
@@ -141,16 +142,43 @@ func (j *client) Rev(ctx context.Context, revset string) (*Rev, error) {
 	return r[0], nil
 }
 
-// RemoteURL returns the URL for a given git remote.
-func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
+// remoteList returns the name and URL of each git remote.
+func (j *client) remoteList(ctx context.Context) ([][2]string, error) {
 	result, err := j.Run(ctx, "git", "remote", "list")
 	if err != nil {
-		return "", fmt.Errorf("failed to list remotes: %w", err)
+		return nil, fmt.Errorf("failed to list remotes: %w", err)
 	}
+	var remotes [][2]string
 	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
-		parts := strings.Fields(line)
-		if len(parts) >= 2 && parts[0] == remote {
-			return parts[1], nil
+		if parts := strings.Fields(line); len(parts) >= 2 {
+			remotes = append(remotes, [2]string{parts[0], parts[1]})
+		}
+	}
+	return remotes, nil
+}
+
+// Remotes returns the names of the git remotes.
+func (j *client) Remotes(ctx context.Context) ([]string, error) {
+	list, err := j.remoteList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, r := range list {
+		names = append(names, r[0])
+	}
+	return names, nil
+}
+
+// RemoteURL returns the URL for a given git remote.
+func (j *client) RemoteURL(ctx context.Context, remote string) (string, error) {
+	list, err := j.remoteList(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range list {
+		if r[0] == remote {
+			return r[1], nil
 		}
 	}
 	return "", fmt.Errorf("remote %q not found", remote)

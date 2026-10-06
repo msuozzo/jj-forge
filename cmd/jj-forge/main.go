@@ -301,13 +301,17 @@ func main() {
 					return err
 				}
 			}
+			configMgr := forge.NewConfigManager(client)
 			if !uploadSkipCheck {
-				configMgr := forge.NewConfigManager(client)
 				if err := check.Run(ctx, client, configMgr, revset, false, newJJExecutor(), stdoutUI); err != nil {
 					return err
 				}
 			}
-			result, err := change.Upload(ctx, client, revset, uploadRemote, stdoutUI)
+			remotes, err := forge.ResolveRemotes(ctx, client, configMgr, uploadRemote, "")
+			if err != nil {
+				return err
+			}
+			result, err := change.Upload(ctx, client, revset, remotes.Fork, stdoutUI)
 			if err != nil {
 				return err
 			}
@@ -323,7 +327,7 @@ func main() {
 			return nil
 		},
 	}
-	uploadCmd.Flags().StringVar(&uploadRemote, "remote", "og", "Remote to push to")
+	uploadCmd.Flags().StringVar(&uploadRemote, "remote", "", "Remote to push to (default: git.push, else the only remote, else og)")
 	uploadCmd.Flags().BoolVar(&uploadSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var submitRemote, submitBranch string
@@ -422,14 +426,18 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, openForkRemote, openUpstreamRemote)
+			if err != nil {
+				return err
+			}
 			// Detect forge type and adjust remotes before pushing
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, openUpstreamRemote)
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
 			// For forges without fork support, use upstream as fork remote
 			if !forgeClient.SupportsForks() {
-				openForkRemote = openUpstreamRemote
+				remotes.Fork = remotes.Upstream
 			}
 			// Phase 3: Push
 			// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
@@ -437,7 +445,7 @@ use 'review open' and 'review submit' instead.`,
 			if trailerResult.TrailersUpdated == 0 {
 				preResolved = trailerResult.Revs
 			}
-			pushResult, err := change.Push(ctx, jjClient, revset, openForkRemote, stdoutUI, preResolved)
+			pushResult, err := change.Push(ctx, jjClient, revset, remotes.Fork, stdoutUI, preResolved)
 			if err != nil {
 				return err
 			}
@@ -494,9 +502,9 @@ use 'review open' and 'review submit' instead.`,
 				result, err := review.Open(ctx, jjClient, forgeClient, configMgr, review.OpenParams{
 					Rev:               rev.ID,
 					Reviewers:         reviewers,
-					UpstreamRemote:    openUpstreamRemote,
+					UpstreamRemote:    remotes.Upstream,
 					UpstreamRemoteURL: upstreamRemoteURL,
-					ForkRemote:        openForkRemote,
+					ForkRemote:        remotes.Fork,
 				})
 				if err != nil {
 					if errors.Is(err, review.ErrReviewAlreadyExists) {
@@ -518,7 +526,7 @@ use 'review open' and 'review submit' instead.`,
 			if opened > 0 {
 				prsUpdated, err := review.UpdatePRLinks(ctx, jjClient, forgeClient, configMgr, review.UpdatePRLinksParams{
 					Revset:            revset,
-					UpstreamRemote:    openUpstreamRemote,
+					UpstreamRemote:    remotes.Upstream,
 					UpstreamRemoteURL: upstreamRemoteURL,
 				})
 				if err != nil {
@@ -531,8 +539,8 @@ use 'review open' and 'review submit' instead.`,
 		},
 	}
 	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "Usernames to assign as reviewers")
-	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "up", "Remote to create PR against")
-	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
+	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "", "Remote to create PR against (default: the trunk() remote, else the fork remote)")
+	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
 	openCmd.Flags().BoolVar(&openSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var mergeUpstreamRemote, mergeForkRemote string
@@ -560,18 +568,22 @@ use 'review open' and 'review submit' instead.`,
 					return err
 				}
 			}
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, mergeUpstreamRemote)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, mergeForkRemote, mergeUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
 			if !forgeClient.SupportsForks() {
-				mergeForkRemote = mergeUpstreamRemote
+				remotes.Fork = remotes.Upstream
 			}
 			// Execute merge command
 			mergeParams := review.MergeParams{
 				Rev:               rev,
-				ForkRemote:        mergeForkRemote,
-				UpstreamRemote:    mergeUpstreamRemote,
+				ForkRemote:        remotes.Fork,
+				UpstreamRemote:    remotes.Upstream,
 				UpstreamRemoteURL: upstreamRemoteURL,
 				NoCleanup:         mergeNoCleanup,
 				UI:                stdoutUI,
@@ -588,8 +600,8 @@ use 'review open' and 'review submit' instead.`,
 				}
 				if _, updateErr := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
 					Revset:            rev,
-					ForkRemote:        mergeForkRemote,
-					UpstreamRemote:    mergeUpstreamRemote,
+					ForkRemote:        remotes.Fork,
+					UpstreamRemote:    remotes.Upstream,
 					UpstreamRemoteURL: upstreamRemoteURL,
 					UI:                stdoutUI,
 				}); updateErr != nil {
@@ -606,8 +618,8 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "og", "Remote of fork")
-	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
+	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "", "Remote of fork (default: git.push, else the only remote, else og)")
+	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: the trunk() remote, else the fork remote)")
 	mergeCmd.Flags().BoolVar(&mergeNoCleanup, "no-cleanup", false, "Skip local cleanup after merge")
 	mergeCmd.Flags().BoolVar(&mergeSkipCheck, "skip-check", false, "Skip the configured check command")
 
@@ -631,18 +643,22 @@ use 'review open' and 'review submit' instead.`,
 				}
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, closeUpstreamRemote)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, closeForkRemote, closeUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
 			if !forgeClient.SupportsForks() {
-				closeForkRemote = closeUpstreamRemote
+				remotes.Fork = remotes.Upstream
 			}
 			// Execute close command
 			result, err := review.Close(ctx, jjClient, forgeClient, configMgr, review.CloseParams{
 				Rev:               rev,
-				ForkRemote:        closeForkRemote,
-				UpstreamRemote:    closeUpstreamRemote,
+				ForkRemote:        remotes.Fork,
+				UpstreamRemote:    remotes.Upstream,
 				UpstreamRemoteURL: upstreamRemoteURL,
 				Force:             closeForce,
 				NoCleanup:         closeNoCleanup,
@@ -657,8 +673,8 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	closeCmd.Flags().StringVar(&closeForkRemote, "fork-remote", "og", "Remote to use")
-	closeCmd.Flags().StringVar(&closeUpstreamRemote, "upstream-remote", "up", "Remote of upstream")
+	closeCmd.Flags().StringVar(&closeForkRemote, "fork-remote", "", "Remote to use (default: git.push, else the only remote, else og)")
+	closeCmd.Flags().StringVar(&closeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: the trunk() remote, else the fork remote)")
 	closeCmd.Flags().BoolVar(&closeForce, "force", false, "Skip confirmation prompt")
 	closeCmd.Flags().BoolVar(&closeNoCleanup, "no-cleanup", false, "Skip local cleanup after close")
 
@@ -685,13 +701,17 @@ use 'review open' and 'review submit' instead.`,
 				return fmt.Errorf("revset and --all are mutually exclusive")
 			}
 			configMgr := forge.NewConfigManager(jjClient)
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, importUpstreamRemote)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, "", importUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
 			result, err := review.Import(ctx, jjClient, forgeClient, configMgr, review.ImportParams{
 				Revset:            revset,
-				UpstreamRemote:    importUpstreamRemote,
+				UpstreamRemote:    remotes.Upstream,
 				UpstreamRemoteURL: upstreamRemoteURL,
 				All:               importAll,
 			})
@@ -702,7 +722,7 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "up", "Remote to search for PRs")
+	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "", "Remote to search for PRs (default: the trunk() remote, else the fork remote)")
 	importCmd.Flags().BoolVar(&importAll, "all", false, "Check all mutable revisions")
 
 	var updateUpstreamRemote, updateForkRemote string
@@ -736,17 +756,21 @@ whose branch it pushed. Pushing by other means leaves those reviews stale.`,
 					return check.Run(ctx, jjClient, configMgr, revset, false, newJJExecutor(), stdoutUI)
 				}
 			}
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, updateUpstreamRemote)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, updateForkRemote, updateUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
 			if !forgeClient.SupportsForks() {
-				updateForkRemote = updateUpstreamRemote
+				remotes.Fork = remotes.Upstream
 			}
 			result, err := review.Update(ctx, jjClient, forgeClient, configMgr, review.UpdateParams{
 				Revset:            revset,
-				ForkRemote:        updateForkRemote,
-				UpstreamRemote:    updateUpstreamRemote,
+				ForkRemote:        remotes.Fork,
+				UpstreamRemote:    remotes.Upstream,
 				UpstreamRemoteURL: upstreamRemoteURL,
 				UI:                stdoutUI,
 				CheckFn:           checkFn,
@@ -772,8 +796,8 @@ whose branch it pushed. Pushing by other means leaves those reviews stale.`,
 			return nil
 		},
 	}
-	updateCmd.Flags().StringVar(&updateForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
-	updateCmd.Flags().StringVar(&updateUpstreamRemote, "upstream-remote", "up", "Remote to update PRs on")
+	updateCmd.Flags().StringVar(&updateForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
+	updateCmd.Flags().StringVar(&updateUpstreamRemote, "upstream-remote", "", "Remote to update PRs on (default: the trunk() remote, else the fork remote)")
 	updateCmd.Flags().BoolVar(&updateSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	reviewCmd.AddCommand(importCmd)
@@ -889,7 +913,11 @@ Examples:
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jjClient := jj.NewClientWithExecutor(repoPath, newJJExecutor())
-			forgeClient, upstreamURL, err := getForge(ctx, jjClient, rulesetUpstreamRemote)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, forge.NewConfigManager(jjClient), "", rulesetUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
@@ -902,7 +930,7 @@ Examples:
 			return nil
 		},
 	}
-	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "up", "Remote to target")
+	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "", "Remote to target (default: the trunk() remote, else the fork remote)")
 
 	var setupTemplatesUser bool
 	setupTemplatesCmd := &cobra.Command{
@@ -992,7 +1020,12 @@ at most --timeout.`,
 					return err
 				}
 			}
-			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, actionsStatusUpstreamRemote)
+			configMgr := forge.NewConfigManager(jjClient)
+			remotes, err := forge.ResolveRemotes(ctx, jjClient, configMgr, actionsStatusForkRemote, actionsStatusUpstreamRemote)
+			if err != nil {
+				return err
+			}
+			forgeClient, upstreamRemoteURL, err := getForge(ctx, jjClient, remotes.Upstream)
 			if err != nil {
 				return err
 			}
@@ -1006,7 +1039,7 @@ at most --timeout.`,
 			case cmd.Flags().Changed("timeout") && !actionsStatusWait:
 				return &ui.UserError{Msg: "--timeout only applies with --wait"}
 			}
-			pushed, err := review.FindPushedReview(ctx, jjClient, forgeClient, forge.NewConfigManager(jjClient), rev, actionsStatusForkRemote)
+			pushed, err := review.FindPushedReview(ctx, jjClient, forgeClient, configMgr, rev, remotes.Fork)
 			if err != nil {
 				return err
 			}
@@ -1041,8 +1074,8 @@ at most --timeout.`,
 	actionsStatusCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &ui.ExitError{Err: err, Code: actionsStatusError}
 	})
-	actionsStatusCmd.Flags().StringVar(&actionsStatusForkRemote, "fork-remote", "og", "Remote where the branch is pushed")
-	actionsStatusCmd.Flags().StringVar(&actionsStatusUpstreamRemote, "upstream-remote", "up", "Remote the review is on")
+	actionsStatusCmd.Flags().StringVar(&actionsStatusForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
+	actionsStatusCmd.Flags().StringVar(&actionsStatusUpstreamRemote, "upstream-remote", "", "Remote the review is on (default: the trunk() remote, else the fork remote)")
 	actionsStatusCmd.Flags().BoolVar(&actionsStatusWait, "wait", false, "Poll until the checks pass, fail or are found not to run")
 	actionsStatusCmd.Flags().DurationVar(&actionsStatusTimeout, "timeout", 15*time.Minute, "With --wait, give up after this long (0 waits forever)")
 

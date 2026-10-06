@@ -23,6 +23,7 @@ var testUI = ui.New(io.Discard, ui.ColorNever)
 
 // mockClient implements jj.Client for testing.
 type mockClient struct {
+	jj.Client
 	mu       sync.Mutex
 	config   map[string]string
 	revs     []*jj.Rev

@@ -13,6 +13,7 @@ import (
 
 // mockClient is a simple mock for testing ConfigManager
 type mockClient struct {
+	jj.Client
 	mu      sync.Mutex
 	config  map[string]string
 	callLog [][]string
