@@ -55,6 +55,7 @@ func writeFile(t *testing.T, path, content string) {
 
 func setupMergeIntegrationTest(t *testing.T) (remoteDir, repoDir string) {
 	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // Isolate jj's per-repo config store
 
 	tmpDir := t.TempDir()
 	remoteDir = filepath.Join(tmpDir, "remote.git")

@@ -39,6 +39,7 @@ func TestUploadIntegration(t *testing.T) {
 	if err := os.MkdirAll(remoteDir, 0755); err != nil {
 		t.Fatalf("failed to create remote dir: %v", err)
 	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // Isolate jj's per-repo config store
 	runCmd(t, remoteDir, "git", "init", "--bare")
 
 	// Initialize jj repo
@@ -131,6 +132,7 @@ func TestUploadIntegration_Idempotent(t *testing.T) {
 
 	// Setup
 	os.MkdirAll(remoteDir, 0755)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // Isolate jj's per-repo config store
 	runCmd(t, remoteDir, "git", "init", "--bare")
 	os.MkdirAll(repoDir, 0755)
 	runCmd(t, repoDir, "jj", "git", "init")

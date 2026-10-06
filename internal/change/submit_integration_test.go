@@ -24,6 +24,7 @@ var integrationTestUI = ui.New(io.Discard, ui.ColorNever)
 
 func setupSubmitTest(t *testing.T) (tmpDir, remoteDir, repoDir string) {
 	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // Isolate jj's per-repo config store
 
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "jj-forge-submit-integration-*")
@@ -53,6 +54,9 @@ func setupSubmitTest(t *testing.T) (tmpDir, remoteDir, repoDir string) {
 	// Add remote
 	runCmd(t, repoDir, "jj", "git", "remote", "add", "og", remoteDir)
 	runCmd(t, repoDir, "jj", "git", "fetch", "--remote", "og")
+	// Pushed main commits are immutable, as after repo clone, so the mutable()
+	// queries in the helpers see only the test's own commits.
+	runCmd(t, repoDir, "jj", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@og")
 
 	return tmpDir, remoteDir, repoDir
 }
