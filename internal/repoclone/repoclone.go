@@ -25,8 +25,8 @@ const (
 type Params struct {
 	URL            string   // Repository URL to clone
 	Path           string   // Clone to this path (empty = default to repo name)
-	ForkRemote     string   // Name for fork/personal remote (default: "og")
-	UpstreamRemote string   // Name for upstream remote (default: "up")
+	ForkRemote     string   // Name for fork/personal remote
+	UpstreamRemote string   // Name for upstream remote
 	UseHTTPS       bool     // Use HTTPS instead of SSH for remotes
 	NoFork         bool     // Don't create fork for external repos (fail instead)
 	TrackBranches  []string // Glob patterns for branches to track from fork remote (e.g. "push-*")

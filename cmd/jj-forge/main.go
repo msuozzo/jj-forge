@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -327,7 +328,7 @@ func main() {
 			return nil
 		},
 	}
-	uploadCmd.Flags().StringVar(&uploadRemote, "remote", "", "Remote to push to (default: git.push, else the only remote, else og)")
+	uploadCmd.Flags().StringVar(&uploadRemote, "remote", "", "Remote to push to (default: git.push, else the only remote, else forge.default-fork-remote)")
 	uploadCmd.Flags().BoolVar(&uploadSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var submitRemote, submitBranch string
@@ -339,9 +340,9 @@ func main() {
 
 The target defaults to the bookmark the trunk() revset alias names (e.g.
 master@og, as set by 'repo clone' and 'jj git clone'). When trunk() is not
-a plain <branch>@<remote>, it is main on git.push's remote, else main@og.
-With only --remote, the branch comes from trunk() when it is on that
-remote, and is main otherwise.
+a plain <branch>@<remote>, it is main on the fork remote: git.push, else
+the only remote, else forge.default-fork-remote. With only --remote, the
+branch comes from trunk() when it is on that remote, and is main otherwise.
 
 This is suitable for solo projects or develop-on-main workflows where
 PR-based review is not required. For team workflows with code review,
@@ -375,7 +376,7 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	submitCmd.Flags().StringVar(&submitRemote, "remote", "", "Remote to push to (default: the trunk() remote, else git.push, else og)")
+	submitCmd.Flags().StringVar(&submitRemote, "remote", "", "Remote to push to (default: the trunk() remote, else the fork remote)")
 	submitCmd.Flags().StringVar(&submitBranch, "branch", "", "Target branch to fast-forward (default: the trunk() branch, else main)")
 	submitCmd.Flags().BoolVar(&submitSkipCheck, "skip-check", false, "Skip the configured check command")
 
@@ -539,8 +540,8 @@ use 'review open' and 'review submit' instead.`,
 		},
 	}
 	openCmd.Flags().StringSliceVar(&openReviewers, "reviewer", nil, "Usernames to assign as reviewers")
-	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "", "Remote to create PR against (default: the trunk() remote, else the fork remote)")
-	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
+	openCmd.Flags().StringVar(&openUpstreamRemote, "upstream-remote", "", "Remote to create PR against (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
+	openCmd.Flags().StringVar(&openForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else forge.default-fork-remote)")
 	openCmd.Flags().BoolVar(&openSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	var mergeUpstreamRemote, mergeForkRemote string
@@ -618,8 +619,8 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "", "Remote of fork (default: git.push, else the only remote, else og)")
-	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: the trunk() remote, else the fork remote)")
+	mergeCmd.Flags().StringVar(&mergeForkRemote, "fork-remote", "", "Remote of fork (default: git.push, else the only remote, else forge.default-fork-remote)")
+	mergeCmd.Flags().StringVar(&mergeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 	mergeCmd.Flags().BoolVar(&mergeNoCleanup, "no-cleanup", false, "Skip local cleanup after merge")
 	mergeCmd.Flags().BoolVar(&mergeSkipCheck, "skip-check", false, "Skip the configured check command")
 
@@ -673,8 +674,8 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	closeCmd.Flags().StringVar(&closeForkRemote, "fork-remote", "", "Remote to use (default: git.push, else the only remote, else og)")
-	closeCmd.Flags().StringVar(&closeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: the trunk() remote, else the fork remote)")
+	closeCmd.Flags().StringVar(&closeForkRemote, "fork-remote", "", "Remote to use (default: git.push, else the only remote, else forge.default-fork-remote)")
+	closeCmd.Flags().StringVar(&closeUpstreamRemote, "upstream-remote", "", "Remote of upstream (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 	closeCmd.Flags().BoolVar(&closeForce, "force", false, "Skip confirmation prompt")
 	closeCmd.Flags().BoolVar(&closeNoCleanup, "no-cleanup", false, "Skip local cleanup after close")
 
@@ -722,7 +723,7 @@ use 'review open' and 'review submit' instead.`,
 			return nil
 		},
 	}
-	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "", "Remote to search for PRs (default: the trunk() remote, else the fork remote)")
+	importCmd.Flags().StringVar(&importUpstreamRemote, "upstream-remote", "", "Remote to search for PRs (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 	importCmd.Flags().BoolVar(&importAll, "all", false, "Check all mutable revisions")
 
 	var updateUpstreamRemote, updateForkRemote string
@@ -796,8 +797,8 @@ whose branch it pushed. Pushing by other means leaves those reviews stale.`,
 			return nil
 		},
 	}
-	updateCmd.Flags().StringVar(&updateForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
-	updateCmd.Flags().StringVar(&updateUpstreamRemote, "upstream-remote", "", "Remote to update PRs on (default: the trunk() remote, else the fork remote)")
+	updateCmd.Flags().StringVar(&updateForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else forge.default-fork-remote)")
+	updateCmd.Flags().StringVar(&updateUpstreamRemote, "upstream-remote", "", "Remote to update PRs on (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 	updateCmd.Flags().BoolVar(&updateSkipCheck, "skip-check", false, "Skip the configured check command")
 
 	reviewCmd.AddCommand(importCmd)
@@ -839,7 +840,7 @@ Workflow is determined by repository ownership:
 The command will:
   - Analyze repository ownership and fork status
   - Clone or create the repository
-  - Configure appropriate remotes (og/up)
+  - Configure the fork and upstream remotes
   - Set up workflow preferences
 
 Tangled repositories (tangled.org) are detected automatically. Ownership is
@@ -858,17 +859,25 @@ Examples:
 			if len(args) > 1 {
 				path = args[1]
 			}
+			jjClientForConfig := jj.NewClientWithExecutor("", newJJExecutor())
+			configMgr := forge.NewConfigManager(jjClientForConfig)
+			forkRemote, err := configMgr.GetDefaultForkRemote()
+			if err != nil {
+				return err
+			}
+			upstreamRemote, err := configMgr.GetDefaultUpstreamRemote()
+			if err != nil {
+				return err
+			}
 			params := repoclone.Params{
 				URL:            url,
 				Path:           path,
-				ForkRemote:     cloneForkRemote,
-				UpstreamRemote: cloneUpstreamRemote,
+				ForkRemote:     cmp.Or(cloneForkRemote, forkRemote),
+				UpstreamRemote: cmp.Or(cloneUpstreamRemote, upstreamRemote),
 				UseHTTPS:       cloneUseHTTPS,
 				NoFork:         cloneNoFork,
 				TrackBranches:  cloneTrackBranches,
 			}
-			jjClientForConfig := jj.NewClientWithExecutor("", newJJExecutor())
-			configMgr := forge.NewConfigManager(jjClientForConfig)
 			hosts, _ := configMgr.GetHosts()
 			// Dispatch to SSM clone flow for SSM URLs
 			forgeType, _ := forge.DetectForge(ctx, url, forge.DefaultHTTPClient(), hosts)
@@ -896,12 +905,12 @@ Examples:
 				ghClient.WithGHCommand(ghCmd)
 			}
 			runner := repoclone.NewRunnerWithDeps(ghClient, newJJExecutor(), &cmdpkg.DefaultPrompter{}, stdoutUI)
-			_, err := runner.Run(ctx, params)
+			_, err = runner.Run(ctx, params)
 			return err
 		},
 	}
-	cloneCmd.Flags().StringVar(&cloneForkRemote, "fork-remote", "og", "Name for fork/personal remote")
-	cloneCmd.Flags().StringVar(&cloneUpstreamRemote, "upstream-remote", "up", "Name for upstream remote")
+	cloneCmd.Flags().StringVar(&cloneForkRemote, "fork-remote", "", "Name for fork/personal remote (default: forge.default-fork-remote)")
+	cloneCmd.Flags().StringVar(&cloneUpstreamRemote, "upstream-remote", "", "Name for upstream remote (default: forge.default-upstream-remote)")
 	cloneCmd.Flags().BoolVar(&cloneUseHTTPS, "https", false, "Use HTTPS instead of SSH for remotes")
 	cloneCmd.Flags().BoolVar(&cloneNoFork, "no-fork", false, "Don't create fork for external repos (fail instead)")
 	cloneCmd.Flags().StringArrayVar(&cloneTrackBranches, "track-branches", []string{"push-*"}, "Glob patterns for branches to track from fork remote (repeatable)")
@@ -930,7 +939,7 @@ Examples:
 			return nil
 		},
 	}
-	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "", "Remote to target (default: the trunk() remote, else the fork remote)")
+	setupRulesetCmd.Flags().StringVar(&rulesetUpstreamRemote, "upstream-remote", "", "Remote to target (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 
 	var setupTemplatesUser bool
 	setupTemplatesCmd := &cobra.Command{
@@ -1074,8 +1083,8 @@ at most --timeout.`,
 	actionsStatusCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &ui.ExitError{Err: err, Code: actionsStatusError}
 	})
-	actionsStatusCmd.Flags().StringVar(&actionsStatusForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else og)")
-	actionsStatusCmd.Flags().StringVar(&actionsStatusUpstreamRemote, "upstream-remote", "", "Remote the review is on (default: the trunk() remote, else the fork remote)")
+	actionsStatusCmd.Flags().StringVar(&actionsStatusForkRemote, "fork-remote", "", "Remote where the branch is pushed (default: git.push, else the only remote, else forge.default-fork-remote)")
+	actionsStatusCmd.Flags().StringVar(&actionsStatusUpstreamRemote, "upstream-remote", "", "Remote the review is on (default: forge.default-upstream-remote when the repository has it, else the trunk() remote)")
 	actionsStatusCmd.Flags().BoolVar(&actionsStatusWait, "wait", false, "Poll until the checks pass, fail or are found not to run")
 	actionsStatusCmd.Flags().DurationVar(&actionsStatusTimeout, "timeout", 15*time.Minute, "With --wait, give up after this long (0 waits forever)")
 

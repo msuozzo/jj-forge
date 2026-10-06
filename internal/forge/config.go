@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -44,12 +45,14 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 
 // ForgeConfig represents the [forge] section of the jj config.
 type ForgeConfig struct {
-	DefaultReviewer string            `toml:"default-reviewer,omitempty"`
-	Reviews         []string          `toml:"reviews,omitempty"`
-	CheckCommand    string            `toml:"check-command,omitempty"`
-	Checks          []string          `toml:"checks,omitempty"`
-	Tools           map[string]string `toml:"tools,omitempty"`
-	Hosts           map[string]string `toml:"hosts,omitempty"`
+	DefaultReviewer       string            `toml:"default-reviewer,omitempty"`
+	DefaultForkRemote     string            `toml:"default-fork-remote,omitempty"`
+	DefaultUpstreamRemote string            `toml:"default-upstream-remote,omitempty"`
+	Reviews               []string          `toml:"reviews,omitempty"`
+	CheckCommand          string            `toml:"check-command,omitempty"`
+	Checks                []string          `toml:"checks,omitempty"`
+	Tools                 map[string]string `toml:"tools,omitempty"`
+	Hosts                 map[string]string `toml:"hosts,omitempty"`
 }
 
 // Check verdict values.
@@ -239,6 +242,26 @@ func (m *ConfigManager) GetDefaultReviewer() (string, error) {
 		return "", err
 	}
 	return cfg.DefaultReviewer, nil
+}
+
+// GetDefaultForkRemote returns forge.default-fork-remote, or DefaultForkRemote
+// when it is unset.
+func (m *ConfigManager) GetDefaultForkRemote() (string, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return "", err
+	}
+	return cmp.Or(cfg.DefaultForkRemote, DefaultForkRemote), nil
+}
+
+// GetDefaultUpstreamRemote returns forge.default-upstream-remote, or
+// DefaultUpstreamRemote when it is unset.
+func (m *ConfigManager) GetDefaultUpstreamRemote() (string, error) {
+	cfg, err := m.getForgeConfig()
+	if err != nil {
+		return "", err
+	}
+	return cmp.Or(cfg.DefaultUpstreamRemote, DefaultUpstreamRemote), nil
 }
 
 // GetHosts retrieves the configured host overrides map from the config.

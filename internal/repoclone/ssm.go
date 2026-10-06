@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/ssm"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
@@ -61,11 +62,11 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 
 	remoteName := params.ForkRemote
 	if remoteName == "" {
-		remoteName = "og"
+		remoteName = forge.DefaultForkRemote
 	}
 	upstreamRemote := params.UpstreamRemote
 	if upstreamRemote == "" {
-		upstreamRemote = "up"
+		upstreamRemote = forge.DefaultUpstreamRemote
 	}
 
 	// SSM uses no forks: the upstream remote points at the same URL.

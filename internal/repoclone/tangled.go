@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/forge/tangled"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
@@ -99,11 +100,11 @@ func (r *TangledRunner) Run(ctx context.Context, params Params) (*Result, error)
 
 	forkRemote := params.ForkRemote
 	if forkRemote == "" {
-		forkRemote = "og"
+		forkRemote = forge.DefaultForkRemote
 	}
 	upstreamRemote := params.UpstreamRemote
 	if upstreamRemote == "" {
-		upstreamRemote = "up"
+		upstreamRemote = forge.DefaultUpstreamRemote
 	}
 
 	steps := cloneSteps{
@@ -139,7 +140,7 @@ func (r *TangledRunner) Run(ctx context.Context, params Params) (*Result, error)
 		fmt.Fprintln(u)
 		fmt.Fprintf(u, "Workflow: Develop on main\n")
 		fmt.Fprintf(u, "  Use 'jj' to create changes and 'jj-forge change submit' to land them\n")
-		fmt.Fprintf(u, "  Use 'jj-forge review open --upstream-remote %s' to review changes as PRs\n", forkRemote)
+		fmt.Fprintf(u, "  Use 'jj-forge review open' to review changes as PRs\n")
 	} else {
 		result.UpstreamName = upstreamRemote
 		printPRWorkflowSummary(u, "Tangled")

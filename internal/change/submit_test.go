@@ -73,8 +73,9 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 		remote     string // Submit's remote and branch arguments. trunk() is
 		branch     string // only read when one of them is empty.
 		trunk      string // trunk() alias
-		readsPush  bool   // git.push is read when trunk() names no remote
-		push       string // git.push value, "" for unset
+		resolves   bool   // the fork remote is resolved when trunk() names none
+		remotes    string // jj git remote list output, when resolving
+		push       string // git.push value, "" for unset, when resolving
 		wantRemote string
 		wantBranch string
 		wantNote   string // Expected in the hint, or "" for no mention of trunk()
@@ -112,7 +113,8 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 		{
 			name:       "complex revset",
 			trunk:      "latest(remote_heads() | root())",
-			readsPush:  true,
+			resolves:   true,
+			remotes:    "og url\n",
 			wantRemote: "og",
 			wantBranch: "main",
 			wantNote:   fallback("og"),
@@ -120,7 +122,8 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 		{
 			name:       "complex revset with git.push",
 			trunk:      "latest(remote_heads() | root())",
-			readsPush:  true,
+			resolves:   true,
+			remotes:    "og url\n",
 			push:       "origin",
 			wantRemote: "origin",
 			wantBranch: "main",
@@ -148,8 +151,13 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 			if tt.remote == "" || tt.branch == "" {
 				calls = append(calls, configGet(jj.TrunkAliasKey, tt.trunk))
 			}
-			if tt.readsPush {
-				calls = append(calls, configGet(jj.GitPushKey, tt.push))
+			if tt.resolves {
+				calls = append(calls,
+					jjtest.Call{Args: []string{"git", "remote", "list"}, Output: jjtest.Output(tt.remotes)},
+					configGet(jj.GitPushKey, tt.push),
+					jjtest.Call{Args: []string{"config", "list", "forge"}},
+					configGet(jj.TrunkAliasKey, tt.trunk),
+				)
 			}
 			calls = append(calls,
 				jjtest.Call{Args: []string{"git", "fetch", "--remote", tt.wantRemote}},

@@ -1,6 +1,8 @@
 package forge_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
@@ -21,32 +23,85 @@ func configGet(key, value string) jjtest.Call {
 }
 
 func TestResolveRemotes(t *testing.T) {
+	ogUp := "forge.default-fork-remote = \"og\"\nforge.default-upstream-remote = \"up\"\n"
+	originUpstream := "forge.default-fork-remote = \"origin\"\nforge.default-upstream-remote = \"upstream\"\n"
 	tests := []struct {
 		name     string
 		fork     string // given fork and upstream
 		upstream string
-		remotes  string // jj git remote list output (read when fork is empty)
+		remotes  string // jj git remote list output
 		push     string // git.push, "" for unset (read when fork is empty)
+		config   string // jj config list forge output (read when either is empty)
 		trunk    string // trunk() alias (read when upstream is empty)
 		want     forge.Remotes
 	}{
-		{name: "both given", fork: "mine", upstream: "theirs", want: forge.Remotes{Fork: "mine", Upstream: "theirs"}},
-		{name: "forked repo from repo clone", remotes: "og url\nup url\n", push: "og", trunk: "master@up", want: forge.Remotes{Fork: "og", Upstream: "up"}},
-		{name: "develop-on-main from repo clone", remotes: "og url\n", push: "og", trunk: "main@og", want: forge.Remotes{Fork: "og", Upstream: "og"}},
-		{name: "plain jj git clone", remotes: "origin url\n", trunk: "master@origin", want: forge.Remotes{Fork: "origin", Upstream: "origin"}},
-		{name: "custom trunk revset", remotes: "og url\n", push: "og", trunk: "latest(remote_heads())", want: forge.Remotes{Fork: "og", Upstream: "og"}},
-		{name: "two remotes without git.push", remotes: "origin url\nupstream url\n", trunk: "main@origin", want: forge.Remotes{Fork: "og", Upstream: "origin"}},
-		{name: "fork given", fork: "mine", trunk: "main@mine", want: forge.Remotes{Fork: "mine", Upstream: "mine"}},
-		{name: "upstream given", upstream: "theirs", remotes: "og url\n", push: "og", want: forge.Remotes{Fork: "og", Upstream: "theirs"}},
+		{
+			name: "both given",
+			fork: "mine", upstream: "theirs",
+			want: forge.Remotes{Fork: "mine", Upstream: "theirs"},
+		},
+		{
+			name:    "forked repo from repo clone",
+			remotes: "og url\nup url\n", push: "og", trunk: "master@up",
+			want: forge.Remotes{Fork: "og", Upstream: "up"},
+		},
+		{
+			name:    "develop-on-main from repo clone",
+			remotes: "og url\n", push: "og", trunk: "main@og",
+			want: forge.Remotes{Fork: "og", Upstream: "og"},
+		},
+		{
+			name:    "plain jj git clone",
+			remotes: "origin url\n", trunk: "master@origin",
+			want: forge.Remotes{Fork: "origin", Upstream: "origin"},
+		},
+		{
+			name:    "legacy fork without git.push, names configured",
+			remotes: "og url\nup url\n", config: ogUp, trunk: "master@up",
+			want: forge.Remotes{Fork: "og", Upstream: "up"},
+		},
+		{
+			name:    "fork-only hybrid with trunk on the fork",
+			remotes: "og url\nup url\n", push: "og", trunk: "master@og",
+			want: forge.Remotes{Fork: "og", Upstream: "up"},
+		},
+		{
+			name:    "custom trunk revset",
+			remotes: "og url\n", push: "og", trunk: "latest(remote_heads())",
+			want: forge.Remotes{Fork: "og", Upstream: "og"},
+		},
+		{
+			name:    "conventional names configured",
+			remotes: "origin url\nupstream url\n", config: originUpstream, trunk: "main@origin",
+			want: forge.Remotes{Fork: "origin", Upstream: "upstream"},
+		},
+		{
+			name:    "two remotes without git.push or config",
+			remotes: "origin url\nupstream url\n", trunk: "main@origin",
+			want: forge.Remotes{Fork: "og", Upstream: "origin"},
+		},
+		{
+			name: "fork given",
+			fork: "mine", remotes: "mine url\n", trunk: "main@mine",
+			want: forge.Remotes{Fork: "mine", Upstream: "mine"},
+		},
+		{
+			name:     "upstream given",
+			upstream: "theirs", remotes: "og url\n", push: "og",
+			want: forge.Remotes{Fork: "og", Upstream: "theirs"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []jjtest.Call
+			if tt.fork == "" || tt.upstream == "" {
+				calls = append(calls, jjtest.Call{Args: []string{"git", "remote", "list"}, Output: jjtest.Output(tt.remotes)})
+			}
 			if tt.fork == "" {
-				calls = append(calls,
-					jjtest.Call{Args: []string{"git", "remote", "list"}, Output: jjtest.Output(tt.remotes)},
-					configGet(jj.GitPushKey, tt.push),
-				)
+				calls = append(calls, configGet(jj.GitPushKey, tt.push))
+			}
+			if tt.fork == "" || tt.upstream == "" {
+				calls = append(calls, jjtest.Call{Args: []string{"config", "list", "forge"}, Output: jjtest.Output(tt.config)})
 			}
 			if tt.upstream == "" {
 				calls = append(calls, configGet(jj.TrunkAliasKey, tt.trunk))
@@ -63,4 +118,16 @@ func TestResolveRemotes(t *testing.T) {
 			scenario.Verify()
 		})
 	}
+}
+
+func TestResolveRemotes_ListError(t *testing.T) {
+	scenario := jjtest.NewScenario(t, jjtest.NewFakeRepo(),
+		jjtest.Call{Args: []string{"git", "remote", "list"}, Err: errors.New("not a jj repo")},
+	)
+	client := scenario.Client()
+	_, err := forge.ResolveRemotes(t.Context(), client, forge.NewConfigManager(client), "", "")
+	if err == nil || !strings.Contains(err.Error(), "failed to list remotes") {
+		t.Fatalf("ResolveRemotes() error = %v, want remote listing error", err)
+	}
+	scenario.Verify()
 }

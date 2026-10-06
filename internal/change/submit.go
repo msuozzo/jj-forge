@@ -1,7 +1,6 @@
 package change
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -18,9 +17,9 @@ type SubmitResult struct {
 }
 
 // Submit adds changes directly to the target branch without PR review.
-// An empty remote defaults to the one trunk() names, else git.push, else
-// "og". An empty branch defaults to the one trunk() names on that remote,
-// else "main".
+// An empty remote defaults to the one trunk() names, else the fork remote
+// forge.ResolveRemotes finds. An empty branch defaults to the one trunk()
+// names on that remote, else "main".
 // For each revision:
 //   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
@@ -38,11 +37,11 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 		if remote == "" {
 			remote = trunk.Remote
 			if remote == "" {
-				push, err := configMgr.Get(jj.GitPushKey)
+				remotes, err := forge.ResolveRemotes(ctx, client, configMgr, "", "")
 				if err != nil {
 					return nil, err
 				}
-				remote = cmp.Or(push, "og")
+				remote = remotes.Fork
 			}
 		}
 		if branch == "" {

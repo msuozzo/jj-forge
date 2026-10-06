@@ -664,3 +664,34 @@ func TestGetHosts(t *testing.T) {
 		t.Errorf("GetHosts() mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestGetDefaultRemotes(t *testing.T) {
+	// Unset keys fall back to the built-in names.
+	mgr := NewConfigManager(newMockClient())
+	fork, err := mgr.GetDefaultForkRemote()
+	if err != nil {
+		t.Fatalf("GetDefaultForkRemote failed: %v", err)
+	}
+	upstream, err := mgr.GetDefaultUpstreamRemote()
+	if err != nil {
+		t.Fatalf("GetDefaultUpstreamRemote failed: %v", err)
+	}
+	if fork != DefaultForkRemote || upstream != DefaultUpstreamRemote {
+		t.Errorf("defaults = %q, %q, want %q, %q", fork, upstream, DefaultForkRemote, DefaultUpstreamRemote)
+	}
+
+	// Set keys are returned as is.
+	mock := newMockClient()
+	mock.config["default-fork-remote"] = `"origin"`
+	mock.config["default-upstream-remote"] = `"upstream"`
+	mgr = NewConfigManager(mock)
+	if fork, err = mgr.GetDefaultForkRemote(); err != nil {
+		t.Fatalf("GetDefaultForkRemote failed: %v", err)
+	}
+	if upstream, err = mgr.GetDefaultUpstreamRemote(); err != nil {
+		t.Fatalf("GetDefaultUpstreamRemote failed: %v", err)
+	}
+	if fork != "origin" || upstream != "upstream" {
+		t.Errorf("configured = %q, %q, want origin, upstream", fork, upstream)
+	}
+}
