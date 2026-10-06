@@ -3,18 +3,30 @@ package change
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/forge"
+	"github.com/msuozzo/jj-forge/internal/jj"
 	"github.com/msuozzo/jj-forge/internal/jjtest"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
-var trunkConfigGet = []string{"config", "get", `revset-aliases."trunk()"`}
-
 func logArgs(revset string) []string {
 	return []string{"log", "--no-graph", "--template", templateMatcher, "-r", revset}
+}
+
+// configGet expects config get KEY, printing value or failing as unset when
+// value is "".
+func configGet(key, value string) jjtest.Call {
+	call := jjtest.Call{Args: []string{"config", "get", key}}
+	if value == "" {
+		call.Err = jjtest.ConfigNotFound(key)
+	} else {
+		call.Output = jjtest.Output(value + "\n")
+	}
+	return call
 }
 
 func TestSubmit_TrunkTarget(t *testing.T) {
@@ -27,10 +39,7 @@ func TestSubmit_TrunkTarget(t *testing.T) {
 	)
 
 	scenario := jjtest.NewScenario(t, repo,
-		jjtest.Call{
-			Args:   trunkConfigGet,
-			Output: func(*jjtest.FakeRepo) string { return "master@og\n" },
-		},
+		jjtest.Call{Args: []string{"config", "get", jj.TrunkAliasKey}, Output: jjtest.Output("master@og\n")},
 		jjtest.Call{Args: []string{"git", "fetch", "--remote", "og"}},
 		jjtest.Call{Args: logArgs("master@og"), Output: jjtest.LogOutput("mmmmmmmmmmmm")},
 		jjtest.Call{Args: logArgs("@-"), Output: jjtest.LogOutput("aaaaaaaaaaaa")},
@@ -39,9 +48,11 @@ func TestSubmit_TrunkTarget(t *testing.T) {
 		jjtest.Call{Args: []string{"git", "push", "--bookmark", "master", "--remote", "og"}},
 		jjtest.Call{Args: []string{"git", "fetch", "--remote", "og"}},
 		jjtest.Call{Args: logArgs("master@og"), Output: jjtest.LogOutput("aaaaaaaaaaaa")},
+		jjtest.Call{Args: []string{"config", "list", "forge"}}, // verdict cleanup finds none
 	)
 
-	result, err := Submit(context.Background(), scenario.Client(), nil, "@-", "", "", testUI)
+	client := scenario.Client()
+	result, err := Submit(context.Background(), client, forge.NewConfigManager(client), "@-", "", "", testUI)
 	if err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
@@ -54,32 +65,30 @@ func TestSubmit_TrunkTarget(t *testing.T) {
 func TestSubmit_DefaultTarget(t *testing.T) {
 	// Each case stops at the missing-branch error, which shows the target
 	// Submit chose and the hint explaining where the branch came from.
-	unset := &cmd.ExecError{
-		Args:   append([]string{"jj"}, trunkConfigGet...),
-		Stderr: "Config error: Value not found for revset-aliases.\"trunk()\"\n",
-		Err:    errors.New("exit status 1"),
+	fallback := func(remote string) string {
+		return fmt.Sprintf("trunk() names no branch on %q, so the default main was used", remote)
 	}
-	fallback := `trunk() names no branch on "og", so the default main was used`
 	tests := []struct {
 		name       string
 		remote     string // Submit's remote and branch arguments. trunk() is
 		branch     string // only read when one of them is empty.
-		trunk      string
-		trunkErr   error
+		trunk      string // trunk() alias
+		readsPush  bool   // git.push is read when trunk() names no remote
+		push       string // git.push value, "" for unset
 		wantRemote string
 		wantBranch string
 		wantNote   string // Expected in the hint, or "" for no mention of trunk()
 	}{
 		{
 			name:       "trunk alias",
-			trunk:      "master@og\n",
+			trunk:      "master@og",
 			wantRemote: "og",
 			wantBranch: "master",
 			wantNote:   `The branch comes from trunk() (master@og).`,
 		},
 		{
 			name:       "trunk alias on another remote",
-			trunk:      "main@origin\n",
+			trunk:      "main@origin",
 			wantRemote: "origin",
 			wantBranch: "main",
 			wantNote:   `The branch comes from trunk() (main@origin).`,
@@ -87,7 +96,7 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 		{
 			name:       "remote given with trunk on it",
 			remote:     "up",
-			trunk:      "master@up\n",
+			trunk:      "master@up",
 			wantRemote: "up",
 			wantBranch: "master",
 			wantNote:   `The branch comes from trunk() (master@up).`,
@@ -95,36 +104,32 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 		{
 			name:       "remote given with trunk elsewhere",
 			remote:     "og",
-			trunk:      "master@up\n",
+			trunk:      "master@up",
 			wantRemote: "og",
 			wantBranch: "main",
-			wantNote:   fallback,
+			wantNote:   fallback("og"),
 		},
 		{
 			name:       "complex revset",
-			trunk:      "latest(remote_heads() | root())\n",
+			trunk:      "latest(remote_heads() | root())",
+			readsPush:  true,
 			wantRemote: "og",
 			wantBranch: "main",
-			wantNote:   fallback,
+			wantNote:   fallback("og"),
 		},
 		{
-			name:       "operator after remote bookmark",
-			trunk:      "master@og-\n",
-			wantRemote: "og",
+			name:       "complex revset with git.push",
+			trunk:      "latest(remote_heads() | root())",
+			readsPush:  true,
+			push:       "origin",
+			wantRemote: "origin",
 			wantBranch: "main",
-			wantNote:   fallback,
-		},
-		{
-			name:       "unset alias",
-			trunkErr:   unset,
-			wantRemote: "og",
-			wantBranch: "main",
-			wantNote:   fallback,
+			wantNote:   fallback("origin"),
 		},
 		{
 			name:       "branch given",
 			branch:     "release/1.0",
-			trunk:      "master@up\n",
+			trunk:      "master@up",
 			wantRemote: "up",
 			wantBranch: "release/1.0",
 		},
@@ -141,11 +146,10 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 			remoteBookmark := tt.wantBranch + "@" + tt.wantRemote
 			var calls []jjtest.Call
 			if tt.remote == "" || tt.branch == "" {
-				calls = append(calls, jjtest.Call{
-					Args:   trunkConfigGet,
-					Output: func(*jjtest.FakeRepo) string { return tt.trunk },
-					Err:    tt.trunkErr,
-				})
+				calls = append(calls, configGet(jj.TrunkAliasKey, tt.trunk))
+			}
+			if tt.readsPush {
+				calls = append(calls, configGet(jj.GitPushKey, tt.push))
 			}
 			calls = append(calls,
 				jjtest.Call{Args: []string{"git", "fetch", "--remote", tt.wantRemote}},
@@ -156,7 +160,8 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 			)
 			scenario := jjtest.NewScenario(t, jjtest.NewFakeRepo(), calls...)
 
-			_, err := Submit(context.Background(), scenario.Client(), nil, "@-", tt.remote, tt.branch, testUI)
+			client := scenario.Client()
+			_, err := Submit(context.Background(), client, forge.NewConfigManager(client), "@-", tt.remote, tt.branch, testUI)
 			var userErr *ui.UserError
 			if !errors.As(err, &userErr) {
 				t.Fatalf("Submit() error = %v, want UserError", err)
@@ -181,11 +186,12 @@ func TestSubmit_TrunkConfigError(t *testing.T) {
 	// A failure to read trunk() other than it being unset is not masked by
 	// falling back to main@og.
 	scenario := jjtest.NewScenario(t, jjtest.NewFakeRepo(),
-		jjtest.Call{Args: trunkConfigGet, Err: errors.New("Config error: invalid TOML")},
+		jjtest.Call{Args: []string{"config", "get", jj.TrunkAliasKey}, Err: errors.New("Config error: invalid TOML")},
 	)
-	_, err := Submit(context.Background(), scenario.Client(), nil, "@-", "", "", testUI)
-	if err == nil || !strings.Contains(err.Error(), "reading trunk() alias") {
-		t.Fatalf("Submit() error = %v, want trunk() read error", err)
+	client := scenario.Client()
+	_, err := Submit(context.Background(), client, forge.NewConfigManager(client), "@-", "", "", testUI)
+	if err == nil || !strings.Contains(err.Error(), "reading jj config") {
+		t.Fatalf("Submit() error = %v, want config read error", err)
 	}
 	scenario.Verify()
 }

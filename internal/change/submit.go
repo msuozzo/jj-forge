@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -18,31 +17,10 @@ type SubmitResult struct {
 	Submitted int // Number of changes submitted
 }
 
-// remoteBookmarkRegex matches a revset that is only <branch>@<remote>, with
-// both names in jj's unquoted symbol syntax.
-var remoteBookmarkRegex = regexp.MustCompile(`^([\w/]+(?:[.+-][\w/]+)*)@([\w/]+(?:[.+-][\w/]+)*)$`)
-
-// trunkTarget returns the branch and remote the trunk() revset alias names
-// if the alias is a plain <branch>@<remote>, and "" for both otherwise.
-func trunkTarget(ctx context.Context, client jj.Client) (branch, remote string, err error) {
-	result, err := client.Run(ctx, "config", "get", `revset-aliases."trunk()"`)
-	if err != nil {
-		// An unset alias names no bookmark, but other failures are reported.
-		if strings.Contains(err.Error(), "Value not found") {
-			return "", "", nil
-		}
-		return "", "", fmt.Errorf("reading trunk() alias: %w", err)
-	}
-	m := remoteBookmarkRegex.FindStringSubmatch(strings.TrimSpace(result.Stdout))
-	if m == nil {
-		return "", "", nil
-	}
-	return m[1], m[2], nil
-}
-
 // Submit adds changes directly to the target branch without PR review.
-// An empty remote defaults to the one trunk() names, or "og". An empty
-// branch defaults to the one trunk() names on that remote, or "main".
+// An empty remote defaults to the one trunk() names, else git.push, else
+// "og". An empty branch defaults to the one trunk() names on that remote,
+// else "main".
 // For each revision:
 //   - removes forge-parent trailers
 //   - pushes to fast-forward the branch
@@ -52,17 +30,25 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 	// Where a defaulted branch came from, for the hint if it does not exist.
 	var branchNote string
 	if remote == "" || branch == "" {
-		trunkBranch, trunkRemote, err := trunkTarget(ctx, client)
+		alias, err := configMgr.Get(jj.TrunkAliasKey)
 		if err != nil {
 			return nil, err
 		}
+		trunk := jj.ParseRemoteBookmark(alias)
 		if remote == "" {
-			remote = cmp.Or(trunkRemote, "og")
+			remote = trunk.Remote
+			if remote == "" {
+				push, err := configMgr.Get(jj.GitPushKey)
+				if err != nil {
+					return nil, err
+				}
+				remote = cmp.Or(push, "og")
+			}
 		}
 		if branch == "" {
-			if trunkRemote == remote {
-				branch = trunkBranch
-				branchNote = fmt.Sprintf("The branch comes from trunk() (%s@%s).\n", branch, remote)
+			if trunk.Remote == remote {
+				branch = trunk.Name
+				branchNote = fmt.Sprintf("The branch comes from trunk() (%s).\n", trunk)
 			} else {
 				branch = "main"
 				branchNote = fmt.Sprintf("trunk() names no branch on %q, so the default %s was used. Pass --branch to choose another.\n", remote, branch)
@@ -188,14 +174,12 @@ func Submit(ctx context.Context, client jj.Client, configMgr *forge.ConfigManage
 	}
 	fmt.Fprintf(u, "Verified: %s is now at %s\n", u.Styled("bookmark", remoteBookmark), u.Styled("change_id", chainTip.ID))
 	// Clean up check verdicts for submitted changes (non-fatal)
-	if configMgr != nil {
-		var changeIDs []string
-		for _, rev := range revs {
-			changeIDs = append(changeIDs, rev.ID)
-		}
-		if err := configMgr.RemoveCheckVerdicts(changeIDs); err != nil {
-			fmt.Fprintf(u, "Warning: failed to clean up check verdicts: %v\n", err)
-		}
+	var changeIDs []string
+	for _, rev := range revs {
+		changeIDs = append(changeIDs, rev.ID)
+	}
+	if err := configMgr.RemoveCheckVerdicts(changeIDs); err != nil {
+		fmt.Fprintf(u, "Warning: failed to clean up check verdicts: %v\n", err)
 	}
 	result.Submitted = len(revs)
 	return result, nil

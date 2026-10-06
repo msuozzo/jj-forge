@@ -396,3 +396,15 @@ func (m *ConfigManager) saveVerdicts(verdicts []CheckVerdict) error {
 	m.invalidateCache()
 	return err
 }
+
+// Get returns the value of a jj config key, and "" if it is unset.
+func (m *ConfigManager) Get(key string) (string, error) {
+	result, err := m.client.Run(context.Background(), "config", "get", key)
+	if err != nil {
+		if strings.Contains(err.Error(), "Value not found") {
+			return "", nil
+		}
+		return "", fmt.Errorf("reading jj config %s: %w", key, err)
+	}
+	return strings.TrimSpace(result.Stdout), nil
+}

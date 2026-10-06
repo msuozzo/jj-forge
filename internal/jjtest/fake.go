@@ -4,6 +4,7 @@ package jjtest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -245,5 +246,19 @@ func UpdateDescription(id, newDesc string) func(*FakeRepo) {
 		if c, ok := r.Commits[id]; ok {
 			c.Description = newDesc
 		}
+	}
+}
+
+// Output returns s as the command's stdout.
+func Output(s string) func(*FakeRepo) string {
+	return func(*FakeRepo) string { return s }
+}
+
+// ConfigNotFound is how jj config get fails for a key with no value.
+func ConfigNotFound(key string) error {
+	return &cmd.ExecError{
+		Args:   []string{"jj", "config", "get", key},
+		Stderr: "Config error: Value not found for " + key + "\n",
+		Err:    errors.New("exit status 1"),
 	}
 }
