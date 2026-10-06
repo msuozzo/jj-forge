@@ -281,6 +281,27 @@ func TestRunner(t *testing.T) {
 			},
 		},
 		{
+			name: "personal non-fork keeping origin",
+			repos: map[string]string{
+				"repos/testuser/my-project": `{"fork": false, "parent_owner": null, "parent_name": null, "ssh_url": "git@github.com:testuser/my-project.git", "clone_url": "https://github.com/testuser/my-project.git", "default_branch": "main"}`,
+			},
+			params: Params{
+				URL:            "git@github.com:testuser/my-project.git",
+				Path:           "/tmp/test-clone",
+				ForkRemote:     "origin",
+				UpstreamRemote: "upstream",
+			},
+			wantResult: &Result{
+				ClonePath: "/tmp/test-clone", Workflow: WorkflowMain, ForkRemote: "origin",
+			},
+			wantJJ: [][]string{
+				{"jj", "git", "clone"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.push", "origin"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", "git.fetch", "origin"},
+				{"jj", "-R", "/tmp/test-clone", "config", "set", "--repo", `revset-aliases."trunk()"`, "main@origin"},
+			},
+		},
+		{
 			name: "personal fork",
 			repos: map[string]string{
 				"repos/testuser/forked-project":       `{"fork": true, "parent_owner": "upstream-owner", "parent_name": "forked-project", "ssh_url": "git@github.com:testuser/forked-project.git", "clone_url": "https://github.com/testuser/forked-project.git", "default_branch": "main"}`,

@@ -268,12 +268,12 @@ func (r *Runner) Run(ctx context.Context, params Params) (*Result, error) {
 			tracker.Finish()
 			return nil, fmt.Errorf("failed to rename origin remote: %w", err)
 		}
-		_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "git.push", params.ForkRemote)
-		if err != nil {
-			tracker.SetStatus(taskRemotes, ui.TaskFailed)
-			tracker.Finish()
-			return nil, fmt.Errorf("failed to set push remote: %w", err)
-		}
+	}
+	_, err = r.jjExecutor(ctx, cmd.Opts{}, "jj", "-R", absClonePath, "config", "set", "--repo", "git.push", params.ForkRemote)
+	if err != nil {
+		tracker.SetStatus(taskRemotes, ui.TaskFailed)
+		tracker.Finish()
+		return nil, fmt.Errorf("failed to set push remote: %w", err)
 	}
 	tracker.SetStatus(taskRemotes, ui.TaskDone)
 
