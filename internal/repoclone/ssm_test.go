@@ -45,8 +45,8 @@ func TestSSMRunner_HappyPath(t *testing.T) {
 	wantResult := &Result{
 		ClonePath:    result.ClonePath, // uses TempDir so match dynamically
 		Workflow:     WorkflowPR,
-		ForkRemote:   "og",
-		UpstreamName: "up",
+		ForkRemote:   "origin",
+		UpstreamName: "upstream",
 	}
 	if diff := cmp.Diff(wantResult, result); diff != "" {
 		t.Errorf("Result mismatch (-want +got):\n%s", diff)
@@ -55,11 +55,10 @@ func TestSSMRunner_HappyPath(t *testing.T) {
 	absPath := result.ClonePath
 	wantJJ := [][]string{
 		{"jj", "git", "clone"},
-		{"jj", "-R", absPath, "git", "remote", "rename", "origin", "og"},
-		{"jj", "-R", absPath, "git", "remote", "add", "up"},
+		{"jj", "-R", absPath, "git", "remote", "add", "upstream"},
 		{"jj", "-R", absPath, "config", "set", "--repo", "git.fetch"},
-		{"jj", "-R", absPath, "config", "set", "--repo", "git.push", "og"},
-		{"jj", "-R", absPath, "config", "set", "--repo", `revset-aliases."trunk()"`, "main@up"},
+		{"jj", "-R", absPath, "config", "set", "--repo", "git.push", "origin"},
+		{"jj", "-R", absPath, "config", "set", "--repo", `revset-aliases."trunk()"`, "main@upstream"},
 	}
 	if len(*jjCmds) < len(wantJJ) {
 		t.Fatalf("got %d jj commands, want at least %d", len(*jjCmds), len(wantJJ))
@@ -78,9 +77,11 @@ func TestSSMRunner_TrackBranches(t *testing.T) {
 	runner := NewSSMRunnerWithDeps(jjExec, u)
 
 	result, err := runner.Run(context.Background(), Params{
-		URL:           "https://loc-git.loc.sourcemanager.dev/proj/my-repo",
-		Path:          t.TempDir() + "/my-repo",
-		TrackBranches: []string{"push-*", "dev-*"},
+		URL:            "https://loc-git.loc.sourcemanager.dev/proj/my-repo",
+		Path:           t.TempDir() + "/my-repo",
+		ForkRemote:     "og",
+		UpstreamRemote: "up",
+		TrackBranches:  []string{"push-*", "dev-*"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

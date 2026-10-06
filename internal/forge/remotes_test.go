@@ -62,7 +62,7 @@ func TestResolveRemotes(t *testing.T) {
 		},
 		{
 			name:    "fork-only hybrid with trunk on the fork",
-			remotes: "og url\nup url\n", push: "og", trunk: "master@og",
+			remotes: "og url\nup url\n", push: "og", config: ogUp, trunk: "master@og",
 			want: forge.Remotes{Fork: "og", Upstream: "up"},
 		},
 		{
@@ -76,9 +76,14 @@ func TestResolveRemotes(t *testing.T) {
 			want: forge.Remotes{Fork: "origin", Upstream: "upstream"},
 		},
 		{
-			name:    "two remotes without git.push or config",
+			name:    "conventional names by default",
 			remotes: "origin url\nupstream url\n", trunk: "main@origin",
-			want: forge.Remotes{Fork: "og", Upstream: "origin"},
+			want: forge.Remotes{Fork: "origin", Upstream: "upstream"},
+		},
+		{
+			name:    "legacy fork without git.push or config",
+			remotes: "og url\nup url\n", trunk: "master@up",
+			want: forge.Remotes{Fork: "origin", Upstream: "up"},
 		},
 		{
 			name: "fork given",

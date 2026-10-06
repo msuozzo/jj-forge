@@ -200,14 +200,14 @@ Run `jj forge <command> --help` for flags and details.
 
 ## Configuration
 
-| Key                             | Description                                                 |
-| ------------------------------- | ----------------------------------------------------------- |
-| `forge.check-command`           | Shell command to run for checks                             |
-| `forge.default-fork-remote`     | Name `repo clone` gives the fork remote (default: `og`)     |
-| `forge.default-reviewer`        | Default reviewer username for `review open`                 |
-| `forge.default-upstream-remote` | Name `repo clone` gives the upstream remote (default: `up`) |
-| `forge.hosts`                   | Map of custom git hosts to forge types                      |
-| `forge.tools`                   | Map of forge CLI tool command overrides (`gh`, `tg`)        |
+| Key                             | Description                                                       |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `forge.check-command`           | Shell command to run for checks                                   |
+| `forge.default-fork-remote`     | Name `repo clone` gives the fork remote (default: `origin`)       |
+| `forge.default-reviewer`        | Default reviewer username for `review open`                       |
+| `forge.default-upstream-remote` | Name `repo clone` gives the upstream remote (default: `upstream`) |
+| `forge.hosts`                   | Map of custom git hosts to forge types                            |
+| `forge.tools`                   | Map of forge CLI tool command overrides (`gh`, `tg`)              |
 
 Set values with:
 

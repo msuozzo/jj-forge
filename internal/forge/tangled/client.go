@@ -44,7 +44,7 @@ type Client struct {
 // NewClient creates a Tangled client.
 //
 // gitDir is exported to tg as GIT_DIR. upstreamRemote is the git remote name
-// of the repository reviews target (e.g. "up"). tg resolves the PR base as
+// of the repository reviews target (e.g. "upstream"). tg resolves the PR base as
 // "<upstreamRemote>/<branch>". jjClient, when non-nil, is used to export jj
 // bookmarks to git refs so that tg can see push-* branches.
 func NewClient(gitDir, upstreamRemote string, jjClient jj.Client, executor cmd.Executor) *Client {

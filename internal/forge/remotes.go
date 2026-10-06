@@ -12,8 +12,8 @@ import (
 // for, unless forge.default-fork-remote or forge.default-upstream-remote says
 // otherwise.
 const (
-	DefaultForkRemote     = "og"
-	DefaultUpstreamRemote = "up"
+	DefaultForkRemote     = "origin"
+	DefaultUpstreamRemote = "upstream"
 )
 
 // Remotes are the remotes a review command works with.

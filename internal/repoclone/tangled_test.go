@@ -79,7 +79,7 @@ func TestTangledRunner_OwnedRepo_MainWorkflow(t *testing.T) {
 	wantResult := &Result{
 		ClonePath:  result.ClonePath,
 		Workflow:   WorkflowMain,
-		ForkRemote: "og",
+		ForkRemote: "origin",
 	}
 	if diff := cmp.Diff(wantResult, result); diff != "" {
 		t.Errorf("Result mismatch (-want +got):\n%s", diff)
@@ -88,10 +88,9 @@ func TestTangledRunner_OwnedRepo_MainWorkflow(t *testing.T) {
 	absPath := result.ClonePath
 	wantJJ := [][]string{
 		{"jj", "git", "clone", tangledTestURL},
-		{"jj", "-R", absPath, "git", "remote", "rename", "origin", "og"},
-		{"jj", "-R", absPath, "config", "set", "--repo", "git.fetch", "og"},
-		{"jj", "-R", absPath, "config", "set", "--repo", "git.push", "og"},
-		{"jj", "-R", absPath, "config", "set", "--repo", `revset-aliases."trunk()"`, "master@og"},
+		{"jj", "-R", absPath, "config", "set", "--repo", "git.fetch", "origin"},
+		{"jj", "-R", absPath, "config", "set", "--repo", "git.push", "origin"},
+		{"jj", "-R", absPath, "config", "set", "--repo", `revset-aliases."trunk()"`, "master@origin"},
 	}
 	if len(*jjCmds) != len(wantJJ) {
 		t.Fatalf("got %d jj commands, want %d:\n%v", len(*jjCmds), len(wantJJ), *jjCmds)
@@ -117,9 +116,11 @@ func TestTangledRunner_ExternalRepo_PRWorkflow(t *testing.T) {
 	runner := NewTangledRunnerWithDeps(cli, fakeGitExecutor(t, "main"), jjExec, u)
 
 	result, err := runner.Run(context.Background(), Params{
-		URL:           tangledTestURL,
-		Path:          t.TempDir() + "/my-repo",
-		TrackBranches: []string{"push-*"},
+		URL:            tangledTestURL,
+		Path:           t.TempDir() + "/my-repo",
+		ForkRemote:     "og",
+		UpstreamRemote: "up",
+		TrackBranches:  []string{"push-*"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

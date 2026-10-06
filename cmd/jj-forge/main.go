@@ -339,8 +339,8 @@ func main() {
 		Long: `Submit lands commits directly by fast-forwarding the target branch.
 
 The target defaults to the bookmark the trunk() revset alias names (e.g.
-master@og, as set by 'repo clone' and 'jj git clone'). When trunk() is not
-a plain <branch>@<remote>, it is main on the fork remote: git.push, else
+master@origin, as set by 'repo clone' and 'jj git clone'). When trunk() is
+not a plain <branch>@<remote>, it is main on the fork remote: git.push, else
 the only remote, else forge.default-fork-remote. With only --remote, the
 branch comes from trunk() when it is on that remote, and is main otherwise.
 
