@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -79,7 +80,7 @@ func TestTryLock_IgnoresLeftoverRecord(t *testing.T) {
 	}
 }
 
-func TestUnlock_RemovesFileAndFreesLock(t *testing.T) {
+func TestUnlock_KeepsFileAndFreesLock(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x.lock")
 	l, err := TryLock(path)
@@ -89,8 +90,8 @@ func TestUnlock_RemovesFileAndFreesLock(t *testing.T) {
 	if err := l.Unlock(); err != nil {
 		t.Fatalf("Unlock: %v", err)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("lock file should be removed by Unlock: %v", err)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("lock file should stay after Unlock: %v", err)
 	}
 	l2, err := TryLock(path)
 	if err != nil {
@@ -148,5 +149,47 @@ func TestAcquire_ContextCancelled(t *testing.T) {
 	defer cancel()
 	if _, err := Acquire(ctx, path, 10*time.Millisecond, nil); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Acquire: got %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestTryLock_MutualExclusion has many contenders take and release the lock in
+// a tight loop and fails if two ever hold it at once. flock locks belong to the
+// open file, so goroutines in one process contend as separate processes would.
+func TestTryLock_MutualExclusion(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "x.lock")
+	deadline := time.Now().Add(300 * time.Millisecond)
+	var holders, acquisitions, overlaps atomic.Int32
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for time.Now().Before(deadline) {
+				l, err := TryLock(path)
+				var held *HeldError
+				if errors.As(err, &held) {
+					continue
+				}
+				if err != nil {
+					t.Errorf("TryLock: %v", err)
+					return
+				}
+				if holders.Add(1) > 1 {
+					overlaps.Add(1)
+				}
+				acquisitions.Add(1)
+				time.Sleep(50 * time.Microsecond)
+				holders.Add(-1)
+				l.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if acquisitions.Load() == 0 {
+		t.Fatal("no contender ever took the lock")
+	}
+	if n := overlaps.Load(); n > 0 {
+		t.Errorf("%d of %d acquisitions overlapped another holder", n, acquisitions.Load())
 	}
 }

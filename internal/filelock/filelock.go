@@ -1,8 +1,9 @@
-// Package filelock provides cross-process locks on files.
+// Package filelock provides cross-process locks backed by flock(2).
 //
-// A lock is a file created with O_EXCL that records its holder's PID and
-// start time. A lock whose holder is no longer running, or whose record can't
-// be read, is stale and is taken over.
+// The kernel releases a lock when its holder exits, so there is no stale-lock
+// recovery to get wrong. Lock files are never removed: unlinking a locked file
+// would let the next contender lock a fresh file while the holder still holds
+// the old one.
 package filelock
 
 import (
@@ -18,7 +19,7 @@ import (
 
 // Lock is a held lock. Unlock releases it.
 type Lock struct {
-	path string
+	f *os.File
 }
 
 // HeldError is returned by TryLock when another holder has the lock. PID and
@@ -40,59 +41,36 @@ func (e *HeldError) Error() string {
 // TryLock takes the lock on path without waiting, creating the file if needed.
 // It returns a *HeldError when another holder has the lock.
 func TryLock(path string) (*Lock, error) {
-	return tryLock(path, false)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("opening lock file: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, readHolder(path)
+		}
+		return nil, fmt.Errorf("locking %s: %w", path, err)
+	}
+	recordHolder(f)
+	return &Lock{f: f}, nil
 }
 
-func tryLock(path string, isRetry bool) (*Lock, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-	if err == nil {
-		content := fmt.Sprintf("%d\n%d\n", os.Getpid(), time.Now().Unix())
-		if _, writeErr := f.WriteString(content); writeErr != nil {
-			f.Close()
-			os.Remove(path)
-			return nil, fmt.Errorf("failed to write lock file: %w", writeErr)
-		}
-		f.Close()
-		return &Lock{path: path}, nil
+// recordHolder writes this process as the holder for contenders' messages.
+// The record is informational, so a failure to write it doesn't fail the lock.
+func recordHolder(f *os.File) {
+	if err := f.Truncate(0); err == nil {
+		f.WriteAt(fmt.Appendf(nil, "%d\n%d\n", os.Getpid(), time.Now().Unix()), 0)
 	}
-	if !os.IsExist(err) {
-		return nil, fmt.Errorf("failed to create lock file: %w", err)
-	}
-	// Lock file exists — check if stale.
-	if isRetry {
-		return nil, &HeldError{Path: path}
-	}
-	data, readErr := os.ReadFile(path)
-	if readErr != nil {
-		// Corrupt/unreadable — remove and retry.
-		os.Remove(path)
-		return tryLock(path, true)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) < 2 {
-		os.Remove(path)
-		return tryLock(path, true)
-	}
-	pid, pidErr := strconv.Atoi(lines[0])
-	ts, tsErr := strconv.ParseInt(lines[1], 10, 64)
-	if pidErr != nil || tsErr != nil {
-		os.Remove(path)
-		return tryLock(path, true)
-	}
-	// Check if owning process is still alive.
-	proc, procErr := os.FindProcess(pid)
-	if procErr != nil || proc.Signal(syscall.Signal(0)) != nil {
-		// Process is dead — stale lock.
-		os.Remove(path)
-		return tryLock(path, true)
-	}
-	// Process alive — real contention.
-	return nil, &HeldError{Path: path, PID: pid, Since: time.Unix(ts, 0)}
 }
 
 // Acquire takes the lock on path, retrying every interval while another holder
 // has it. onHeld, when non-nil, is called with each *HeldError seen while
 // waiting. It returns ctx's error if ctx ends first.
+//
+// It polls rather than blocking in flock(2): on macOS a blocked flock can
+// miss the release while other goroutines in the process fork, and wait
+// until the next one.
 func Acquire(ctx context.Context, path string, interval time.Duration, onHeld func(*HeldError)) (*Lock, error) {
 	for {
 		l, err := TryLock(path)
@@ -116,5 +94,27 @@ func (l *Lock) Unlock() error {
 	if l == nil {
 		return nil
 	}
-	return os.Remove(l.path)
+	l.f.Truncate(0) // clear the holder record, the file itself stays
+	return l.f.Close()
+}
+
+// readHolder reads the holder record. The holder may be mid-write, in which
+// case the fields stay zero.
+func readHolder(path string) *HeldError {
+	held := &HeldError{Path: path}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return held
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		return held
+	}
+	pid, pidErr := strconv.Atoi(lines[0])
+	ts, tsErr := strconv.ParseInt(lines[1], 10, 64)
+	if pidErr == nil && tsErr == nil {
+		held.PID = pid
+		held.Since = time.Unix(ts, 0)
+	}
+	return held
 }
