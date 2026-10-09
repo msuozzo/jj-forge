@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,8 +15,10 @@ import (
 	"time"
 
 	"github.com/msuozzo/jj-forge/internal/cmd"
+	"github.com/msuozzo/jj-forge/internal/filelock"
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/jjtest"
 	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
@@ -30,15 +33,17 @@ type mockClient struct {
 	revsFunc func(ctx context.Context, revset string) ([]*jj.Rev, error) // if set, overrides revs
 	root     string
 	gitDir   string
+	cfgPath  string
 	callLog  [][]string
 }
 
-func newMockClient(revs []*jj.Rev) *mockClient {
+func newMockClient(t *testing.T, revs []*jj.Rev) *mockClient {
 	return &mockClient{
-		config: make(map[string]string),
-		revs:   revs,
-		root:   "/fake/repo",
-		gitDir: "/fake/git/dir",
+		config:  make(map[string]string),
+		revs:    revs,
+		root:    "/fake/repo",
+		gitDir:  "/fake/git/dir",
+		cfgPath: filepath.Join(t.TempDir(), "config.toml"),
 	}
 }
 
@@ -46,10 +51,15 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, erro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	args = jjtest.RepoConfigWrite(args)
 	m.callLog = append(m.callLog, args)
 
 	if len(args) < 3 {
 		return nil, fmt.Errorf("unexpected args: %v", args)
+	}
+
+	if slices.Equal(args, []string{"config", "path", "--repo"}) {
+		return &cmd.Result{Stdout: m.cfgPath}, nil
 	}
 
 	if args[0] == "config" && args[1] == "list" {
@@ -121,7 +131,7 @@ func (m *mockClient) GitDir(ctx context.Context) (string, error) {
 func TestRunNoConfig(t *testing.T) {
 	t.Parallel()
 	// No check command configured — should be a no-op.
-	mock := newMockClient([]*jj.Rev{{ID: "c1", CommitID: "abc", IsMutable: true}})
+	mock := newMockClient(t, []*jj.Rev{{ID: "c1", CommitID: "abc", IsMutable: true}})
 	configMgr := forge.NewConfigManager(mock)
 
 	ran := false
@@ -146,7 +156,7 @@ func TestRunPass(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -193,7 +203,7 @@ func TestRunFail(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
@@ -232,7 +242,7 @@ func TestRunFailureOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"false\""
 	configMgr := forge.NewConfigManager(mock)
@@ -275,7 +285,7 @@ func TestRunFailureOutput(t *testing.T) {
 func TestRunSkipCached(t *testing.T) {
 	t.Parallel()
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -311,7 +321,7 @@ func TestRunForceIgnoresCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -350,7 +360,7 @@ func TestRunMultipleRevs(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: true},
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -403,7 +413,7 @@ func TestRunMultipleRevs_CachedSkip(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: true},
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -442,7 +452,7 @@ func TestRunMultipleRevs_MixedResults(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: true},
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -499,7 +509,7 @@ func TestRunMultipleRevs_AllPool(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: true},
 		{ID: "c2", CommitID: "def", IsMutable: true},
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -535,7 +545,7 @@ func TestRunStaleCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "newcommit", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -572,7 +582,7 @@ func TestRunImmutableSkipped(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: false},
 		{ID: "c2", CommitID: "def", IsMutable: false},
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
 
@@ -598,7 +608,7 @@ func TestRunSetsRunningBeforeExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -670,7 +680,7 @@ func TestRunMixedMutability(t *testing.T) {
 		{ID: "c1", CommitID: "abc", IsMutable: true},
 		{ID: "c2", CommitID: "def", IsMutable: false}, // immutable — should be skipped
 	}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -718,7 +728,7 @@ func TestRunDriftCancellation(t *testing.T) {
 	}
 
 	revs := []*jj.Rev{{ID: "c1", CommitID: "abc123", IsMutable: true}}
-	mock := newMockClient(revs)
+	mock := newMockClient(t, revs)
 	mock.root = tmpDir
 	mock.config["check-command"] = "\"echo hello\""
 	configMgr := forge.NewConfigManager(mock)
@@ -752,14 +762,106 @@ func TestRunDriftCancellation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify no verdict was written (drift = skip verdict).
+	// The running verdict written before execution is cleared, and no pass or
+	// fail replaces it.
 	verdict, err := configMgr.GetCheckVerdictByChangeID("c1")
 	if err != nil {
 		t.Fatalf("GetCheckVerdictByChangeID failed: %v", err)
 	}
-	// The "running" verdict was set before execution, but the drift cancellation
-	// should not overwrite it with pass/fail. It stays as "running".
-	if verdict != nil && verdict.Verdict == forge.CheckVerdictPass {
-		t.Errorf("expected no pass verdict for drifted check, got %q", verdict.Verdict)
+	if verdict != nil {
+		t.Errorf("expected no verdict for drifted check, got %v", verdict)
+	}
+}
+
+func TestRunWaitingForLockUsesFreshVerdicts(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	forgeDir := filepath.Join(tmpDir, ".jj", "forge")
+	if err := os.MkdirAll(forgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	revs := []*jj.Rev{
+		{ID: "c1", CommitID: "abc", IsMutable: true},
+		{ID: "c2", CommitID: "def", IsMutable: true},
+	}
+	mock := newMockClient(t, revs)
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	var poolRuns atomic.Int32
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		if strings.Contains(strings.Join(args, " "), "sh -c echo hello") && opts.WorkDir != "" {
+			poolRuns.Add(1)
+		}
+		return &cmd.Result{Stdout: "fake-data"}, nil
+	}
+
+	// Another process holds the check lock.
+	held, err := filelock.TryLock(filepath.Join(forgeDir, lockFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- Run(context.Background(), mock, configMgr, "@-::@", false, runner, testUI) }()
+
+	// Once Run has read the verdicts (after the check command), the other
+	// process passes c1 and stores a verdict for an unrelated change.
+	for {
+		mock.mu.Lock()
+		reads := 0
+		for _, call := range mock.callLog {
+			if slices.Equal(call, []string{"config", "list", "forge"}) {
+				reads++
+			}
+		}
+		mock.mu.Unlock()
+		if reads >= 2 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	other := forge.NewConfigManager(mock)
+	for _, v := range []forge.CheckVerdict{
+		{ChangeID: "c1", Verdict: forge.CheckVerdictPass, CommitID: "abc"},
+		{ChangeID: "c9", Verdict: forge.CheckVerdictPass, CommitID: "zzz"},
+	} {
+		if err := other.SetCheckVerdict(v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held.Unlock()
+
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if n := poolRuns.Load(); n != 1 {
+		t.Errorf("expected only c2 to run, got %d runs", n)
+	}
+	for id, commit := range map[string]string{"c1": "abc", "c2": "def", "c9": "zzz"} {
+		v, err := configMgr.GetCheckVerdictByChangeID(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v == nil || v.Verdict != forge.CheckVerdictPass || v.CommitID != commit {
+			t.Errorf("verdict for %s = %v, want pass for %s", id, v, commit)
+		}
+	}
+}
+
+func TestTakeReady(t *testing.T) {
+	t.Parallel()
+	ch := make(chan int, 4)
+	ch <- 1
+	ch <- 2
+	ch <- 3
+	if got := takeReady(ch, 2); !slices.Equal(got, []int{1, 2}) {
+		t.Errorf("takeReady up to 2 = %v, want [1 2]", got)
+	}
+	if got := takeReady(ch, 10); !slices.Equal(got, []int{3}) {
+		t.Errorf("takeReady with one waiting = %v, want [3]", got)
+	}
+	if got := takeReady(ch, 10); len(got) != 0 {
+		t.Errorf("takeReady with none waiting = %v, want none", got)
 	}
 }

@@ -55,13 +55,17 @@ func TestOpen_Success(t *testing.T) {
 		},
 		// forge: create review
 		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
-		// AddReviewRecord: getForgeConfig is cached from above, no config list needed
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
 		},
 		jjtest.Call{
-			// Verification: SaveRecords invalidated cache, so this re-reads
+			// Verification reads the config
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
@@ -167,7 +171,11 @@ func TestOpen_StripsTrailers(t *testing.T) {
 		},
 		// forge: create review
 		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
-		// AddReviewRecord: getForgeConfig is cached, no config list needed
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -240,7 +248,11 @@ func TestOpen_StackedReview(t *testing.T) {
 		},
 		// forge: create review
 		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-bbbbbbbbbbbb"}},
-		// AddReviewRecord: getForgeConfig is cached, no config list needed
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["bbbbbbbbbbbb\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -517,7 +529,13 @@ func TestOpen_CanReopenClosed(t *testing.T) {
 		},
 		// forge: create review
 		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
-		// AddReviewRecord: getForgeConfig is cached from GetReviewByChangeID above
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/42\nhttps://github.com/owner/repo/pull/42\nclosed"]`
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -596,7 +614,11 @@ func TestOpen_CrossRepo(t *testing.T) {
 		},
 		// forge: create review (cross-repo: fork-owner prefix)
 		jjtest.Call{Args: []string{"forge:CreateReview", "fork-owner:push-aaaaaaaaaaaa"}},
-		// AddReviewRecord: getForgeConfig is cached, no config list needed
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/upstream-owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),
@@ -666,7 +688,11 @@ func TestOpen_PreResolvedUpstreamURL(t *testing.T) {
 		},
 		// forge: create review
 		jjtest.Call{Args: []string{"forge:CreateReview", "owner:push-aaaaaaaaaaaa"}},
-		// AddReviewRecord
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args:   []string{"config", "list", "forge"},
+			Output: jjtest.EmptyOutput(),
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`},
 			Output: jjtest.EmptyOutput(),

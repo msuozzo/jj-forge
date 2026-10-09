@@ -81,25 +81,43 @@ func TestMerge_Success(t *testing.T) {
 			Args:   []string{"abandon", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		// RemoveCheckVerdicts: fresh read under the config lock
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// pruneStaleReviewRecords: getForgeConfig cached from RemoveCheckVerdicts
+		// pruneStaleReviewRecords: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 		// pruneStaleReviewRecords: bulk Revs — change still present, no pruning
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// cleanupLinksAfterMerge: no other open reviews
+		// cleanupLinksAfterMerge: reads the records, no other open reviews
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -214,25 +232,43 @@ func TestMerge_NoCleanup(t *testing.T) {
 		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// No cleanup commands (NoCleanup=true)
-		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		// RemoveCheckVerdicts: fresh read under the config lock
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// pruneStaleReviewRecords: getForgeConfig cached from RemoveCheckVerdicts
+		// pruneStaleReviewRecords: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 		// pruneStaleReviewRecords: bulk Revs — change still present, no pruning
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// cleanupLinksAfterMerge: no other open reviews
+		// cleanupLinksAfterMerge: reads the records, no other open reviews
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())
@@ -687,25 +723,43 @@ func TestMerge_LinkCleanup(t *testing.T) {
 			Args:   []string{"abandon", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// AddReviewRecord (mark merged): getForgeConfig cached from GetReviewByChangeID
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return reviewsConfig
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen", "cccccccccccc\npr/3\nhttps://github.com/owner/repo/pull/3\nopen"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		// RemoveCheckVerdicts: fresh read under the config lock
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return mergedConfig
 			},
 		},
-		// pruneStaleReviewRecords: getForgeConfig cached from RemoveCheckVerdicts (no write)
+		// pruneStaleReviewRecords: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
+		},
 		// pruneStaleReviewRecords: bulk Revs for all records
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "present(aaaaaaaaaaaa)|present(bbbbbbbbbbbb)|present(cccccccccccc)"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa", "bbbbbbbbbbbb", "cccccccccccc"),
 		},
-		// cleanupLinksAfterMerge: getForgeConfig cached from pruneStaleReviewRecords (no write)
+		// cleanupLinksAfterMerge: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
+		},
 		// cleanupLinksAfterMerge: bulk Revs for open reviews
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "bbbbbbbbbbbb|cccccccccccc"},
@@ -889,30 +943,48 @@ func TestMerge_PrunesStaleRecords(t *testing.T) {
 			Args:   []string{"abandon", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// AddReviewRecord (mark merged)
+		// AddReviewRecord (mark merged): fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return reviewsConfig
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged", "bbbbbbbbbbbb\npr/2\nhttps://github.com/owner/repo/pull/2\nopen"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		// RemoveCheckVerdicts: fresh read under the config lock
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return mergedConfig
 			},
 		},
-		// pruneStaleReviewRecords: getForgeConfig cached from RemoveCheckVerdicts
+		// pruneStaleReviewRecords: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
+		},
 		// pruneStaleReviewRecords: bulk Revs for all records — bbbbbbbbbbbb is missing
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "present(aaaaaaaaaaaa)|present(bbbbbbbbbbbb)"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// pruneStaleReviewRecords: SaveRecords to remove bbbbbbbbbbbb
+		// pruneStaleReviewRecords: removes bbbbbbbbbbbb after a fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return mergedConfig
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// cleanupLinksAfterMerge: cache invalidated by pruneStaleReviewRecords SaveRecords, re-reads
+		// cleanupLinksAfterMerge: reads the records
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
@@ -1007,25 +1079,43 @@ func TestMerge_PreResolvedUpstreamURL(t *testing.T) {
 		jjtest.Call{Args: []string{"forge:MergeReview", "1", "aaaaaaaaaaaa0000000000000000000000000000"}},
 		jjtest.Call{Args: []string{"forge:GetReview", "1"}},
 		// No cleanup commands (NoCleanup=true)
-		// AddReviewRecord: getForgeConfig cached from GetReviewByChangeID
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts: cache invalidated by SaveRecords, re-reads
+		// RemoveCheckVerdicts: fresh read under the config lock
 		jjtest.Call{
 			Args: []string{"config", "list", "forge"},
 			Output: func(r *jjtest.FakeRepo) string {
 				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
 			},
 		},
-		// pruneStaleReviewRecords: getForgeConfig cached from RemoveCheckVerdicts
+		// pruneStaleReviewRecords: reads the records
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 		// pruneStaleReviewRecords: bulk Revs — change still present, no pruning
 		jjtest.Call{
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "present(aaaaaaaaaaaa)"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
-		// cleanupLinksAfterMerge: no other open reviews
+		// cleanupLinksAfterMerge: reads the records, no other open reviews
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nmerged"]`
+			},
+		},
 	)
 
 	configMgr := forge.NewConfigManager(scenario.Client())

@@ -70,7 +70,20 @@ func TestClose_Success(t *testing.T) {
 			Args:   []string{"abandon", "aaaaaaaaaaaa"},
 			Output: jjtest.EmptyOutput(),
 		},
-		// RemoveCheckVerdicts + AddReviewRecord: both use cached config from GetReviewByChangeID
+		// RemoveCheckVerdicts: fresh read under the config lock, no verdict to remove
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
+		// AddReviewRecord: fresh read under the config lock
+		jjtest.Call{
+			Args: []string{"config", "list", "forge"},
+			Output: func(r *jjtest.FakeRepo) string {
+				return `forge.reviews = ["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nopen"]`
+			},
+		},
 		jjtest.Call{
 			Args:   []string{"config", "set", "--repo", "forge.reviews", `["aaaaaaaaaaaa\npr/1\nhttps://github.com/owner/repo/pull/1\nclosed"]`},
 			Output: jjtest.EmptyOutput(),

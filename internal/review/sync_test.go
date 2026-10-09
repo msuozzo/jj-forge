@@ -167,6 +167,8 @@ func TestUpdate_SyncsTangledReviewsAfterPush(t *testing.T) {
 			Args:   []string{"log", "--no-graph", "--template", templateMatcher, "-r", "(@) | (parents(@) & mutable()) | (children(@) & mutable())"},
 			Output: jjtest.LogOutput("aaaaaaaaaaaa"),
 		},
+		// UpdatePRLinks: read records
+		configListCall(openRec),
 	)
 	configMgr := forge.NewConfigManager(scenario.Client())
 

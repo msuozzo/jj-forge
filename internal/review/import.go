@@ -98,22 +98,17 @@ func Import(ctx context.Context, jjClient jj.Client, forgeClient forge.Forge, co
 	wg.Wait()
 	close(resultCh)
 
-	finalRecords := make(map[string]forge.ReviewRecord)
-	// Initialize with existing records
-	for k, v := range recordMap {
-		finalRecords[k] = v
-	}
-
 	res := &ImportResult{}
 	var errs []error
+	var changed []forge.ReviewRecord
 
 	for r := range resultCh {
 		if r.Err != nil {
 			errs = append(errs, r.Err)
 			continue
 		}
-		if r.Record != nil {
-			finalRecords[r.Record.ChangeID] = *r.Record
+		if r.Record != nil && (r.Added || r.Updated) {
+			changed = append(changed, *r.Record)
 			if r.Added {
 				res.Added++
 			}
@@ -129,15 +124,19 @@ func Import(ctx context.Context, jjClient jj.Client, forgeClient forge.Forge, co
 		}
 	}
 
-	if res.Added > 0 || res.Updated > 0 {
-		newRecordList := make([]forge.ReviewRecord, 0, len(finalRecords))
-		for _, r := range finalRecords {
-			newRecordList = append(newRecordList, r)
-		}
-		slices.SortFunc(newRecordList, func(a, b forge.ReviewRecord) int {
-			return strings.Compare(a.ChangeID, b.ChangeID)
+	if len(changed) > 0 {
+		// Apply only what changed to a fresh read, so records written by other
+		// processes while the forge was queried survive.
+		err := configMgr.Update(func(s *forge.State) error {
+			for _, rec := range changed {
+				s.SetReview(rec)
+			}
+			slices.SortFunc(s.Reviews, func(a, b forge.ReviewRecord) int {
+				return strings.Compare(a.ChangeID, b.ChangeID)
+			})
+			return nil
 		})
-		if err := configMgr.SaveRecords(newRecordList); err != nil {
+		if err != nil {
 			return nil, fmt.Errorf("failed to save records: %w", err)
 		}
 	}

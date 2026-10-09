@@ -309,18 +309,17 @@ func pruneStaleReviewRecords(
 	for _, rev := range revs {
 		presentIDs[rev.ID] = true
 	}
-	// Remove any missing records.
-	var newRecords []forge.ReviewRecord
-	changed := false
+	var missing []string
 	for _, rec := range records {
-		if presentIDs[rec.ChangeID] {
-			newRecords = append(newRecords, rec)
-		} else {
-			changed = true
+		if !presentIDs[rec.ChangeID] {
+			missing = append(missing, rec.ChangeID)
 		}
 	}
-	if !changed {
+	if len(missing) == 0 {
 		return nil
 	}
-	return configMgr.SaveRecords(newRecords)
+	return configMgr.Update(func(s *forge.State) error {
+		s.RemoveReviews(missing...)
+		return nil
+	})
 }

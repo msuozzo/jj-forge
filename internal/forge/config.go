@@ -92,8 +92,8 @@ func ParseCheckVerdict(s string) (CheckVerdict, error) {
 
 // ConfigManager handles reading and writing jj-forge configuration.
 type ConfigManager struct {
-	client       jj.Client
-	cachedConfig *ForgeConfig
+	client     jj.Client
+	configPath string // repo config file, looked up on first update
 }
 
 // NewConfigManager creates a new ConfigManager.
@@ -101,22 +101,16 @@ func NewConfigManager(client jj.Client) *ConfigManager {
 	return &ConfigManager{client: client}
 }
 
-// getForgeConfig retrieves the entire forge config section.
-// Results are cached for the lifetime of the ConfigManager instance;
-// any write operation invalidates the cache.
+// getForgeConfig reads the forge config section. It is read fresh every
+// time, since other jj-forge processes may have changed it.
 func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
-	if m.cachedConfig != nil {
-		return m.cachedConfig, nil
-	}
 	result, err := m.client.Run(context.Background(), "config", "list", "forge")
 	if err != nil {
 		return nil, err
 	}
 	output := strings.TrimSpace(result.Stdout)
 	if output == "" {
-		cfg := &ForgeConfig{}
-		m.cachedConfig = cfg
-		return cfg, nil
+		return &ForgeConfig{}, nil
 	}
 	var wrapper struct {
 		ForgeConfig `toml:"forge,omitempty"`
@@ -124,99 +118,41 @@ func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
 	if err := toml.Unmarshal([]byte(output), &wrapper); err != nil {
 		return nil, fmt.Errorf("failed to parse forge config: %w", err)
 	}
-	m.cachedConfig = &wrapper.ForgeConfig
-	return m.cachedConfig, nil
+	return &wrapper.ForgeConfig, nil
 }
 
-// invalidateCache clears the cached config, forcing the next read to
-// fetch from the jj config store.
-func (m *ConfigManager) invalidateCache() {
-	m.cachedConfig = nil
-}
-
-// GetReviewRecords retrieves all forge review records from the config.
-func (m *ConfigManager) GetReviewRecords() ([]ReviewRecord, error) {
+// readState reads the review records and check verdicts.
+func (m *ConfigManager) readState() (*State, error) {
 	cfg, err := m.getForgeConfig()
 	if err != nil {
 		return nil, err
 	}
-	var records []ReviewRecord
-	for _, s := range cfg.Reviews {
-		rec, err := ParseReviewRecord(s)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, rec)
+	return parseState(cfg)
+}
+
+// GetReviewRecords retrieves all forge review records from the config.
+func (m *ConfigManager) GetReviewRecords() ([]ReviewRecord, error) {
+	state, err := m.readState()
+	if err != nil {
+		return nil, err
 	}
-	return records, nil
+	return state.Reviews, nil
 }
 
 // AddReviewRecord adds or updates a forge review record in the config.
 func (m *ConfigManager) AddReviewRecord(rec ReviewRecord) error {
-	records, err := m.GetReviewRecords()
-	if err != nil {
-		return err
-	}
-	found := false
-	for i, r := range records {
-		if r.ChangeID == rec.ChangeID {
-			records[i] = rec
-			found = true
-			break
-		}
-	}
-	if !found {
-		records = append(records, rec)
-	}
-	return m.SaveRecords(records)
+	return m.Update(func(s *State) error {
+		s.SetReview(rec)
+		return nil
+	})
 }
 
 // RemoveReviewRecord removes a forge review record from the config by ChangeID.
 func (m *ConfigManager) RemoveReviewRecord(changeID string) error {
-	records, err := m.GetReviewRecords()
-	if err != nil {
-		return err
-	}
-	var nextRecords []ReviewRecord
-	for _, r := range records {
-		if r.ChangeID != changeID {
-			nextRecords = append(nextRecords, r)
-		}
-	}
-	if len(nextRecords) == len(records) {
-		return nil // Not found, nothing to do
-	}
-	return m.SaveRecords(nextRecords)
-}
-
-// SaveRecords saves the list of review records to the config.
-func (m *ConfigManager) SaveRecords(records []ReviewRecord) error {
-	// Convert records to strings
-	var reviewsRaw []string
-	for _, r := range records {
-		reviewsRaw = append(reviewsRaw, r.String())
-	}
-	// Marshal as TOML array
-	var wrapper struct {
-		Reviews []string `toml:"reviews"`
-	}
-	wrapper.Reviews = reviewsRaw
-	tomlBytes, err := toml.Marshal(wrapper)
-	if err != nil {
-		return err
-	}
-	// Extract just the array value part from "reviews = [...]"
-	tomlStr := string(tomlBytes)
-	// Find the array part
-	startIdx := strings.Index(tomlStr, "[")
-	if startIdx == -1 {
-		return fmt.Errorf("unexpected TOML format")
-	}
-	arrayValue := strings.TrimSpace(tomlStr[startIdx:])
-	// Use jj config set to write the value
-	_, err = m.client.Run(context.Background(), "config", "set", "--repo", "forge.reviews", arrayValue)
-	m.invalidateCache()
-	return err
+	return m.Update(func(s *State) error {
+		s.RemoveReviews(changeID)
+		return nil
+	})
 }
 
 // GetReviewByChangeID finds a review record by change ID.
@@ -301,123 +237,45 @@ func (m *ConfigManager) GetToolCommand(name string) (string, error) {
 
 // GetCheckVerdicts retrieves all stored check verdicts from the config.
 func (m *ConfigManager) GetCheckVerdicts() ([]CheckVerdict, error) {
-	cfg, err := m.getForgeConfig()
+	state, err := m.readState()
 	if err != nil {
 		return nil, err
 	}
-	var verdicts []CheckVerdict
-	for _, s := range cfg.Checks {
-		v, err := ParseCheckVerdict(s)
-		if err != nil {
-			return nil, err
-		}
-		verdicts = append(verdicts, v)
-	}
-	return verdicts, nil
+	return state.Checks, nil
 }
 
 // SetCheckVerdict adds or updates a check verdict in the config (upsert by ChangeID).
 func (m *ConfigManager) SetCheckVerdict(v CheckVerdict) error {
-	verdicts, err := m.GetCheckVerdicts()
-	if err != nil {
-		return err
-	}
-	found := false
-	for i, existing := range verdicts {
-		if existing.ChangeID == v.ChangeID {
-			verdicts[i] = v
-			found = true
-			break
-		}
-	}
-	if !found {
-		verdicts = append(verdicts, v)
-	}
-	return m.saveVerdicts(verdicts)
+	return m.SetCheckVerdicts([]CheckVerdict{v})
 }
 
-// SetCheckVerdicts adds or updates multiple check verdicts in one batch (single read + single write).
+// SetCheckVerdicts adds or updates multiple check verdicts in one update.
 func (m *ConfigManager) SetCheckVerdicts(updates []CheckVerdict) error {
-	verdicts, err := m.GetCheckVerdicts()
-	if err != nil {
-		return err
-	}
-	for _, u := range updates {
-		found := false
-		for i, existing := range verdicts {
-			if existing.ChangeID == u.ChangeID {
-				verdicts[i] = u
-				found = true
-				break
-			}
+	return m.Update(func(s *State) error {
+		for _, v := range updates {
+			s.SetCheck(v)
 		}
-		if !found {
-			verdicts = append(verdicts, u)
-		}
-	}
-	return m.saveVerdicts(verdicts)
+		return nil
+	})
 }
 
 // RemoveCheckVerdicts removes check verdicts for the given change IDs.
 // It is a no-op if none of the change IDs are found.
 func (m *ConfigManager) RemoveCheckVerdicts(changeIDs []string) error {
-	verdicts, err := m.GetCheckVerdicts()
-	if err != nil {
-		return err
-	}
-	removeSet := make(map[string]bool, len(changeIDs))
-	for _, id := range changeIDs {
-		removeSet[id] = true
-	}
-	var nextVerdicts []CheckVerdict
-	for _, v := range verdicts {
-		if !removeSet[v.ChangeID] {
-			nextVerdicts = append(nextVerdicts, v)
-		}
-	}
-	if len(nextVerdicts) == len(verdicts) {
-		return nil // Nothing to remove
-	}
-	return m.saveVerdicts(nextVerdicts)
+	return m.Update(func(s *State) error {
+		s.RemoveChecks(changeIDs...)
+		return nil
+	})
 }
 
 // GetCheckVerdictByChangeID finds a check verdict by change ID.
 // Returns nil if no verdict is found.
 func (m *ConfigManager) GetCheckVerdictByChangeID(changeID string) (*CheckVerdict, error) {
-	verdicts, err := m.GetCheckVerdicts()
+	state, err := m.readState()
 	if err != nil {
 		return nil, err
 	}
-	for _, v := range verdicts {
-		if v.ChangeID == changeID {
-			return &v, nil
-		}
-	}
-	return nil, nil
-}
-
-func (m *ConfigManager) saveVerdicts(verdicts []CheckVerdict) error {
-	var checksRaw []string
-	for _, v := range verdicts {
-		checksRaw = append(checksRaw, v.String())
-	}
-	var wrapper struct {
-		Checks []string `toml:"checks"`
-	}
-	wrapper.Checks = checksRaw
-	tomlBytes, err := toml.Marshal(wrapper)
-	if err != nil {
-		return err
-	}
-	tomlStr := string(tomlBytes)
-	startIdx := strings.Index(tomlStr, "[")
-	if startIdx == -1 {
-		return fmt.Errorf("unexpected TOML format")
-	}
-	arrayValue := strings.TrimSpace(tomlStr[startIdx:])
-	_, err = m.client.Run(context.Background(), "config", "set", "--repo", "forge.checks", arrayValue)
-	m.invalidateCache()
-	return err
+	return state.Check(changeID), nil
 }
 
 // Get returns the value of a jj config key, and "" if it is unset.

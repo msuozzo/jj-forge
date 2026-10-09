@@ -92,6 +92,7 @@ func TestImport_UpdateExisting(t *testing.T) {
 		importRemoteListCall(),
 		configListCall(openRec),
 		importLogCall("@", "aaaaaaaaaaaa"),
+		configListCall(openRec), // fresh read under the config lock
 		configSetCall(mergedRec),
 	)
 
@@ -158,6 +159,7 @@ func TestImport_DiscoverNew(t *testing.T) {
 				importRemoteListCall(),
 				configListCall(),
 				importLogCall("@", changeID),
+				configListCall(), // fresh read under the config lock
 				configSetCall(newRec),
 			)
 

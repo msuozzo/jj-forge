@@ -3,6 +3,8 @@ package forge
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 
@@ -16,12 +18,14 @@ type mockClient struct {
 	jj.Client
 	mu      sync.Mutex
 	config  map[string]string
+	cfgPath string
 	callLog [][]string
 }
 
-func newMockClient() *mockClient {
+func newMockClient(t *testing.T) *mockClient {
 	return &mockClient{
-		config: make(map[string]string),
+		config:  make(map[string]string),
+		cfgPath: filepath.Join(t.TempDir(), "config.toml"),
 	}
 }
 
@@ -29,10 +33,15 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, erro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	args = repoConfigWrite(args)
 	m.callLog = append(m.callLog, args)
 
 	if len(args) < 3 {
 		return nil, fmt.Errorf("unexpected args: %v", args)
+	}
+
+	if slices.Equal(args, []string{"config", "path", "--repo"}) {
+		return &cmd.Result{Stdout: m.cfgPath}, nil
 	}
 
 	if args[0] == "config" && args[1] == "list" {
@@ -75,6 +84,16 @@ func (m *mockClient) Run(ctx context.Context, args ...string) (*cmd.Result, erro
 	}
 
 	return nil, fmt.Errorf("unexpected command: %v", args)
+}
+
+// repoConfigWrite rewrites the jj call Update makes to set a key in its copy
+// of the repo config as the "config set --repo KEY VALUE" it stands for. It
+// mirrors jjtest.RepoConfigWrite, which this package's tests can't import.
+func repoConfigWrite(args []string) []string {
+	if len(args) == 8 && args[0] == "--config-file" && slices.Equal(args[2:5], []string{"config", "set", "--file"}) && args[5] == args[1] {
+		return []string{"config", "set", "--repo", args[6], args[7]}
+	}
+	return args
 }
 
 func (m *mockClient) Rev(ctx context.Context, rev string) (*jj.Rev, error) {
@@ -135,7 +154,7 @@ func TestParseReviewRecord(t *testing.T) {
 }
 
 func TestConfigManager(t *testing.T) {
-	mock := newMockClient()
+	mock := newMockClient(t)
 	mgr := NewConfigManager(mock)
 
 	rec1 := ReviewRecord{ChangeID: "c1", ForgeID: "f1", URL: "u1", Status: "s1"}
@@ -196,7 +215,7 @@ func TestConfigManager(t *testing.T) {
 
 func TestGetDefaultReviewer(t *testing.T) {
 	// Test: no config
-	mock1 := newMockClient()
+	mock1 := newMockClient(t)
 	mgr1 := NewConfigManager(mock1)
 	reviewer, err := mgr1.GetDefaultReviewer()
 	if err != nil {
@@ -207,7 +226,7 @@ func TestGetDefaultReviewer(t *testing.T) {
 	}
 
 	// Test: config with default-reviewer
-	mock2 := newMockClient()
+	mock2 := newMockClient(t)
 	mock2.config["default-reviewer"] = "\"test-reviewer\""
 	mgr2 := NewConfigManager(mock2)
 	reviewer, err = mgr2.GetDefaultReviewer()
@@ -219,7 +238,7 @@ func TestGetDefaultReviewer(t *testing.T) {
 	}
 
 	// Test: config without default-reviewer (empty)
-	mock3 := newMockClient()
+	mock3 := newMockClient(t)
 	mgr3 := NewConfigManager(mock3)
 	reviewer, err = mgr3.GetDefaultReviewer()
 	if err != nil {
@@ -232,7 +251,7 @@ func TestGetDefaultReviewer(t *testing.T) {
 
 func TestGetCheckCommand(t *testing.T) {
 	// Test: no config
-	mock1 := newMockClient()
+	mock1 := newMockClient(t)
 	mgr1 := NewConfigManager(mock1)
 	cmd, err := mgr1.GetCheckCommand()
 	if err != nil {
@@ -243,7 +262,7 @@ func TestGetCheckCommand(t *testing.T) {
 	}
 
 	// Test: config with check-command
-	mock2 := newMockClient()
+	mock2 := newMockClient(t)
 	mock2.config["check-command"] = "\"echo hello\""
 	mgr2 := NewConfigManager(mock2)
 	cmd, err = mgr2.GetCheckCommand()
@@ -257,7 +276,7 @@ func TestGetCheckCommand(t *testing.T) {
 
 func TestGetToolCommand(t *testing.T) {
 	// Test: no config returns default name
-	mock1 := newMockClient()
+	mock1 := newMockClient(t)
 	mgr1 := NewConfigManager(mock1)
 	cmd, err := mgr1.GetToolCommand("gh")
 	if err != nil {
@@ -268,7 +287,7 @@ func TestGetToolCommand(t *testing.T) {
 	}
 
 	// Test: custom config returns custom command
-	mock2 := newMockClient()
+	mock2 := newMockClient(t)
 	mock2.config["tools"] = `{ gh = "gh-custom" }`
 	mgr2 := NewConfigManager(mock2)
 	cmd, err = mgr2.GetToolCommand("gh")
@@ -290,7 +309,7 @@ func TestGetToolCommand(t *testing.T) {
 }
 
 func TestCheckVerdictCRUD(t *testing.T) {
-	mock := newMockClient()
+	mock := newMockClient(t)
 	mgr := NewConfigManager(mock)
 
 	v1 := CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "abc123"}
@@ -398,7 +417,7 @@ func TestParseCheckVerdict(t *testing.T) {
 
 func TestRemoveCheckVerdicts(t *testing.T) {
 	t.Run("remove single from multiple", func(t *testing.T) {
-		mock := newMockClient()
+		mock := newMockClient(t)
 		mgr := NewConfigManager(mock)
 
 		// Add 3 verdicts
@@ -432,7 +451,7 @@ func TestRemoveCheckVerdicts(t *testing.T) {
 	})
 
 	t.Run("remove multiple at once", func(t *testing.T) {
-		mock := newMockClient()
+		mock := newMockClient(t)
 		mgr := NewConfigManager(mock)
 
 		for _, v := range []CheckVerdict{
@@ -462,7 +481,7 @@ func TestRemoveCheckVerdicts(t *testing.T) {
 	})
 
 	t.Run("no-op when not found", func(t *testing.T) {
-		mock := newMockClient()
+		mock := newMockClient(t)
 		mgr := NewConfigManager(mock)
 
 		if err := mgr.SetCheckVerdict(CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "aaa"}); err != nil {
@@ -499,7 +518,7 @@ func TestRemoveCheckVerdicts(t *testing.T) {
 }
 
 func TestSetCheckVerdictsBatch(t *testing.T) {
-	mock := newMockClient()
+	mock := newMockClient(t)
 	mgr := NewConfigManager(mock)
 
 	// Pre-populate one verdict.
@@ -567,78 +586,39 @@ func TestSetCheckVerdictsBatch(t *testing.T) {
 	}
 }
 
-func TestConfigCaching(t *testing.T) {
-	t.Run("multiple reads use single subprocess call", func(t *testing.T) {
-		mock := newMockClient()
-		mock.config["default-reviewer"] = "\"alice\""
-		mock.config["check-command"] = "\"make test\""
-		mgr := NewConfigManager(mock)
-
-		// Multiple reads should result in a single config list call.
-		if _, err := mgr.GetDefaultReviewer(); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := mgr.GetCheckCommand(); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := mgr.GetReviewRecords(); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := mgr.GetCheckVerdicts(); err != nil {
-			t.Fatal(err)
-		}
-
-		mock.mu.Lock()
-		defer mock.mu.Unlock()
-		var listCalls int
-		for _, call := range mock.callLog {
-			if len(call) >= 2 && call[0] == "config" && call[1] == "list" {
-				listCalls++
-			}
-		}
-		if listCalls != 1 {
-			t.Errorf("expected 1 config list call (cached), got %d", listCalls)
-		}
-	})
-
-	t.Run("write invalidates cache", func(t *testing.T) {
-		mock := newMockClient()
-		mgr := NewConfigManager(mock)
-
-		// First read populates the cache.
-		if _, err := mgr.GetReviewRecords(); err != nil {
-			t.Fatal(err)
-		}
-
-		// Write invalidates the cache.
-		if err := mgr.AddReviewRecord(ReviewRecord{ChangeID: "c1", ForgeID: "f1", URL: "u1", Status: "s1"}); err != nil {
-			t.Fatal(err)
-		}
-
-		// Next read should re-fetch from subprocess.
-		if _, err := mgr.GetReviewRecords(); err != nil {
-			t.Fatal(err)
-		}
-
-		mock.mu.Lock()
-		defer mock.mu.Unlock()
-		var listCalls int
-		for _, call := range mock.callLog {
-			if len(call) >= 2 && call[0] == "config" && call[1] == "list" {
-				listCalls++
-			}
-		}
-		// 1 initial read + 1 read inside AddReviewRecord + 1 post-write read = 3
-		// But with caching: 1 initial + 0 (AddReviewRecord uses cache) + 1 (cache invalidated by write) = 2
-		if listCalls != 2 {
-			t.Errorf("expected 2 config list calls (cache invalidated by write), got %d", listCalls)
-		}
-	})
+func TestConfigReadsAreFresh(t *testing.T) {
+	// Two managers over one config stand in for two jj-forge processes. Each
+	// read must see the other's writes.
+	mock := newMockClient(t)
+	a, b := NewConfigManager(mock), NewConfigManager(mock)
+	if _, err := a.GetCheckVerdicts(); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetCheckVerdict(CheckVerdict{ChangeID: "c1", Verdict: CheckVerdictPass, CommitID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.GetCheckVerdictByChangeID("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Verdict != CheckVerdictPass {
+		t.Errorf("GetCheckVerdictByChangeID(c1) = %v, want the pass b wrote", got)
+	}
+	if err := a.SetCheckVerdict(CheckVerdict{ChangeID: "c2", Verdict: CheckVerdictFail, CommitID: "y"}); err != nil {
+		t.Fatal(err)
+	}
+	all, err := b.GetCheckVerdicts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Errorf("GetCheckVerdicts() = %v, want both verdicts", all)
+	}
 }
 
 func TestGetHosts(t *testing.T) {
 	// Test: no config
-	mock1 := newMockClient()
+	mock1 := newMockClient(t)
 	mgr1 := NewConfigManager(mock1)
 	hosts, err := mgr1.GetHosts()
 	if err != nil {
@@ -649,7 +629,7 @@ func TestGetHosts(t *testing.T) {
 	}
 
 	// Test: config with custom host mapping
-	mock2 := newMockClient()
+	mock2 := newMockClient(t)
 	mock2.config["hosts"] = `{ "github.example.com" = "github", "gitlab.example.com" = "gitlab" }`
 	mgr2 := NewConfigManager(mock2)
 	hosts, err = mgr2.GetHosts()
@@ -667,7 +647,7 @@ func TestGetHosts(t *testing.T) {
 
 func TestGetDefaultRemotes(t *testing.T) {
 	// Unset keys fall back to the built-in names.
-	mgr := NewConfigManager(newMockClient())
+	mgr := NewConfigManager(newMockClient(t))
 	remote, err := mgr.GetDefaultRemote()
 	if err != nil {
 		t.Fatalf("GetDefaultRemote failed: %v", err)
@@ -681,7 +661,7 @@ func TestGetDefaultRemotes(t *testing.T) {
 	}
 
 	// Set keys are returned as is.
-	mock := newMockClient()
+	mock := newMockClient(t)
 	mock.config["default-remote"] = `"og"`
 	mock.config["default-upstream-remote"] = `"up"`
 	mgr = NewConfigManager(mock)

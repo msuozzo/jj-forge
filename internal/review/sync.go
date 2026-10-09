@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/msuozzo/jj-forge/internal/forge"
 	"github.com/msuozzo/jj-forge/internal/ui"
@@ -27,15 +28,17 @@ func SyncReviews(
 	if !ok || len(changeIDs) == 0 {
 		return 0, nil
 	}
+	records, err := configMgr.GetReviewRecords()
+	if err != nil {
+		return 0, fmt.Errorf("failed to read config: %w", err)
+	}
 	synced := 0
 	for _, changeID := range changeIDs {
-		rec, err := configMgr.GetReviewByChangeID(changeID)
-		if err != nil {
-			return synced, fmt.Errorf("failed to read config: %w", err)
-		}
-		if rec == nil || rec.Status != forge.ReviewStateOpen {
+		i := slices.IndexFunc(records, func(r forge.ReviewRecord) bool { return r.ChangeID == changeID })
+		if i == -1 || records[i].Status != forge.ReviewStateOpen {
 			continue
 		}
+		rec := records[i]
 		reviewID, err := forgeClient.ParseID(rec.ForgeID)
 		if err != nil {
 			return synced, fmt.Errorf("invalid review ID %s: %w", rec.ForgeID, err)

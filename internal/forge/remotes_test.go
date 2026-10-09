@@ -31,7 +31,7 @@ func TestResolveRemotes(t *testing.T) {
 		upstream string
 		remotes  string // jj git remote list output
 		push     string // git.push, "" for unset (read when fork is empty)
-		config   string // jj config list forge output (read when either is empty)
+		config   string // jj config list forge output (read for each remote resolved)
 		trunk    string // trunk() alias (read when upstream is empty)
 		want     forge.Remotes
 	}{
@@ -102,14 +102,12 @@ func TestResolveRemotes(t *testing.T) {
 			if tt.fork == "" || tt.upstream == "" {
 				calls = append(calls, jjtest.Call{Args: []string{"git", "remote", "list"}, Output: jjtest.Output(tt.remotes)})
 			}
+			listForge := jjtest.Call{Args: []string{"config", "list", "forge"}, Output: jjtest.Output(tt.config)}
 			if tt.fork == "" {
-				calls = append(calls, configGet(jj.GitPushKey, tt.push))
-			}
-			if tt.fork == "" || tt.upstream == "" {
-				calls = append(calls, jjtest.Call{Args: []string{"config", "list", "forge"}, Output: jjtest.Output(tt.config)})
+				calls = append(calls, configGet(jj.GitPushKey, tt.push), listForge)
 			}
 			if tt.upstream == "" {
-				calls = append(calls, configGet(jj.TrunkAliasKey, tt.trunk))
+				calls = append(calls, listForge, configGet(jj.TrunkAliasKey, tt.trunk))
 			}
 			scenario := jjtest.NewScenario(t, jjtest.NewFakeRepo(), calls...)
 			client := scenario.Client()

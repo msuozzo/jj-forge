@@ -53,8 +53,10 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if len(revs) == 0 {
 		return nil
 	}
-	// Filter out revisions with cached passing verdicts (batch)
-	toCheck := filterCached(revs, configMgr, force)
+	// Filter out revisions with cached passing verdicts. On a read error,
+	// check everything.
+	verdicts, _ := configMgr.GetCheckVerdicts()
+	toCheck := filterCached(revs, verdicts, force)
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
@@ -86,38 +88,41 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		tracker.SetMessage(i, "")
 	}
 
-	// Re-filter after lock acquisition: the previous holder may have completed
-	// some checks while we waited.
-	toCheck = filterCached(toCheck, configMgr, force)
+	// The previous holder may have passed some of these while we waited. Drop
+	// those and mark the rest running in one update, so no other process's
+	// verdict lands in between.
+	queued := toCheck
+	err = configMgr.Update(func(s *forge.State) error {
+		toCheck = filterCached(queued, s.Checks, force)
+		for _, rev := range toCheck {
+			s.SetCheck(forge.CheckVerdict{
+				ChangeID: rev.ID,
+				Verdict:  forge.CheckVerdictRunning,
+				CommitID: rev.CommitID,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		tracker.Finish()
+		return fmt.Errorf("failed to set running verdicts: %w", err)
+	}
+	for _, rev := range queued {
+		if !slices.Contains(toCheck, rev) {
+			tracker.SetStatus(revIndex[rev.ID], ui.TaskDone)
+		}
+	}
 	if len(toCheck) == 0 {
 		tracker.Finish()
 		return nil
-	}
-	// Write "running" verdicts before starting execution.
-	var runningVerdicts []forge.CheckVerdict
-	for _, rev := range toCheck {
-		runningVerdicts = append(runningVerdicts, forge.CheckVerdict{
-			ChangeID: rev.ID,
-			Verdict:  forge.CheckVerdictRunning,
-			CommitID: rev.CommitID,
-		})
-	}
-	if err := configMgr.SetCheckVerdicts(runningVerdicts); err != nil {
-		return fmt.Errorf("failed to set running verdicts: %w", err)
 	}
 	outstanding := slices.Clone(toCheck)
 	defer func() {
 		if ctx.Err() == nil {
 			return
 		}
-		// Remove verdicts for checks that haven't yet completed.
-		var ids []string
-		for _, rev := range outstanding {
-			ids = append(ids, rev.ID)
-		}
-		if len(ids) > 0 {
-			configMgr.RemoveCheckVerdicts(ids)
-		}
+		// Clear the running verdicts of checks that didn't finish.
+		clearRunning(configMgr, outstanding)
 	}()
 	// Initialize pool.
 	gitDir, err := client.GitDir(ctx)
@@ -216,42 +221,66 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		}
 	}()
 
-	// Store verdicts as they arrive and collect errors.
+	// Store verdicts as they arrive and collect errors. Results that arrive
+	// together are stored in one update, so a run of quick checks doesn't
+	// hold the config lock back to back.
 	var failures []string
-	for range len(toCheck) {
-		r := <-resultCh
-		// Context cancellation means drift (or parent cancellation) — skip verdict.
-		if r.err != nil && errors.Is(r.err, context.Canceled) {
-			tracker.SetStatus(revIndex[r.rev.ID], ui.TaskSkipped)
-			continue
+	for remaining := len(toCheck); remaining > 0; {
+		// The receive runs before takeReady, waiting for at least one result.
+		batch := append([]result{<-resultCh}, takeReady(resultCh, remaining-1)...)
+		remaining -= len(batch)
+
+		var verdicts []forge.CheckVerdict
+		var drifted []*jj.Rev
+		var settled []string // changes no longer outstanding
+		for _, r := range batch {
+			// Context cancellation means drift (or parent cancellation) — skip verdict.
+			if r.err != nil && errors.Is(r.err, context.Canceled) {
+				tracker.SetStatus(revIndex[r.rev.ID], ui.TaskSkipped)
+				if ctx.Err() == nil {
+					// Drift. The parent's cancellation is cleaned up on return.
+					drifted = append(drifted, r.rev)
+					settled = append(settled, r.rev.ID)
+				}
+				continue
+			}
+			verdictStr := forge.CheckVerdictPass
+			taskStatus := ui.TaskDone
+			if r.err != nil {
+				verdictStr = forge.CheckVerdictFail
+				taskStatus = ui.TaskFailed
+			}
+			tracker.SetStatus(revIndex[r.rev.ID], taskStatus)
+			verdicts = append(verdicts, forge.CheckVerdict{
+				ChangeID: r.rev.ID,
+				Verdict:  verdictStr,
+				CommitID: r.rev.CommitID,
+			})
+			settled = append(settled, r.rev.ID)
+			if r.err != nil {
+				msg := fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID)
+				var execErr *cmd.ExecError
+				if errors.As(r.err, &execErr) && execErr.Stderr != "" {
+					msg += "\n" + ui.Indent(strings.TrimSpace(execErr.Stderr), 2)
+				}
+				failures = append(failures, msg)
+			}
 		}
-		verdictStr := forge.CheckVerdictPass
-		taskStatus := ui.TaskDone
-		if r.err != nil {
-			verdictStr = forge.CheckVerdictFail
-			taskStatus = ui.TaskFailed
-		}
-		tracker.SetStatus(revIndex[r.rev.ID], taskStatus)
-		if err := configMgr.SetCheckVerdict(forge.CheckVerdict{
-			ChangeID: r.rev.ID,
-			Verdict:  verdictStr,
-			CommitID: r.rev.CommitID,
-		}); err != nil {
+		err := configMgr.Update(func(s *forge.State) error {
+			for _, v := range verdicts {
+				s.SetCheck(v)
+			}
+			clearRunningIn(s, drifted)
+			return nil
+		})
+		if err != nil {
 			tracker.Finish()
 			watchCancel()
 			return fmt.Errorf("failed to store check verdict: %w", err)
 		}
 		outstanding = slices.DeleteFunc(outstanding, func(rev *jj.Rev) bool {
-			return rev.ID == r.rev.ID
+			return slices.Contains(settled, rev.ID)
 		})
-		if r.err != nil {
-			msg := fmt.Sprintf("%s (%s)", r.rev.ID, r.rev.CommitID)
-			var execErr *cmd.ExecError
-			if errors.As(r.err, &execErr) && execErr.Stderr != "" {
-				msg += "\n" + ui.Indent(strings.TrimSpace(execErr.Stderr), 2)
-			}
-			failures = append(failures, msg)
-		}
 	}
 	tracker.Finish()
 	watchCancel()
@@ -267,13 +296,9 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 // filterCached returns the subset of revs that need checking. When force is
 // true all revs are returned. Otherwise, revisions with a cached passing
 // verdict whose commit ID matches are filtered out.
-func filterCached(revs []*jj.Rev, configMgr *forge.ConfigManager, force bool) []*jj.Rev {
+func filterCached(revs []*jj.Rev, verdicts []forge.CheckVerdict, force bool) []*jj.Rev {
 	if force {
 		return revs
-	}
-	verdicts, err := configMgr.GetCheckVerdicts()
-	if err != nil {
-		return revs // on error, check everything
 	}
 	var toCheck []*jj.Rev
 	for _, rev := range revs {
@@ -288,6 +313,44 @@ func filterCached(revs []*jj.Rev, configMgr *forge.ConfigManager, force bool) []
 		toCheck = append(toCheck, rev)
 	}
 	return toCheck
+}
+
+// takeReady returns up to atMost values already waiting on ch, without
+// blocking.
+func takeReady[T any](ch <-chan T, atMost int) []T {
+	var taken []T
+	for len(taken) < atMost {
+		select {
+		case v := <-ch:
+			taken = append(taken, v)
+		default:
+			return taken
+		}
+	}
+	return taken
+}
+
+// clearRunning removes the running verdicts this run wrote for revs. Errors
+// are ignored, since a leftover running verdict only shows as ci/~ until the
+// next check.
+func clearRunning(configMgr *forge.ConfigManager, revs []*jj.Rev) {
+	if len(revs) == 0 {
+		return
+	}
+	configMgr.Update(func(s *forge.State) error {
+		clearRunningIn(s, revs)
+		return nil
+	})
+}
+
+// clearRunningIn removes the running verdicts this run wrote for revs from s.
+// A verdict that has since changed belongs to someone else and is kept.
+func clearRunningIn(s *forge.State, revs []*jj.Rev) {
+	for _, rev := range revs {
+		if v := s.Check(rev.ID); v != nil && v.Verdict == forge.CheckVerdictRunning && v.CommitID == rev.CommitID {
+			s.RemoveChecks(rev.ID)
+		}
+	}
 }
 
 func runInDir(ctx context.Context, pool *WorkPool, runner cmd.Executor, wd *WorkDir, commitID, checkCmd string) error {

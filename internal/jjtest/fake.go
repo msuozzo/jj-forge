@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -71,11 +72,16 @@ type Call struct {
 }
 
 // Scenario implements an executor that validates calls against expected sequence.
+//
+// Repo config writes by forge.ConfigManager.Update are recorded as the
+// "config set --repo KEY VALUE" they stand for, and "config path --repo" is
+// answered with a file in a temporary directory without consuming a call.
 type Scenario struct {
-	T     *testing.T
-	Repo  *FakeRepo
-	Calls []Call
-	idx   int
+	T         *testing.T
+	Repo      *FakeRepo
+	Calls     []Call
+	idx       int
+	configDir string
 }
 
 // NewScenario creates a scenario for testing.
@@ -97,6 +103,13 @@ func (s *Scenario) Executor() cmd.Executor {
 		if len(cmdArgs) > 1 && cmdArgs[0] == "-R" {
 			cmdArgs = cmdArgs[2:]
 		}
+		if slices.Equal(cmdArgs, []string{"config", "path", "--repo"}) {
+			if s.configDir == "" {
+				s.configDir = s.T.TempDir()
+			}
+			return &cmd.Result{Stdout: filepath.Join(s.configDir, "config.toml") + "\n"}, nil
+		}
+		cmdArgs = RepoConfigWrite(cmdArgs)
 
 		if s.idx >= len(s.Calls) {
 			s.T.Fatalf("unexpected call: jj %v", cmdArgs)
@@ -123,6 +136,19 @@ func (s *Scenario) Executor() cmd.Executor {
 		}
 		return &cmd.Result{Stdout: stdout}, nil
 	}
+}
+
+// RepoConfigWrite rewrites the jj call forge.ConfigManager.Update makes to set
+// a key in its copy of the repo config,
+//
+//	--config-file TMP config set --file TMP KEY VALUE
+//
+// as "config set --repo KEY VALUE". Other calls are returned unchanged.
+func RepoConfigWrite(args []string) []string {
+	if len(args) == 8 && args[0] == "--config-file" && slices.Equal(args[2:5], []string{"config", "set", "--file"}) && args[5] == args[1] {
+		return []string{"config", "set", "--repo", args[6], args[7]}
+	}
+	return args
 }
 
 // Verify checks that all expected calls were made.

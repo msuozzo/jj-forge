@@ -156,6 +156,7 @@ func TestSubmit_DefaultTarget(t *testing.T) {
 					jjtest.Call{Args: []string{"git", "remote", "list"}, Output: jjtest.Output(tt.remotes)},
 					configGet(jj.GitPushKey, tt.push),
 					jjtest.Call{Args: []string{"config", "list", "forge"}},
+					jjtest.Call{Args: []string{"config", "list", "forge"}},
 					configGet(jj.TrunkAliasKey, tt.trunk),
 				)
 			}
