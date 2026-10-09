@@ -2,8 +2,7 @@ package detach
 
 import (
 	"os"
-	"path/filepath"
-	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -45,102 +44,28 @@ func TestRewriteArgs_DoesNotMutateInput(t *testing.T) {
 	}
 }
 
-func TestReadLivePID_NoFile(t *testing.T) {
-	pid, alive := readLivePID(filepath.Join(t.TempDir(), "nope.pid"))
-	if alive {
-		t.Errorf("expected not alive for missing file, got pid %d", pid)
-	}
-}
-
-func TestReadLivePID_CorruptFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.pid")
-	os.WriteFile(path, []byte("not-a-number\n"), 0644)
-
-	pid, alive := readLivePID(path)
-	if alive {
-		t.Errorf("expected not alive for corrupt file, got pid %d", pid)
-	}
-}
-
-func TestReadLivePID_DeadProcess(t *testing.T) {
+func TestStart_AppendsToLog(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "test.pid")
-	// PID 999999999 almost certainly doesn't exist.
-	os.WriteFile(path, []byte("999999999\n"), 0644)
-
-	pid, alive := readLivePID(path)
-	if alive {
-		t.Errorf("expected not alive for dead PID, got pid %d", pid)
-	}
-	// Stale PID file should be cleaned up.
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Error("stale PID file should have been removed")
-	}
-}
-
-func TestReadLivePID_CurrentProcess(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "test.pid")
-	os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644)
-
-	pid, alive := readLivePID(path)
-	if !alive {
-		t.Error("expected current process to be alive")
-	}
-	if pid != os.Getpid() {
-		t.Errorf("pid = %d, want %d", pid, os.Getpid())
-	}
-}
-
-func TestCleanup_RemovesPIDFile(t *testing.T) {
-	dir := t.TempDir()
-	pidPath := filepath.Join(dir, "check.pid")
-	os.WriteFile(pidPath, []byte("12345\n"), 0644)
-
 	proc := New("check", dir, NoTransform())
-	proc.Cleanup()
-
-	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
-		t.Error("PID file should have been removed")
+	if err := os.WriteFile(proc.LogPath(), []byte("earlier run\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestCleanup_NoErrorOnMissing(t *testing.T) {
-	// Should not panic when PID file or directory doesn't exist.
-	proc := New("check", filepath.Join(t.TempDir(), "nonexistent"), NoTransform())
-	proc.Cleanup()
-}
-
-func TestStart_SingleInstanceEnforcement(t *testing.T) {
-	dir := t.TempDir()
-
-	// Write PID file with our own PID (which is alive).
-	pidPath := filepath.Join(dir, "check.pid")
-	os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644)
-
-	proc := New("check", dir, NoTransform())
-	_, err := proc.Start([]string{"jj-forge", "check", "--_detached"})
-	if err == nil {
-		t.Fatal("expected error for already-running process")
+	// The child is this test binary, which runs no tests and exits.
+	for range 2 {
+		if _, err := proc.Start([]string{"jj-forge", "-test.run=^$"}); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
 	}
-	if got := err.Error(); got != "jj-forge check is already running (pid "+strconv.Itoa(os.Getpid())+")" {
-		t.Errorf("unexpected error: %s", got)
+	data, err := os.ReadFile(proc.LogPath())
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestStart_StaleInstanceAllowed(t *testing.T) {
-	dir := t.TempDir()
-
-	// Write PID file with a dead PID.
-	pidPath := filepath.Join(dir, "check.pid")
-	os.WriteFile(pidPath, []byte("999999999\n"), 0644)
-
-	// The Start call will fail later (bad executable), but the single-instance
-	// check should pass — the stale PID is cleaned up.
-	proc := New("check", dir, NoTransform())
-	_, err := proc.Start([]string{"jj-forge", "check", "--_detached"})
-	if err != nil && err.Error() == "jj-forge check is already running (pid 999999999)" {
-		t.Error("stale PID should not block a new instance")
+	log := string(data)
+	if !strings.HasPrefix(log, "earlier run\n") {
+		t.Errorf("log lost the earlier run: %q", log)
+	}
+	if n := strings.Count(log, "=== "); n != 2 {
+		t.Errorf("log has %d run headers, want 2: %q", n, log)
 	}
 }
 

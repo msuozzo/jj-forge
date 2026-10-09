@@ -251,9 +251,6 @@ func main() {
 				fmt.Fprintf(os.Stderr, "jj-forge change check running in background (pid %d), logging to %s\n", pid, proc.LogPath())
 				return nil
 			}
-			if detached {
-				defer proc.Cleanup()
-			}
 			var revset string
 			if len(args) > 0 {
 				revset = args[0]
@@ -279,7 +276,7 @@ func main() {
 		},
 	}
 	checkCmd.Flags().BoolVar(&checkForce, "force", false, "Re-run checks even if cached verdicts are passing")
-	checkCmd.Flags().BoolVar(&checkDetach, "detach", false, "Run in the background")
+	checkCmd.Flags().BoolVar(&checkDetach, "detach", false, "Run in the background, appending output to .jj/forge/check.log (a run started while another is checking waits for it)")
 
 	var uploadRemote string
 	var uploadSkipCheck bool
