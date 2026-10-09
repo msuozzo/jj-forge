@@ -3,11 +3,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // Opts holds optional parameters for command execution.
@@ -15,7 +18,17 @@ type Opts struct {
 	Stdin   io.Reader
 	WorkDir string
 	Env     []string // Additional env vars in "KEY=VALUE" format. Appended to os.Environ().
+	// ProcessGroup runs the command in its own process group. Cancelling the
+	// context signals the whole group rather than just the command, and
+	// anything the command started is killed once it exits. Processes that
+	// start their own session or group, as some build daemons do, escape.
+	ProcessGroup bool
 }
+
+// processGroupWaitDelay is how long a cancelled process group gets to exit
+// after SIGTERM, and how long an exited command's leftover processes may keep
+// its output open, before they are killed.
+const processGroupWaitDelay = 3 * time.Second
 
 // ExecError represents a command that exited with a non-zero status.
 type ExecError struct {
@@ -57,7 +70,19 @@ func DefaultExecutor(ctx context.Context, opts Opts, args ...string) (*Result, e
 	if opts.Stdin != nil {
 		c.Stdin = opts.Stdin
 	}
-	if err := c.Run(); err != nil {
+	if opts.ProcessGroup {
+		c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGTERM) }
+		c.WaitDelay = processGroupWaitDelay
+	}
+	err := c.Run()
+	if opts.ProcessGroup && c.Process != nil {
+		// The command has exited. Kill whatever it left running.
+		syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+	}
+	// ErrWaitDelay alone means the command succeeded but left processes
+	// holding its output, which are now killed. The exit status decides.
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return nil, &ExecError{Args: args, Stderr: stderr.String(), Err: err}
 	}
 	return &Result{Stdout: stdout.String(), Stderr: stderr.String()}, nil

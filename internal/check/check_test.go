@@ -734,9 +734,11 @@ func TestRunDriftCancellation(t *testing.T) {
 	configMgr := forge.NewConfigManager(mock)
 
 	// The runner blocks until context is cancelled (simulating a long-running check).
+	var checkOpts cmd.Opts
 	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
 		cmdStr := strings.Join(args, " ")
 		if strings.Contains(cmdStr, "sh -c echo hello") {
+			checkOpts = opts
 			<-ctx.Done()
 			return nil, ctx.Err()
 		}
@@ -770,6 +772,17 @@ func TestRunDriftCancellation(t *testing.T) {
 	}
 	if verdict != nil {
 		t.Errorf("expected no verdict for drifted check, got %v", verdict)
+	}
+	if !checkOpts.ProcessGroup {
+		t.Error("check command should run in its own process group")
+	}
+	// The cancelled check's slot no longer claims to hold its commit, so the
+	// next check there starts from a full copy.
+	states, _ := filepath.Glob(filepath.Join(tmpDir, ".jj", "forge", "check-pool", "*", stateFileName))
+	for _, state := range states {
+		if data, _ := os.ReadFile(state); strings.Contains(string(data), "abc123") {
+			t.Errorf("%s still records the cancelled check's commit", state)
+		}
 	}
 }
 

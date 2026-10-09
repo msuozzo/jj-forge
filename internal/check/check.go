@@ -358,6 +358,13 @@ func runInDir(ctx context.Context, pool *WorkPool, runner cmd.Executor, wd *Work
 		return fmt.Errorf("failed to materialize %s: %w", commitID, err)
 	}
 
-	_, runErr := runner(ctx, cmd.Opts{WorkDir: wd.Path}, "sh", "-c", checkCmd)
+	_, runErr := runner(ctx, cmd.Opts{WorkDir: wd.Path, ProcessGroup: true}, "sh", "-c", checkCmd)
+	if ctx.Err() != nil {
+		// A check killed partway may have left files half written. The next
+		// check in this slot starts from a full copy of its commit.
+		if err := pool.invalidate(wd); err != nil {
+			return errors.Join(runErr, err)
+		}
+	}
 	return runErr
 }
