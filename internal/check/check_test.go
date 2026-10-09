@@ -878,3 +878,32 @@ func TestTakeReady(t *testing.T) {
 		t.Errorf("takeReady with none waiting = %v, want none", got)
 	}
 }
+
+func TestRunDropsStaleVerdicts(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	revs := []*jj.Rev{{ID: "c1", CommitID: "abc", IsMutable: true}}
+	mock := newMockClient(t, revs)
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	// "gone" has a verdict but no longer resolves: the mock returns only c1.
+	mock.config["checks"] = `["gone\nfail\nold"]`
+	configMgr := forge.NewConfigManager(mock)
+	runner := func(ctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		return &cmd.Result{Stdout: "fake-data"}, nil
+	}
+
+	if err := Run(context.Background(), mock, configMgr, "@", false, runner, testUI); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	all, err := configMgr.GetCheckVerdicts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || all[0].ChangeID != "c1" || all[0].Verdict != forge.CheckVerdictPass {
+		t.Errorf("verdicts = %v, want only a pass for c1", all)
+	}
+}

@@ -55,8 +55,8 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	}
 	// Filter out revisions with cached passing verdicts. On a read error,
 	// check everything.
-	verdicts, _ := configMgr.GetCheckVerdicts()
-	toCheck := filterCached(revs, verdicts, force)
+	cached, _ := configMgr.GetCheckVerdicts()
+	toCheck := filterCached(revs, cached, force)
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
@@ -90,9 +90,12 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 
 	// The previous holder may have passed some of these while we waited. Drop
 	// those and mark the rest running in one update, so no other process's
-	// verdict lands in between.
+	// verdict lands in between. Verdicts for changes jj log no longer labels
+	// go too, so they don't pile up.
+	stale := staleVerdicts(ctx, client, cached)
 	queued := toCheck
 	err = configMgr.Update(func(s *forge.State) error {
+		s.RemoveChecks(stale...)
 		toCheck = filterCached(queued, s.Checks, force)
 		for _, rev := range toCheck {
 			s.SetCheck(forge.CheckVerdict{
@@ -328,6 +331,29 @@ func takeReady[T any](ch <-chan T, atMost int) []T {
 		}
 	}
 	return taken
+}
+
+// staleVerdicts returns the changes with verdicts that no longer exist or are
+// immutable, which jj log doesn't label. On a jj error it returns none.
+func staleVerdicts(ctx context.Context, client jj.Client, verdicts []forge.CheckVerdict) []string {
+	if len(verdicts) == 0 {
+		return nil
+	}
+	var terms []string
+	for _, v := range verdicts {
+		terms = append(terms, fmt.Sprintf("present(%s)", v.ChangeID))
+	}
+	live, err := client.Revs(ctx, fmt.Sprintf("(%s) & mutable()", strings.Join(terms, " | ")))
+	if err != nil {
+		return nil
+	}
+	var stale []string
+	for _, v := range verdicts {
+		if !slices.ContainsFunc(live, func(r *jj.Rev) bool { return r.ID == v.ChangeID }) {
+			stale = append(stale, v.ChangeID)
+		}
+	}
+	return stale
 }
 
 // clearRunning removes the running verdicts this run wrote for revs. Errors
