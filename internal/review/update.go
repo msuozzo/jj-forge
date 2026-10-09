@@ -264,7 +264,7 @@ func UpdatePRLinks(
 	}
 
 	var prsUpdated atomic.Int32
-	updateOne := func(u prUpdate) error {
+	updateLinks := func(u prUpdate) error {
 		details, err := forgeClient.GetReview(ctx, upstreamURL, u.reviewID)
 		if err != nil {
 			return fmt.Errorf("failed to get review #%s: %w", u.reviewID, err)
@@ -278,13 +278,24 @@ func UpdatePRLinks(
 		}
 		return nil
 	}
+	// updateOne is the last step for a change, so its row finishes here.
+	updateOne := func(u prUpdate) error {
+		if tr == nil {
+			return updateLinks(u)
+		}
+		tr.SetMessageByName(u.changeID, "updating PR")
+		tr.SetStatusByName(u.changeID, ui.TaskRunning)
+		if err := updateLinks(u); err != nil {
+			tr.SetStatusByName(u.changeID, ui.TaskFailed)
+			return err
+		}
+		tr.SetStatusByName(u.changeID, ui.TaskDone)
+		return nil
+	}
 
 	if params.Ordered {
 		// Sequential updates in parent-to-child order.
 		for _, u := range updates {
-			if tr != nil {
-				tr.SetMessageByName(u.changeID, "updating PR")
-			}
 			if err := updateOne(u); err != nil {
 				return 0, err
 			}
@@ -297,9 +308,6 @@ func UpdatePRLinks(
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if tr != nil {
-					tr.SetMessageByName(u.changeID, "updating PR")
-				}
 				if err := updateOne(u); err != nil {
 					errCh <- err
 				}

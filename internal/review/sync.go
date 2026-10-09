@@ -42,9 +42,17 @@ func SyncReviews(
 		}
 		if tr != nil {
 			tr.SetMessageByName(changeID, "syncing review")
+			tr.SetStatusByName(changeID, ui.TaskRunning)
 		}
 		if err := syncer.SyncReview(ctx, upstreamURL, reviewID); err != nil {
+			if tr != nil {
+				tr.SetStatusByName(changeID, ui.TaskFailed)
+			}
 			return synced, fmt.Errorf("failed to sync review #%s for change %s: %w", reviewID, changeID, err)
+		}
+		if tr != nil {
+			tr.SetMessageByName(changeID, "synced")
+			tr.SetStatusByName(changeID, ui.TaskPending)
 		}
 		synced++
 	}

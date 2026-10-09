@@ -70,6 +70,23 @@ func TestTaskTracker_NonInteractive_PendingNoOutput(t *testing.T) {
 	}
 }
 
+func TestTaskTracker_NonInteractive_RepeatedDonePrintsOnce(t *testing.T) {
+	var buf bytes.Buffer
+	u := New(&buf, ColorNever)
+	tracker := NewTaskTracker(u, []string{"task-a"})
+	tracker.Start()
+
+	// An earlier phase finishes the task, then a final sweep marks every task done.
+	tracker.SetStatus(0, TaskDone)
+	tracker.SetStatus(0, TaskDone)
+
+	tracker.Finish()
+
+	if got := strings.Count(buf.String(), "✓ task-a"); got != 1 {
+		t.Errorf("expected one checkmark for task-a, got %d in %q", got, buf.String())
+	}
+}
+
 func TestTaskTracker_Mixed(t *testing.T) {
 	var buf bytes.Buffer
 	u := New(&buf, ColorNever)

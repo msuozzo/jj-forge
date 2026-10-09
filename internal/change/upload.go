@@ -188,9 +188,12 @@ func Push(ctx context.Context, client jj.Client, revset string, remote string, u
 			tr.SetStatusByName(item.rev.ID, ui.TaskFailed)
 			return nil, fmt.Errorf("failed to push %s: %w", item.rev.ID, err)
 		}
-		// If we are using an external tracker, we don't set terminal status here
-		// because other phases (like PR updates) might follow.
-		if tr.IsInteractive() && len(tracker) == 0 {
+		if len(tracker) > 0 {
+			// Other phases (like PR updates) follow on an external tracker, so the
+			// row goes back to waiting instead of finishing here.
+			tr.SetMessageByName(item.rev.ID, "pushed")
+			tr.SetStatusByName(item.rev.ID, ui.TaskPending)
+		} else if tr.IsInteractive() {
 			tr.SetStatusByName(item.rev.ID, ui.TaskDone)
 		}
 		result.Pushed++
