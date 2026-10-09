@@ -62,7 +62,7 @@ func (r *SSMRunner) Run(ctx context.Context, params Params) (*Result, error) {
 
 	remoteName := params.ForkRemote
 	if remoteName == "" {
-		remoteName = forge.DefaultForkRemote
+		remoteName = forge.DefaultRemote
 	}
 	upstreamRemote := params.UpstreamRemote
 	if upstreamRemote == "" {

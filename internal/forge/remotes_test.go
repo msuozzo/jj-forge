@@ -23,8 +23,8 @@ func configGet(key, value string) jjtest.Call {
 }
 
 func TestResolveRemotes(t *testing.T) {
-	ogUp := "forge.default-fork-remote = \"og\"\nforge.default-upstream-remote = \"up\"\n"
-	originUpstream := "forge.default-fork-remote = \"origin\"\nforge.default-upstream-remote = \"upstream\"\n"
+	ogUp := "forge.default-remote = \"og\"\nforge.default-upstream-remote = \"up\"\n"
+	originUpstream := "forge.default-remote = \"origin\"\nforge.default-upstream-remote = \"upstream\"\n"
 	tests := []struct {
 		name     string
 		fork     string // given fork and upstream

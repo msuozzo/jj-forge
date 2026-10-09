@@ -100,7 +100,7 @@ func (r *TangledRunner) Run(ctx context.Context, params Params) (*Result, error)
 
 	forkRemote := params.ForkRemote
 	if forkRemote == "" {
-		forkRemote = forge.DefaultForkRemote
+		forkRemote = forge.DefaultRemote
 	}
 	upstreamRemote := params.UpstreamRemote
 	if upstreamRemote == "" {

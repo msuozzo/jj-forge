@@ -9,10 +9,10 @@ import (
 )
 
 // Names repo clone gives the remotes it creates and the review commands look
-// for, unless forge.default-fork-remote or forge.default-upstream-remote says
+// for, unless forge.default-remote or forge.default-upstream-remote says
 // otherwise.
 const (
-	DefaultForkRemote     = "origin"
+	DefaultRemote         = "origin"
 	DefaultUpstreamRemote = "upstream"
 )
 
@@ -48,7 +48,7 @@ func ResolveRemotes(ctx context.Context, client jj.Client, configMgr *ConfigMana
 		if err != nil {
 			return Remotes{}, err
 		}
-		name, err := configMgr.GetDefaultForkRemote()
+		name, err := configMgr.GetDefaultRemote()
 		if err != nil {
 			return Remotes{}, err
 		}

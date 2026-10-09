@@ -46,7 +46,7 @@ func ParseReviewRecord(s string) (ReviewRecord, error) {
 // ForgeConfig represents the [forge] section of the jj config.
 type ForgeConfig struct {
 	DefaultReviewer       string            `toml:"default-reviewer,omitempty"`
-	DefaultForkRemote     string            `toml:"default-fork-remote,omitempty"`
+	DefaultRemote         string            `toml:"default-remote,omitempty"`
 	DefaultUpstreamRemote string            `toml:"default-upstream-remote,omitempty"`
 	Reviews               []string          `toml:"reviews,omitempty"`
 	CheckCommand          string            `toml:"check-command,omitempty"`
@@ -244,14 +244,14 @@ func (m *ConfigManager) GetDefaultReviewer() (string, error) {
 	return cfg.DefaultReviewer, nil
 }
 
-// GetDefaultForkRemote returns forge.default-fork-remote, or DefaultForkRemote
+// GetDefaultRemote returns forge.default-remote, or DefaultRemote
 // when it is unset.
-func (m *ConfigManager) GetDefaultForkRemote() (string, error) {
+func (m *ConfigManager) GetDefaultRemote() (string, error) {
 	cfg, err := m.getForgeConfig()
 	if err != nil {
 		return "", err
 	}
-	return cmp.Or(cfg.DefaultForkRemote, DefaultForkRemote), nil
+	return cmp.Or(cfg.DefaultRemote, DefaultRemote), nil
 }
 
 // GetDefaultUpstreamRemote returns forge.default-upstream-remote, or

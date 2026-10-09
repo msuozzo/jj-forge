@@ -668,30 +668,30 @@ func TestGetHosts(t *testing.T) {
 func TestGetDefaultRemotes(t *testing.T) {
 	// Unset keys fall back to the built-in names.
 	mgr := NewConfigManager(newMockClient())
-	fork, err := mgr.GetDefaultForkRemote()
+	remote, err := mgr.GetDefaultRemote()
 	if err != nil {
-		t.Fatalf("GetDefaultForkRemote failed: %v", err)
+		t.Fatalf("GetDefaultRemote failed: %v", err)
 	}
 	upstream, err := mgr.GetDefaultUpstreamRemote()
 	if err != nil {
 		t.Fatalf("GetDefaultUpstreamRemote failed: %v", err)
 	}
-	if fork != DefaultForkRemote || upstream != DefaultUpstreamRemote {
-		t.Errorf("defaults = %q, %q, want %q, %q", fork, upstream, DefaultForkRemote, DefaultUpstreamRemote)
+	if remote != DefaultRemote || upstream != DefaultUpstreamRemote {
+		t.Errorf("defaults = %q, %q, want %q, %q", remote, upstream, DefaultRemote, DefaultUpstreamRemote)
 	}
 
 	// Set keys are returned as is.
 	mock := newMockClient()
-	mock.config["default-fork-remote"] = `"origin"`
-	mock.config["default-upstream-remote"] = `"upstream"`
+	mock.config["default-remote"] = `"og"`
+	mock.config["default-upstream-remote"] = `"up"`
 	mgr = NewConfigManager(mock)
-	if fork, err = mgr.GetDefaultForkRemote(); err != nil {
-		t.Fatalf("GetDefaultForkRemote failed: %v", err)
+	if remote, err = mgr.GetDefaultRemote(); err != nil {
+		t.Fatalf("GetDefaultRemote failed: %v", err)
 	}
 	if upstream, err = mgr.GetDefaultUpstreamRemote(); err != nil {
 		t.Fatalf("GetDefaultUpstreamRemote failed: %v", err)
 	}
-	if fork != "origin" || upstream != "upstream" {
-		t.Errorf("configured = %q, %q, want origin, upstream", fork, upstream)
+	if remote != "og" || upstream != "up" {
+		t.Errorf("configured = %q, %q, want og, up", remote, upstream)
 	}
 }
