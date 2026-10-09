@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -116,9 +118,40 @@ func (m *ConfigManager) getForgeConfig() (*ForgeConfig, error) {
 		ForgeConfig `toml:"forge,omitempty"`
 	}
 	if err := toml.Unmarshal([]byte(output), &wrapper); err != nil {
+		if key := nonStringKey(output); key != "" {
+			return nil, &ui.UserError{
+				Msg:  fmt.Sprintf("forge.%s must be a string", key),
+				Hint: fmt.Sprintf("jj config set reads a value like true or 1 as a TOML boolean or number. Quote it to store a string: jj config set --repo forge.%s '\"true\"'", key),
+			}
+		}
 		return nil, fmt.Errorf("failed to parse forge config: %w", err)
 	}
 	return &wrapper.ForgeConfig, nil
+}
+
+// nonStringKey returns the first string setting in the forge config that holds
+// some other type, or "" if there is none. go-toml's error doesn't name it.
+func nonStringKey(output string) string {
+	var raw struct {
+		Forge map[string]any `toml:"forge"`
+	}
+	if toml.Unmarshal([]byte(output), &raw) != nil {
+		return ""
+	}
+	fields := reflect.TypeFor[ForgeConfig]()
+	for i := range fields.NumField() {
+		f := fields.Field(i)
+		if f.Type.Kind() != reflect.String {
+			continue
+		}
+		key, _, _ := strings.Cut(f.Tag.Get("toml"), ",")
+		if v, ok := raw.Forge[key]; ok {
+			if _, isString := v.(string); !isString {
+				return key
+			}
+		}
+	}
+	return ""
 }
 
 // readState reads the review records and check verdicts.

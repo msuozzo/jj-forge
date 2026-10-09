@@ -2,6 +2,7 @@ package forge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/msuozzo/jj-forge/internal/cmd"
 	"github.com/msuozzo/jj-forge/internal/jj"
+	"github.com/msuozzo/jj-forge/internal/ui"
 )
 
 // mockClient is a simple mock for testing ConfigManager
@@ -673,5 +675,18 @@ func TestGetDefaultRemotes(t *testing.T) {
 	}
 	if remote != "og" || upstream != "up" {
 		t.Errorf("configured = %q, %q, want og, up", remote, upstream)
+	}
+}
+
+func TestGetCheckCommand_NotAString(t *testing.T) {
+	mock := newMockClient(t)
+	mock.config["check-command"] = "true" // what jj config set stores for an unquoted true
+	_, err := NewConfigManager(mock).GetCheckCommand()
+	var userErr *ui.UserError
+	if !errors.As(err, &userErr) {
+		t.Fatalf("GetCheckCommand() error = %v, want *ui.UserError", err)
+	}
+	if want := "forge.check-command must be a string"; userErr.Msg != want {
+		t.Errorf("Msg = %q, want %q", userErr.Msg, want)
 	}
 }
