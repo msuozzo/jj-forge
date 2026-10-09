@@ -48,6 +48,14 @@ func Update(
 		return &UpdateResult{UploadResult: &change.UploadResult{}}, nil
 	}
 
+	// Phase 2: Run checks (if configured). They draw their own progress, so
+	// they finish before the tracker below starts drawing.
+	if params.CheckFn != nil {
+		if err := params.CheckFn(); err != nil {
+			return nil, err
+		}
+	}
+
 	taskNames := make([]string, len(trailerResult.Revs))
 	for i, rev := range trailerResult.Revs {
 		taskNames[i] = rev.ID
@@ -55,16 +63,6 @@ func Update(
 	tracker := ui.NewTaskTracker(params.UI, taskNames)
 	tracker.Start()
 	defer tracker.Finish()
-
-	// Phase 2: Run checks (if configured)
-	if params.CheckFn != nil {
-		for i := range trailerResult.Revs {
-			tracker.SetMessage(i, "running checks")
-		}
-		if err := params.CheckFn(); err != nil {
-			return nil, err
-		}
-	}
 
 	// Phase 3: Push
 	// If no trailers were updated, commit IDs haven't changed — reuse resolved revs.
