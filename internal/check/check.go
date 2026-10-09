@@ -60,16 +60,6 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if len(toCheck) == 0 {
 		return nil // all cached
 	}
-	fmt.Fprintf(u, "Running checks on %d change(s)...\n", len(toCheck))
-	// Build task tracker for progress display.
-	taskNames := make([]string, len(toCheck))
-	revIndex := make(map[string]int, len(toCheck))
-	for i, rev := range toCheck {
-		taskNames[i] = rev.ID
-		revIndex[rev.ID] = i
-	}
-	tracker := ui.NewTaskTracker(u, taskNames)
-	tracker.Start()
 	repoRoot, err := client.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repo root: %w", err)
@@ -78,15 +68,11 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return err
 	}
-	lock, err := acquireLockWait(ctx, forgeDir, tracker)
+	lock, err := acquireLockWait(ctx, forgeDir, u)
 	if err != nil {
 		return err
 	}
 	defer lock.Unlock()
-
-	for i := range toCheck {
-		tracker.SetMessage(i, "")
-	}
 
 	// The previous holder may have passed some of these while we waited. Drop
 	// those and mark the rest running in one update, so no other process's
@@ -107,18 +93,24 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		return nil
 	})
 	if err != nil {
-		tracker.Finish()
 		return fmt.Errorf("failed to set running verdicts: %w", err)
 	}
-	for _, rev := range queued {
-		if !slices.Contains(toCheck, rev) {
-			tracker.SetStatus(revIndex[rev.ID], ui.TaskDone)
-		}
+	if passed := len(queued) - len(toCheck); passed > 0 {
+		fmt.Fprintf(u, "%d change(s) already passed\n", passed)
 	}
 	if len(toCheck) == 0 {
-		tracker.Finish()
 		return nil
 	}
+	fmt.Fprintf(u, "Running checks on %d change(s)...\n", len(toCheck))
+	// Build task tracker for progress display.
+	taskNames := make([]string, len(toCheck))
+	revIndex := make(map[string]int, len(toCheck))
+	for i, rev := range toCheck {
+		taskNames[i] = rev.ID
+		revIndex[rev.ID] = i
+	}
+	tracker := ui.NewTaskTracker(u, taskNames)
+	tracker.Start()
 	outstanding := slices.Clone(toCheck)
 	defer func() {
 		if ctx.Err() == nil {

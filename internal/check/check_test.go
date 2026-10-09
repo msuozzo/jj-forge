@@ -1,6 +1,7 @@
 package check
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -816,7 +817,10 @@ func TestRunWaitingForLockUsesFreshVerdicts(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- Run(context.Background(), mock, configMgr, "@-::@", false, runner, testUI) }()
+	var out bytes.Buffer
+	go func() {
+		done <- Run(context.Background(), mock, configMgr, "@-::@", false, runner, ui.New(&out, ui.ColorNever))
+	}()
 
 	// Once Run has read the verdicts (after the check command), the other
 	// process passes c1 and stores a verdict for an unrelated change.
@@ -850,6 +854,16 @@ func TestRunWaitingForLockUsesFreshVerdicts(t *testing.T) {
 	}
 	if n := poolRuns.Load(); n != 1 {
 		t.Errorf("expected only c2 to run, got %d runs", n)
+	}
+	// The count covers only what this run checks, after waiting.
+	for _, line := range []string{
+		fmt.Sprintf("Waiting for the check run in pid %d...", os.Getpid()),
+		"1 change(s) already passed",
+		"Running checks on 1 change(s)...",
+	} {
+		if !strings.Contains(out.String(), line) {
+			t.Errorf("output lacks %q:\n%s", line, out.String())
+		}
 	}
 	for id, commit := range map[string]string{"c1": "abc", "c2": "def", "c9": "zzz"} {
 		v, err := configMgr.GetCheckVerdictByChangeID(id)
