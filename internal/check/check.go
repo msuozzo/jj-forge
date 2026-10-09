@@ -80,7 +80,7 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	if err != nil {
 		return err
 	}
-	defer lock.release()
+	defer lock.Unlock()
 
 	for i := range toCheck {
 		tracker.SetMessage(i, "")
