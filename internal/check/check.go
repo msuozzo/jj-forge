@@ -175,9 +175,9 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	// Start drift watcher: polls jj for commit ID changes and cancels
 	// goroutines whose changes have been amended.
 	watchCtx, watchCancel := context.WithCancel(ctx)
+	ticker := time.NewTicker(driftPollInterval)
 	go func() {
 		defer watchCancel()
-		ticker := time.NewTicker(driftPollInterval)
 		defer ticker.Stop()
 		for {
 			select {

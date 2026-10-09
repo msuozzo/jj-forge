@@ -706,7 +706,7 @@ func TestRunMixedMutability(t *testing.T) {
 }
 
 func TestRunDriftCancellation(t *testing.T) {
-	t.Parallel()
+	// Not parallel: it changes driftPollInterval, which every Run reads.
 	// Speed up drift polling for test.
 	origInterval := driftPollInterval
 	driftPollInterval = 100 * time.Millisecond
