@@ -70,6 +70,9 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	}
 	lock, err := acquireLockWait(ctx, forgeDir, u)
 	if err != nil {
+		if ctx.Err() != nil {
+			return errInterrupted()
+		}
 		return err
 	}
 	defer lock.Unlock()
@@ -279,6 +282,9 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 	}
 	tracker.Finish()
 	watchCancel()
+	if ctx.Err() != nil {
+		return errInterrupted()
+	}
 	if len(failures) > 0 {
 		return &ui.UserError{
 			Msg:     "check command failed",
@@ -286,6 +292,12 @@ func Run(ctx context.Context, client jj.Client, configMgr *forge.ConfigManager, 
 		}
 	}
 	return nil
+}
+
+// errInterrupted reports a run cut short by its context, so that callers stop
+// rather than carry on as if the checks had passed.
+func errInterrupted() error {
+	return &ui.UserError{Msg: "checks interrupted"}
 }
 
 // filterCached returns the subset of revs that need checking. When force is

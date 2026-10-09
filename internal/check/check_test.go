@@ -921,3 +921,40 @@ func TestRunDropsStaleVerdicts(t *testing.T) {
 		t.Errorf("verdicts = %v, want only a pass for c1", all)
 	}
 }
+
+func TestRunInterrupted(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".jj", "forge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mock := newMockClient(t, []*jj.Rev{{ID: "c1", CommitID: "abc", IsMutable: true}})
+	mock.root = tmpDir
+	mock.config["check-command"] = "\"echo hello\""
+	configMgr := forge.NewConfigManager(mock)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	runner := func(rctx context.Context, opts cmd.Opts, args ...string) (*cmd.Result, error) {
+		if strings.Contains(strings.Join(args, " "), "sh -c echo hello") {
+			close(started)
+			<-rctx.Done()
+			return nil, rctx.Err()
+		}
+		return &cmd.Result{Stdout: "fake-data"}, nil
+	}
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, mock, configMgr, "@", false, runner, testUI) }()
+	<-started
+	cancel()
+
+	err := <-done
+	var userErr *ui.UserError
+	if !errors.As(err, &userErr) || userErr.Msg != "checks interrupted" {
+		t.Fatalf("Run() error = %v, want checks interrupted", err)
+	}
+	// The interrupted check's running verdict is cleared.
+	if v, err := configMgr.GetCheckVerdictByChangeID("c1"); err != nil || v != nil {
+		t.Errorf("verdict for c1 = %v (err %v), want none", v, err)
+	}
+}

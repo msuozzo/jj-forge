@@ -1103,6 +1103,10 @@ at most --timeout.`,
 		if errors.As(err, &userErr) && userErr.ExitCode != 0 {
 			os.Exit(userErr.ExitCode)
 		}
+		if ctx.Err() != nil {
+			// SIGINT or SIGTERM cancelled the command.
+			os.Exit(130)
+		}
 		os.Exit(1)
 	}
 }
